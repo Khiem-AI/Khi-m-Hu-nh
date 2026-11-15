@@ -9774,7 +9774,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "EXPORT_DATA",
       "APPROVE_MAINTENANCE"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1992-06-18",
+    "gioiTinh": "Nam",
+    "queQuan": "Bến Tre",
+    "diaChiThuongTru": "TP. Thủ Đức, TP. Hồ Chí Minh",
+    "trinhDoHocVan": "Kỹ sư Cơ điện tử",
+    "tinhTrangHonNhan": "Đã kết hôn",
+    "phongBan": "Ban Quản Lý Kỹ Thuật & O&M",
+    "chuyenMon": "Quản lý vận hành CMMS · Hệ thống Điện & HVAC",
+    "loaiHopDong": "Quản lý",
+    "caLamViec": "Hành chính (08:00 - 17:00)",
+    "ngayNghiPhepNam": 14,
+    "ngayNghiPhepDaDung": 3
   },
   {
     "maNhanVien": "ID1486",
@@ -9797,7 +9809,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "MANAGE_COSTS",
       "EXPORT_DATA"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1994-09-22",
+    "gioiTinh": "Nam",
+    "queQuan": "Thanh Hóa",
+    "diaChiThuongTru": "Dĩ An, Bình Dương",
+    "trinhDoHocVan": "Đại học Bách Khoa - Kỹ thuật Nhiệt lạnh",
+    "tinhTrangHonNhan": "Đã kết hôn",
+    "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
+    "chuyenMon": "Chiller · HVAC · Năng lượng Solar",
+    "loaiHopDong": "Chính thức",
+    "caLamViec": "Hành chính (08:00 - 17:00)",
+    "ngayNghiPhepNam": 13,
+    "ngayNghiPhepDaDung": 4
   },
   {
     "maNhanVien": "ID1665",
@@ -9817,7 +9841,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "REQUEST_SPARE_PARTS",
       "LOG_ENERGY"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1996-03-12",
+    "gioiTinh": "Nam",
+    "queQuan": "Nghệ An",
+    "diaChiThuongTru": "Thuận An, Bình Dương",
+    "trinhDoHocVan": "Cao đẳng Điện công nghiệp",
+    "tinhTrangHonNhan": "Độc thân",
+    "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
+    "chuyenMon": "Điện hạ thế · Tủ MSB · Máy nén khí",
+    "loaiHopDong": "Chính thức",
+    "caLamViec": "Ca 1 (06:00 - 14:00)",
+    "ngayNghiPhepNam": 13,
+    "ngayNghiPhepDaDung": 5
   },
   {
     "maNhanVien": "ID1690",
@@ -9837,7 +9873,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "REQUEST_SPARE_PARTS",
       "LOG_ENERGY"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1995-11-04",
+    "gioiTinh": "Nam",
+    "queQuan": "Đồng Nai",
+    "diaChiThuongTru": "Biên Hòa, Đồng Nai",
+    "trinhDoHocVan": "Cao đẳng Cơ khí chế tạo",
+    "tinhTrangHonNhan": "Đã kết hôn",
+    "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
+    "chuyenMon": "Hệ thống Bơm · Xử lý nước DI & Nước thải",
+    "loaiHopDong": "Chính thức",
+    "caLamViec": "Ca 2 (14:00 - 22:00)",
+    "ngayNghiPhepNam": 12,
+    "ngayNghiPhepDaDung": 2
   },
   {
     "maNhanVien": "ID1798",
@@ -9857,7 +9905,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "REQUEST_SPARE_PARTS",
       "LOG_ENERGY"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1997-08-19",
+    "gioiTinh": "Nam",
+    "queQuan": "Thái Bình",
+    "diaChiThuongTru": "Quận 9, TP. Thủ Đức",
+    "trinhDoHocVan": "Trung cấp Điện - Điện tử",
+    "tinhTrangHonNhan": "Độc thân",
+    "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
+    "chuyenMon": "Điều hòa không khí · Bảo trì AHU",
+    "loaiHopDong": "Chính thức",
+    "caLamViec": "Hành chính (08:00 - 17:00)",
+    "ngayNghiPhepNam": 12,
+    "ngayNghiPhepDaDung": 3
   },
   {
     "maNhanVien": "ID1679",
@@ -9877,7 +9937,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "REQUEST_SPARE_PARTS",
       "LOG_ENERGY"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1996-12-02",
+    "gioiTinh": "Nam",
+    "queQuan": "Nam Định",
+    "diaChiThuongTru": "Dĩ An, Bình Dương",
+    "trinhDoHocVan": "Cao đẳng Tự động hóa",
+    "tinhTrangHonNhan": "Độc thân",
+    "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
+    "chuyenMon": "PLC · Biến tần · PCCC",
+    "loaiHopDong": "Chính thức",
+    "caLamViec": "Ca 1 (06:00 - 14:00)",
+    "ngayNghiPhepNam": 12,
+    "ngayNghiPhepDaDung": 1
   },
   {
     "maNhanVien": "ID1570",
@@ -9897,7 +9969,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "REQUEST_SPARE_PARTS",
       "LOG_ENERGY"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1998-04-27",
+    "gioiTinh": "Nam",
+    "queQuan": "Quảng Nam",
+    "diaChiThuongTru": "Thuận An, Bình Dương",
+    "trinhDoHocVan": "Cao đẳng Kỹ thuật Điện",
+    "tinhTrangHonNhan": "Độc thân",
+    "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
+    "chuyenMon": "Bảo trì cơ khí · Hệ thống chiếu sáng",
+    "loaiHopDong": "Chính thức",
+    "caLamViec": "Hành chính (08:00 - 17:00)",
+    "ngayNghiPhepNam": 12,
+    "ngayNghiPhepDaDung": 0
   },
   {
     "maNhanVien": "ID0344",
@@ -9922,7 +10006,19 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "EXPORT_DATA",
       "APPROVE_MAINTENANCE"
     ],
-    "anhDaiDien": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80"
+    "anhDaiDien": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80",
+    "ngaySinh": "1990-01-15",
+    "gioiTinh": "Nam",
+    "queQuan": "TP. Hồ Chí Minh",
+    "diaChiThuongTru": "Quận 7, TP. Hồ Chí Minh",
+    "trinhDoHocVan": "Thạc sĩ Quản trị Kỹ thuật",
+    "tinhTrangHonNhan": "Đã kết hôn",
+    "phongBan": "Ban Giám Đốc Vận Hành",
+    "chuyenMon": "Quản lý dự án · Ngân sách · An toàn nhà máy",
+    "loaiHopDong": "Quản lý",
+    "caLamViec": "Hành chính (08:00 - 17:00)",
+    "ngayNghiPhepNam": 15,
+    "ngayNghiPhepDaDung": 2
   }
 ];
 

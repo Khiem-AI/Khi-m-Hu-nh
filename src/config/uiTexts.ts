@@ -22,6 +22,7 @@ export const UI_TEXTS = {
       dashboard: { label: 'Tổng Quan O&M', desc: '' },
       admin_dashboard: { label: 'Dashboard Admin', desc: '' },
       my_tasks: { label: 'Việc Được Giao', desc: '' },
+      profile: { label: 'Hồ Sơ Cá Nhân', desc: '' },
       equipment: { label: 'Danh Sách Thiết Bị', desc: '' },
       maintenance: { label: 'Kế Hoạch & Lịch Sử', desc: '' },
       inspection_calibration: { label: 'Kiểm Định & Hiệu Chuẩn', desc: '' },
@@ -96,6 +97,10 @@ export const UI_TEXTS = {
     employees: {
       badge: 'Nhân Sự & Phân Quyền',
       title: 'Quản Lý Nhân Viên & Phân Quyền Giao Diện',
+    },
+    profile: {
+      badge: 'Hồ Sơ Nhân Viên',
+      title: 'Hồ Sơ Cá Nhân & Chế Độ Nghỉ Phép',
     },
     adminDashboard: {
       badge: 'Chỉ Dành Cho Admin',

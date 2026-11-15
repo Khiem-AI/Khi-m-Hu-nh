@@ -20,6 +20,7 @@ import {
   Activity,
   Mail,
   ShieldCheck,
+  UserCircle,
   X,
 } from 'lucide-react';
 
@@ -97,6 +98,13 @@ export const Navigation: React.FC<NavigationProps> = ({
       icon: ClipboardCheck,
       badge: myPendingCount > 0 ? `${myPendingCount} việc` : null,
       badgeColor: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
+    },
+    {
+      id: 'profile',
+      label: UI_TEXTS.navigation.items.profile.label,
+      desc: UI_TEXTS.navigation.items.profile.desc,
+      icon: UserCircle,
+      badge: null,
     },
     {
       id: 'equipment',
@@ -275,10 +283,18 @@ export const Navigation: React.FC<NavigationProps> = ({
         })}
       </div>
 
-      {/* User Status Card */}
-      <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-slate-200 dark:border-slate-800 text-xs space-y-1">
+      {/* User Status Card - Clickable shortcut to Profile */}
+      <button
+        type="button"
+        onClick={() => {
+          onSelectTab('profile');
+          onCloseMobile();
+        }}
+        className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800 text-xs space-y-1 transition"
+        title="Mở Hồ Sơ Cá Nhân (Profile)"
+      >
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-          <span className="text-[11px] font-medium">Tài khoản đang trực</span>
+          <span className="text-[11px] font-medium">Hồ sơ của tôi</span>
           <span className="font-mono text-[10px] font-semibold text-slate-600 dark:text-slate-300">
             {currentUser.maNhanVien}
           </span>
@@ -289,7 +305,7 @@ export const Navigation: React.FC<NavigationProps> = ({
         <div className="text-[11px] text-cyan-700 dark:text-cyan-400 font-semibold">
           {currentUser.chucVu}
         </div>
-      </div>
+      </button>
     </div>
   );
 

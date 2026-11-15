@@ -91,6 +91,8 @@ import {
   sanitizeEmailLog,
   sanitizeEmployeePrivate,
   sanitizeEmployeePublic,
+  sanitizeEmployeeSelfPrivate,
+  sanitizeEmployeeSelfPublic,
   sanitizeEquipment,
   sanitizeMaintenanceHistory,
   sanitizeMaintenancePlan,
@@ -417,13 +419,26 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [waterMonthly, setWaterMonthly] = useState<WaterMonthly[]>(() => loadStorage('waterMonthly', INITIAL_WATER_MONTHLY));
   const [employees, setEmployees] = useState<Employee[]>(() => {
     const loaded = loadStorage('employees', INITIAL_EMPLOYEES);
+    const initByCode = new Map(
+      INITIAL_EMPLOYEES.map((e) => [e.maNhanVien.trim().toUpperCase(), e])
+    );
+    const hydrated = loaded.map((emp) => {
+      const initEmp = initByCode.get(emp.maNhanVien.trim().toUpperCase());
+      if (!initEmp) return emp;
+      return {
+        ...initEmp,
+        ...emp,
+        ngayNghiPhepNam: emp.ngayNghiPhepNam ?? initEmp.ngayNghiPhepNam,
+        ngayNghiPhepDaDung: emp.ngayNghiPhepDaDung ?? initEmp.ngayNghiPhepDaDung,
+      };
+    });
     const missing = INITIAL_EMPLOYEES.filter(
       (initEmp) =>
-        !loaded.some(
+        !hydrated.some(
           (e) => e.maNhanVien.trim().toUpperCase() === initEmp.maNhanVien.trim().toUpperCase()
         )
     );
-    return missing.length > 0 ? [...loaded, ...missing] : loaded;
+    return missing.length > 0 ? [...hydrated, ...missing] : hydrated;
   });
   const [meterReadings, setMeterReadings] = useState<MeterReading[]>(() => loadStorage('meterReadings', INITIAL_METER_READINGS));
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() =>
@@ -558,13 +573,18 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const cloudUserRef = useRef<CloudAccountInfo | null>(null);
   const knownCloudIdsRef = useRef<Set<string>>(new Set());
   const employeesRef = useRef<Employee[]>(employees);
+  const currentUserRef = useRef<Employee>(currentUser);
   const cloudEmpPublicRef = useRef<Record<string, Partial<Employee>>>({});
-  const cloudEmpPrivateRef = useRef<Record<string, { maNhanVien: string; email?: string; soDienThoai?: string }>>({});
+  const cloudEmpPrivateRef = useRef<Record<string, Partial<Employee>>>({});
   const workspaceReadyRef = useRef<boolean>(false);
 
   useEffect(() => {
     employeesRef.current = employees;
   }, [employees]);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   const latestSnapshotRef = useRef<WorkspaceSnapshotData>({
     equipment,
@@ -681,34 +701,43 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const pubEntries = Object.values(cloudEmpPublicRef.current);
     if (pubEntries.length === 0) return;
 
-    setEmployees((prev) => {
-      const prevById = new Map(prev.map((e) => [e.maNhanVien, e]));
-      const initById = new Map(INITIAL_EMPLOYEES.map((e) => [e.maNhanVien, e]));
+    const prevById = new Map(employeesRef.current.map((e) => [e.maNhanVien, e]));
+    const initById = new Map(INITIAL_EMPLOYEES.map((e) => [e.maNhanVien, e]));
 
-      const merged = pubEntries.map((pub) => {
-        const id = pub.maNhanVien || '';
-        const fallback = prevById.get(id) || initById.get(id);
-        const priv = cloudEmpPrivateRef.current[id];
-        return {
-          ...(fallback || {
-            maNhanVien: id,
-            tenNhanVien: pub.tenNhanVien || id,
-            date: '',
-            chucVu: pub.chucVu || 'Kỹ thuật viên',
-            ngayVao: '',
-            soDienThoai: '',
-            email: '',
-            username: pub.username || id,
-          }),
-          ...pub,
-          email: priv?.email !== undefined ? priv.email : fallback?.email || '',
-          soDienThoai: priv?.soDienThoai !== undefined ? priv.soDienThoai : fallback?.soDienThoai || '',
-          password: fallback?.password,
-        } as Employee;
-      });
-
-      return merged.sort((a, b) => a.maNhanVien.localeCompare(b.maNhanVien));
+    const merged = pubEntries.map((pub) => {
+      const id = pub.maNhanVien || '';
+      const fallback = prevById.get(id) || initById.get(id);
+      const priv = cloudEmpPrivateRef.current[id];
+      return {
+        ...(fallback || {
+          maNhanVien: id,
+          tenNhanVien: pub.tenNhanVien || id,
+          date: '',
+          chucVu: pub.chucVu || 'Kỹ thuật viên',
+          ngayVao: '',
+          soDienThoai: '',
+          email: '',
+          username: pub.username || id,
+        }),
+        ...pub,
+        ...(priv || {}),
+        email: priv?.email !== undefined ? priv.email : fallback?.email || '',
+        soDienThoai: priv?.soDienThoai !== undefined ? priv.soDienThoai : fallback?.soDienThoai || '',
+        password: fallback?.password,
+      } as Employee;
     });
+
+    const sorted = merged.sort((a, b) => a.maNhanVien.localeCompare(b.maNhanVien));
+    setEmployees(sorted);
+
+    const activeCode = currentUserRef.current?.maNhanVien;
+    if (activeCode) {
+      const refreshedCurrent = sorted.find((e) => e.maNhanVien === activeCode);
+      if (refreshedCurrent) {
+        setCurrentUserState(refreshedCurrent);
+        saveStorage('currentUser', refreshedCurrent);
+      }
+    }
   };
 
   const matchOrApplyCloudUser = (fbUser: User) => {
@@ -985,13 +1014,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           onSnapError
         ),
-        subscribeCloudCollection<{ maNhanVien: string; email?: string; soDienThoai?: string }>(
+        subscribeCloudCollection<Partial<Employee>>(
           'employees_private',
           fbUser.email,
           fbUser.uid,
           (items, paths) => {
             markSynced(paths);
-            const map: Record<string, { maNhanVien: string; email?: string; soDienThoai?: string }> = {};
+            const map: Record<string, Partial<Employee>> = {};
             items.forEach((emp) => {
               if (emp.maNhanVien) map[emp.maNhanVien] = emp;
             });
@@ -1767,21 +1796,31 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEmployees(nextEmployees);
     if (currentUser.maNhanVien === emp.maNhanVien) {
       setCurrentUserState(emp);
+      saveStorage('currentUser', emp);
     }
-    syncDoc('employees_public', emp.maNhanVien, sanitizeEmployeePublic(emp), nextEmployees);
-    syncDoc('employees_private', emp.maNhanVien, sanitizeEmployeePrivate(emp), nextEmployees);
+
+    const isBootAdmin =
+      (cloudUserRef.current?.email || '').trim().toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL;
+    if (!cloudUserRef.current || isBootAdmin) {
+      syncDoc('employees_public', emp.maNhanVien, sanitizeEmployeePublic(emp), nextEmployees);
+      syncDoc('employees_private', emp.maNhanVien, sanitizeEmployeePrivate(emp), nextEmployees);
+    } else if (emp.maNhanVien === currentUser.maNhanVien) {
+      syncDoc('employees_public', emp.maNhanVien, sanitizeEmployeeSelfPublic(emp), nextEmployees);
+      syncDoc('employees_private', emp.maNhanVien, sanitizeEmployeeSelfPrivate(emp), nextEmployees);
+    }
+
     const oldMail = (prevEmp?.email || '').trim().toLowerCase();
     const newMail = (emp.email || '').trim().toLowerCase();
     if (
-      cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL &&
+      isBootAdmin &&
       oldMail !== newMail &&
       newMail &&
       isValidEmailFormat(newMail) &&
       !isPlaceholderEmail(newMail)
     ) {
-      void propagateAllowedEmails(buildAllowedEmails(nextEmployees, cloudUserRef.current.email));
+      void propagateAllowedEmails(buildAllowedEmails(nextEmployees, cloudUserRef.current?.email));
     }
-    addAuditLog('Sửa', 'Nhân viên', emp.maNhanVien, `Cập nhật thông tin nhân viên: ${emp.tenNhanVien}`);
+    addAuditLog('Sửa', 'Nhân viên', emp.maNhanVien, `Cập nhật hồ sơ nhân viên: ${emp.tenNhanVien}`);
   };
 
   // Documents / SOPs / Checklists Actions

@@ -266,7 +266,7 @@ service cloud.firestore {
 
     function isValidEmployeePublic(data) {
       return data.keys().hasAll(['maNhanVien', 'tenNhanVien', 'chucVu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['maNhanVien', 'tenNhanVien', 'date', 'chucVu', 'ngayVao', 'username', 'quyenHan', 'allowedViews', 'anhDaiDien', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['maNhanVien', 'tenNhanVien', 'date', 'chucVu', 'ngayVao', 'username', 'quyenHan', 'allowedViews', 'anhDaiDien', 'gioiTinh', 'phongBan', 'chuyenMon', 'loaiHopDong', 'caLamViec', 'ngayNghiPhepNam', 'ngayNghiPhepDaDung', 'ghiChuHoSo', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
         isValidMeta(data) &&
         data.maNhanVien is string && data.maNhanVien.size() >= 1 && data.maNhanVien.size() <= 60 &&
         data.tenNhanVien is string && data.tenNhanVien.size() >= 1 && data.tenNhanVien.size() <= 160 &&
@@ -276,16 +276,34 @@ service cloud.firestore {
         (!('username' in data) || (data.username is string && data.username.size() <= 120)) &&
         (!('quyenHan' in data) || (data.quyenHan is list && data.quyenHan.size() <= 30 && (data.quyenHan.size() == 0 || data.quyenHan[0] is string))) &&
         (!('allowedViews' in data) || (data.allowedViews is list && data.allowedViews.size() <= 30 && (data.allowedViews.size() == 0 || data.allowedViews[0] is string))) &&
-        (!('anhDaiDien' in data) || (data.anhDaiDien is string && data.anhDaiDien.size() <= 450000));
+        (!('anhDaiDien' in data) || (data.anhDaiDien is string && data.anhDaiDien.size() <= 450000)) &&
+        (!('gioiTinh' in data) || data.gioiTinh in ['Nam', 'Nữ', 'Khác']) &&
+        (!('phongBan' in data) || (data.phongBan is string && data.phongBan.size() <= 120)) &&
+        (!('chuyenMon' in data) || (data.chuyenMon is string && data.chuyenMon.size() <= 300)) &&
+        (!('loaiHopDong' in data) || data.loaiHopDong in ['Chính thức', 'Thử việc', 'Thời vụ', 'Quản lý']) &&
+        (!('caLamViec' in data) || (data.caLamViec is string && data.caLamViec.size() <= 120)) &&
+        (!('ngayNghiPhepNam' in data) || (data.ngayNghiPhepNam is number && data.ngayNghiPhepNam >= 0 && data.ngayNghiPhepNam <= 365)) &&
+        (!('ngayNghiPhepDaDung' in data) || (data.ngayNghiPhepDaDung is number && data.ngayNghiPhepDaDung >= 0 && data.ngayNghiPhepDaDung <= 365)) &&
+        (!('ghiChuHoSo' in data) || (data.ghiChuHoSo is string && data.ghiChuHoSo.size() <= 1500));
     }
 
     function isValidEmployeePrivate(data) {
       return data.keys().hasAll(['maNhanVien', 'email', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['maNhanVien', 'email', 'soDienThoai', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['maNhanVien', 'email', 'soDienThoai', 'ngaySinh', 'queQuan', 'diaChiThuongTru', 'soCCCD', 'ngayCapCCCD', 'noiCapCCCD', 'trinhDoHocVan', 'tinhTrangHonNhan', 'nguoiLienHeKhanCap', 'sdtKhanCap', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
         isValidMeta(data) &&
         data.maNhanVien is string && data.maNhanVien.size() >= 1 && data.maNhanVien.size() <= 60 &&
         data.email is string && data.email.size() <= 200 &&
-        (!('soDienThoai' in data) || (data.soDienThoai is string && data.soDienThoai.size() <= 40));
+        (!('soDienThoai' in data) || (data.soDienThoai is string && data.soDienThoai.size() <= 40)) &&
+        (!('ngaySinh' in data) || (data.ngaySinh is string && data.ngaySinh.size() <= 32)) &&
+        (!('queQuan' in data) || (data.queQuan is string && data.queQuan.size() <= 200)) &&
+        (!('diaChiThuongTru' in data) || (data.diaChiThuongTru is string && data.diaChiThuongTru.size() <= 300)) &&
+        (!('soCCCD' in data) || (data.soCCCD is string && data.soCCCD.size() <= 32)) &&
+        (!('ngayCapCCCD' in data) || (data.ngayCapCCCD is string && data.ngayCapCCCD.size() <= 32)) &&
+        (!('noiCapCCCD' in data) || (data.noiCapCCCD is string && data.noiCapCCCD.size() <= 200)) &&
+        (!('trinhDoHocVan' in data) || (data.trinhDoHocVan is string && data.trinhDoHocVan.size() <= 200)) &&
+        (!('tinhTrangHonNhan' in data) || data.tinhTrangHonNhan in ['Độc thân', 'Đã kết hôn', 'Khác']) &&
+        (!('nguoiLienHeKhanCap' in data) || (data.nguoiLienHeKhanCap is string && data.nguoiLienHeKhanCap.size() <= 160)) &&
+        (!('sdtKhanCap' in data) || (data.sdtKhanCap is string && data.sdtKhanCap.size() <= 40));
     }
 
     function isValidFacilityDocument(data) {
@@ -537,7 +555,13 @@ service cloud.firestore {
       allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
       allow list: if isSignedIn() && isMemberOnDoc(existing());
       allow create: if isValidId(docId) && isAdmin() && isValidEmployeePublic(incoming()) && isValidCreateMeta(incoming());
-      allow update: if isValidId(docId) && isAdmin() && isValidEmployeePublic(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['tenNhanVien', 'date', 'chucVu', 'ngayVao', 'username', 'quyenHan', 'allowedViews', 'anhDaiDien', 'allowedEmails', 'updatedAt']);
+      allow update: if isValidId(docId) && isValidEmployeePublic(incoming()) && isValidUpdateMeta() && (
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['tenNhanVien', 'date', 'chucVu', 'ngayVao', 'username', 'quyenHan', 'allowedViews', 'anhDaiDien', 'gioiTinh', 'phongBan', 'chuyenMon', 'loaiHopDong', 'caLamViec', 'ngayNghiPhepNam', 'ngayNghiPhepDaDung', 'ghiChuHoSo', 'allowedEmails', 'updatedAt'])) ||
+        (isSignedIn() &&
+          exists(/databases/$(database)/documents/employees_private/$(docId)) &&
+          get(/databases/$(database)/documents/employees_private/$(docId)).data.email == request.auth.token.email &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['tenNhanVien', 'anhDaiDien', 'gioiTinh', 'chuyenMon', 'ghiChuHoSo', 'updatedAt']))
+      );
       allow delete: if isValidId(docId) && isAdmin();
     }
 
@@ -545,7 +569,10 @@ service cloud.firestore {
       allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email);
       allow list: if isSignedIn() && (isBootstrappedAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email);
       allow create: if isValidId(docId) && isAdmin() && isValidEmployeePrivate(incoming()) && isValidCreateMeta(incoming());
-      allow update: if isValidId(docId) && isValidEmployeePrivate(incoming()) && isValidUpdateMeta() && (isAdmin() || (isSignedIn() && existing().email == request.auth.token.email && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'soDienThoai', 'updatedAt'])));
+      allow update: if isValidId(docId) && isValidEmployeePrivate(incoming()) && isValidUpdateMeta() && (
+        isAdmin() ||
+        (isSignedIn() && existing().email == request.auth.token.email && incoming().diff(existing()).affectedKeys().hasOnly(['soDienThoai', 'ngaySinh', 'queQuan', 'diaChiThuongTru', 'soCCCD', 'ngayCapCCCD', 'noiCapCCCD', 'trinhDoHocVan', 'tinhTrangHonNhan', 'nguoiLienHeKhanCap', 'sdtKhanCap', 'updatedAt']))
+      );
       allow delete: if isValidId(docId) && isAdmin();
     }
 

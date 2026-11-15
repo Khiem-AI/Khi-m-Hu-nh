@@ -33,6 +33,10 @@ export const EmployeesTab: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('123456');
   const [ngayVao, setNgayVao] = useState('2026-11-10');
+  const [ngaySinh, setNgaySinh] = useState('');
+  const [queQuan, setQueQuan] = useState('');
+  const [phongBan, setPhongBan] = useState('Kỹ Thuật & Bảo Trì (O&M)');
+  const [ngayNghiPhepNam, setNgayNghiPhepNam] = useState<number>(12);
   const [anhDaiDien, setAnhDaiDien] = useState(
     'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
   );
@@ -47,6 +51,12 @@ export const EmployeesTab: React.FC = () => {
   const [editChucVu, setEditChucVu] = useState<UserRole>('Kỹ thuật viên');
   const [editPhone, setEditPhone] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editNgayVao, setEditNgayVao] = useState('');
+  const [editNgaySinh, setEditNgaySinh] = useState('');
+  const [editQueQuan, setEditQueQuan] = useState('');
+  const [editPhongBan, setEditPhongBan] = useState('');
+  const [editNghiPhepNam, setEditNghiPhepNam] = useState<number>(12);
+  const [editNghiPhepDaDung, setEditNghiPhepDaDung] = useState<number>(0);
   const [editAnhDaiDien, setEditAnhDaiDien] = useState('');
   const [editRules, setEditRules] = useState<string[]>([]);
   const [editAllowedViews, setEditAllowedViews] = useState<string[]>([]);
@@ -106,6 +116,12 @@ export const EmployeesTab: React.FC = () => {
     setEditChucVu(emp.chucVu);
     setEditPhone(emp.soDienThoai);
     setEditEmail(emp.email);
+    setEditNgayVao(emp.ngayVao || '');
+    setEditNgaySinh(emp.ngaySinh || '');
+    setEditQueQuan(emp.queQuan || '');
+    setEditPhongBan(emp.phongBan || 'Kỹ Thuật & Bảo Trì (O&M)');
+    setEditNghiPhepNam(emp.ngayNghiPhepNam ?? 12);
+    setEditNghiPhepDaDung(emp.ngayNghiPhepDaDung ?? 0);
     setEditAnhDaiDien(emp.anhDaiDien || '');
     setEditRules(emp.quyenHan || ['VIEW_EQUIPMENT', 'EXECUTE_PLANS', 'PROCESS_TICKETS']);
     setEditAllowedViews(getEffectiveAllowedViews(emp));
@@ -125,6 +141,12 @@ export const EmployeesTab: React.FC = () => {
       chucVu: editChucVu,
       soDienThoai: editPhone,
       email: editEmail,
+      ngayVao: editNgayVao,
+      ngaySinh: editNgaySinh || undefined,
+      queQuan: editQueQuan.trim() || undefined,
+      phongBan: editPhongBan.trim() || undefined,
+      ngayNghiPhepNam: Math.max(0, Math.min(365, Number(editNghiPhepNam) || 0)),
+      ngayNghiPhepDaDung: Math.max(0, Math.min(365, Number(editNghiPhepDaDung) || 0)),
       password: editPassword,
       anhDaiDien: editAnhDaiDien || editingEmployee.anhDaiDien,
       quyenHan: editRules,
@@ -158,6 +180,11 @@ export const EmployeesTab: React.FC = () => {
       date: '2026-11-10',
       chucVu,
       ngayVao,
+      ngaySinh: ngaySinh || undefined,
+      queQuan: queQuan.trim() || undefined,
+      phongBan: phongBan.trim() || 'Kỹ Thuật & Bảo Trì (O&M)',
+      ngayNghiPhepNam: Math.max(0, Math.min(365, Number(ngayNghiPhepNam) || 12)),
+      ngayNghiPhepDaDung: 0,
       soDienThoai,
       email,
       username: maNhanVien.trim().toUpperCase(),
@@ -173,6 +200,10 @@ export const EmployeesTab: React.FC = () => {
     setTenNhanVien('');
     setSoDienThoai('');
     setEmail('');
+    setNgaySinh('');
+    setQueQuan('');
+    setPhongBan('Kỹ Thuật & Bảo Trì (O&M)');
+    setNgayNghiPhepNam(12);
     setPassword('123456');
     setAnhDaiDien(
       'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
@@ -320,6 +351,7 @@ export const EmployeesTab: React.FC = () => {
                 <th className="py-3 px-4">Mã NV</th>
                 <th className="py-3 px-4">Họ Và Tên</th>
                 <th className="py-3 px-4">Chức Vụ</th>
+                <th className="py-3 px-4">Ngày Vào & Phép Năm</th>
                 <th className="py-3 px-4">Mật Khẩu</th>
                 <th className="py-3 px-4">View Được Phép Xem</th>
                 <th className="py-3 px-4">Email</th>
@@ -368,6 +400,12 @@ export const EmployeesTab: React.FC = () => {
                       >
                         {emp.chucVu}
                       </span>
+                    </td>
+                    <td className="py-3.5 px-4 whitespace-nowrap font-mono tabular-nums text-[11px]">
+                      <div className="text-slate-200 font-semibold">{emp.ngayVao || '—'}</div>
+                      <div className="text-slate-400">
+                        Phép còn: {Math.max(0, (emp.ngayNghiPhepNam ?? 12) - (emp.ngayNghiPhepDaDung ?? 0))}/{emp.ngayNghiPhepNam ?? 12} ngày
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <div className="flex items-center gap-1.5 font-mono text-slate-300">
@@ -513,6 +551,73 @@ export const EmployeesTab: React.FC = () => {
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Ngày tháng năm sinh</label>
+                  <input
+                    type="date"
+                    value={editNgaySinh}
+                    onChange={(e) => setEditNgaySinh(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Quê quán</label>
+                  <input
+                    type="text"
+                    value={editQueQuan}
+                    onChange={(e) => setEditQueQuan(e.target.value)}
+                    placeholder="VD: Bến Tre / Hà Nội..."
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Ngày vào làm</label>
+                  <input
+                    type="date"
+                    value={editNgayVao}
+                    onChange={(e) => setEditNgayVao(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Phòng ban / Bộ phận</label>
+                  <input
+                    type="text"
+                    value={editPhongBan}
+                    onChange={(e) => setEditPhongBan(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Số ngày nghỉ phép / năm</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    step={0.5}
+                    value={editNghiPhepNam}
+                    onChange={(e) => setEditNghiPhepNam(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-300 font-semibold block mb-1">Số ngày phép đã nghỉ</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    step={0.5}
+                    value={editNghiPhepDaDung}
+                    onChange={(e) => setEditNghiPhepDaDung(Number(e.target.value) || 0)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                   />
                 </div>
               </div>
@@ -756,6 +861,50 @@ export const EmployeesTab: React.FC = () => {
                     type="date"
                     value={ngayVao}
                     onChange={(e) => setNgayVao(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 font-semibold block mb-1">Ngày Sinh</label>
+                  <input
+                    type="date"
+                    value={ngaySinh}
+                    onChange={(e) => setNgaySinh(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 font-semibold block mb-1">Quê Quán</label>
+                  <input
+                    type="text"
+                    value={queQuan}
+                    onChange={(e) => setQueQuan(e.target.value)}
+                    placeholder="VD: Đồng Nai / Nghệ An"
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 font-semibold block mb-1">Phòng Ban</label>
+                  <input
+                    type="text"
+                    value={phongBan}
+                    onChange={(e) => setPhongBan(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs text-slate-400 font-semibold block mb-1">Số Ngày Phép Năm</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    step={0.5}
+                    value={ngayNghiPhepNam}
+                    onChange={(e) => setNgayNghiPhepNam(Number(e.target.value) || 0)}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono"
                   />
                 </div>

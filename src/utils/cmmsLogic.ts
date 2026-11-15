@@ -253,7 +253,10 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
 
   if (!user) return ['dashboard'];
   if (Array.isArray(user.allowedViews) && user.allowedViews.length > 0) {
-    return filterAdminViews(user.allowedViews);
+    const withProfile = user.allowedViews.includes('profile')
+      ? user.allowedViews
+      : [...user.allowedViews, 'profile'];
+    return filterAdminViews(withProfile);
   }
   if (adminAccess) {
     return allViewIds;
@@ -269,6 +272,7 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
   return [
     'dashboard',
     'my_tasks',
+    'profile',
     'equipment',
     'maintenance',
     'inspection_calibration',

@@ -8,6 +8,7 @@ import { canAccessBackup, getEffectiveAllowedViews, isAdminLevel } from './utils
 import { DashboardTab } from './components/tabs/DashboardTab';
 import { AdminDashboardTab } from './components/tabs/AdminDashboardTab';
 import { MyTasksTab } from './components/tabs/MyTasksTab';
+import { ProfileTab } from './components/tabs/ProfileTab';
 import { EquipmentTab } from './components/tabs/EquipmentTab';
 import { MaintenanceTab } from './components/tabs/MaintenanceTab';
 import { SafetyInspectionTab } from './components/tabs/SafetyInspectionTab';
@@ -219,6 +220,8 @@ function CMMSApp() {
               onOpenTicketFromEquipment={handleOpenTicketFromEquipment}
             />
           )}
+
+          {activeTab === 'profile' && <ProfileTab />}
 
           {activeTab === 'equipment' && (
             <EquipmentTab

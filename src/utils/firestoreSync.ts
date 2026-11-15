@@ -355,6 +355,20 @@ export function sanitizeEmployeePublic(emp: Employee): Record<string, unknown> {
     quyenHan: Array.isArray(emp.quyenHan) ? emp.quyenHan.slice(0, 30) : undefined,
     allowedViews: Array.isArray(emp.allowedViews) ? emp.allowedViews.slice(0, 30) : undefined,
     anhDaiDien: clampDataUrl(emp.anhDaiDien),
+    gioiTinh: emp.gioiTinh,
+    phongBan: emp.phongBan ? clampString(emp.phongBan, 120) : undefined,
+    chuyenMon: emp.chuyenMon ? clampString(emp.chuyenMon, 300) : undefined,
+    loaiHopDong: emp.loaiHopDong,
+    caLamViec: emp.caLamViec ? clampString(emp.caLamViec, 120) : undefined,
+    ngayNghiPhepNam:
+      typeof emp.ngayNghiPhepNam === 'number'
+        ? Math.min(365, Math.max(0, emp.ngayNghiPhepNam))
+        : undefined,
+    ngayNghiPhepDaDung:
+      typeof emp.ngayNghiPhepDaDung === 'number'
+        ? Math.min(365, Math.max(0, emp.ngayNghiPhepDaDung))
+        : undefined,
+    ghiChuHoSo: emp.ghiChuHoSo ? clampString(emp.ghiChuHoSo, 1500) : undefined,
   });
 }
 
@@ -363,6 +377,46 @@ export function sanitizeEmployeePrivate(emp: Employee): Record<string, unknown> 
     maNhanVien: clampString(emp.maNhanVien, 60),
     email: clampString((emp.email || '').trim().toLowerCase(), 200),
     soDienThoai: emp.soDienThoai ? clampString(emp.soDienThoai, 40) : undefined,
+    ngaySinh: emp.ngaySinh ? clampString(emp.ngaySinh, 32) : undefined,
+    queQuan: emp.queQuan ? clampString(emp.queQuan, 200) : undefined,
+    diaChiThuongTru: emp.diaChiThuongTru ? clampString(emp.diaChiThuongTru, 300) : undefined,
+    soCCCD: emp.soCCCD ? clampString(emp.soCCCD, 32) : undefined,
+    ngayCapCCCD: emp.ngayCapCCCD ? clampString(emp.ngayCapCCCD, 32) : undefined,
+    noiCapCCCD: emp.noiCapCCCD ? clampString(emp.noiCapCCCD, 200) : undefined,
+    trinhDoHocVan: emp.trinhDoHocVan ? clampString(emp.trinhDoHocVan, 200) : undefined,
+    tinhTrangHonNhan: emp.tinhTrangHonNhan,
+    nguoiLienHeKhanCap: emp.nguoiLienHeKhanCap
+      ? clampString(emp.nguoiLienHeKhanCap, 160)
+      : undefined,
+    sdtKhanCap: emp.sdtKhanCap ? clampString(emp.sdtKhanCap, 40) : undefined,
+  });
+}
+
+export function sanitizeEmployeeSelfPublic(emp: Employee): Record<string, unknown> {
+  return stripUndefined({
+    tenNhanVien: clampString(emp.tenNhanVien, 160),
+    anhDaiDien: clampDataUrl(emp.anhDaiDien),
+    gioiTinh: emp.gioiTinh,
+    chuyenMon: emp.chuyenMon ? clampString(emp.chuyenMon, 300) : undefined,
+    ghiChuHoSo: emp.ghiChuHoSo ? clampString(emp.ghiChuHoSo, 1500) : undefined,
+  });
+}
+
+export function sanitizeEmployeeSelfPrivate(emp: Employee): Record<string, unknown> {
+  return stripUndefined({
+    soDienThoai: emp.soDienThoai ? clampString(emp.soDienThoai, 40) : undefined,
+    ngaySinh: emp.ngaySinh ? clampString(emp.ngaySinh, 32) : undefined,
+    queQuan: emp.queQuan ? clampString(emp.queQuan, 200) : undefined,
+    diaChiThuongTru: emp.diaChiThuongTru ? clampString(emp.diaChiThuongTru, 300) : undefined,
+    soCCCD: emp.soCCCD ? clampString(emp.soCCCD, 32) : undefined,
+    ngayCapCCCD: emp.ngayCapCCCD ? clampString(emp.ngayCapCCCD, 32) : undefined,
+    noiCapCCCD: emp.noiCapCCCD ? clampString(emp.noiCapCCCD, 200) : undefined,
+    trinhDoHocVan: emp.trinhDoHocVan ? clampString(emp.trinhDoHocVan, 200) : undefined,
+    tinhTrangHonNhan: emp.tinhTrangHonNhan,
+    nguoiLienHeKhanCap: emp.nguoiLienHeKhanCap
+      ? clampString(emp.nguoiLienHeKhanCap, 160)
+      : undefined,
+    sdtKhanCap: emp.sdtKhanCap ? clampString(emp.sdtKhanCap, 40) : undefined,
   });
 }
 
@@ -596,7 +650,8 @@ export async function upsertCloudDoc(
 
     if (existsOnServer) {
       const isBootAdmin = (auth.currentUser?.email || '').toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL;
-      const includeAllowed = colName !== 'employees_private' || isBootAdmin;
+      const includeAllowed =
+        (colName !== 'employees_private' && colName !== 'employees_public') || isBootAdmin;
       const updatePayload = buildUpdatePayload(colName, sanitizedData, allowedEmails, includeAllowed);
       await updateDoc(docRef, updatePayload);
       knownCloudIds?.add(path);

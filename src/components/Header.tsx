@@ -30,6 +30,7 @@ import {
   Cloud,
   CloudOff,
   RefreshCw,
+  UserCircle,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -623,6 +624,17 @@ export const Header: React.FC<HeaderProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
+                  <button
+                    onClick={() => {
+                      setShowUserDropdown(false);
+                      onNavigateTab('profile');
+                    }}
+                    className="w-full py-2 px-3 rounded-xl bg-cyan-600/15 hover:bg-cyan-600/25 text-cyan-700 dark:text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center gap-2 transition"
+                  >
+                    <UserCircle className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />
+                    <span>Hồ Sơ Cá Nhân (Profile)</span>
+                  </button>
+
                   <button
                     onClick={() => {
                       setShowUserDropdown(false);

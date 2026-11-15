@@ -180,7 +180,7 @@ export interface Employee {
   tenNhanVien: string;
   date: string; // YYYY-MM-DD
   chucVu: UserRole;
-  ngayVao: string; // YYYY-MM-DD
+  ngayVao: string; // YYYY-MM-DD (Ngày vào làm)
   soDienThoai: string;
   email: string;
   username: string;
@@ -188,6 +188,25 @@ export interface Employee {
   quyenHan?: string[]; // Danh sách quyền (rules)
   allowedViews?: string[]; // Phân quyền view tùy chọn theo phân hệ
   anhDaiDien?: string;
+  // Hồ sơ cá nhân & Chế độ nghỉ phép (Profile)
+  ngaySinh?: string; // YYYY-MM-DD (Ngày tháng năm sinh)
+  gioiTinh?: 'Nam' | 'Nữ' | 'Khác';
+  queQuan?: string; // Quê quán
+  diaChiThuongTru?: string; // Địa chỉ hiện tại / Thường trú
+  soCCCD?: string; // Số CCCD / CMND
+  ngayCapCCCD?: string; // YYYY-MM-DD
+  noiCapCCCD?: string;
+  trinhDoHocVan?: string; // Trình độ học vấn / Bằng cấp
+  tinhTrangHonNhan?: 'Độc thân' | 'Đã kết hôn' | 'Khác';
+  phongBan?: string; // Phòng ban / Bộ phận
+  chuyenMon?: string; // Chuyên môn / Chứng chỉ nghề
+  loaiHopDong?: 'Chính thức' | 'Thử việc' | 'Thời vụ' | 'Quản lý';
+  caLamViec?: string; // Ca làm việc chính
+  ngayNghiPhepNam?: number; // Tổng số ngày nghỉ phép trong năm
+  ngayNghiPhepDaDung?: number; // Số ngày nghỉ phép đã sử dụng trong năm
+  nguoiLienHeKhanCap?: string; // Họ tên người liên hệ khẩn cấp
+  sdtKhanCap?: string; // Số điện thoại liên hệ khẩn cấp
+  ghiChuHoSo?: string; // Ghi chú hồ sơ / Kỹ năng
 }
 
 // Sheet 11: Dien_Nuoc
@@ -291,6 +310,7 @@ export const APP_VIEW_OPTIONS: AppViewOption[] = [
   { id: 'dashboard', label: 'Tổng Quan O&M', desc: 'Bảng điều hành nhà máy' },
   { id: 'admin_dashboard', label: 'Dashboard Admin', desc: 'OEE, MTBF, MTTR & KPI vận hành' },
   { id: 'my_tasks', label: 'Việc Được Giao', desc: 'Nhiệm vụ của tôi' },
+  { id: 'profile', label: 'Hồ Sơ Cá Nhân', desc: 'Thông tin & Phép năm' },
   { id: 'equipment', label: 'Danh Sách Thiết Bị', desc: 'Máy móc & Mã QR' },
   { id: 'maintenance', label: 'Kế Hoạch & Lịch Sử', desc: 'Bảo trì định kỳ' },
   { id: 'inspection_calibration', label: 'Kiểm Định & Hiệu Chuẩn', desc: 'An toàn, hiệu chuẩn & nhắc hạn' },
