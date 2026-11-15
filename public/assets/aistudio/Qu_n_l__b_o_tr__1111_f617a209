@@ -1,0 +1,335 @@
+Mã thiết bị,Tên thiết bị,,Hệ thống/danh mục,Vị trí,Mức độ rủi ro,Trạng thái,Tần suất,Người phụ trách,Email,QR code,Source Row,Hình ảnh
+HVAC-CH-01,Chiller 01,"Model: YKFRFJQ75ELH
+ Công suất lạnh: 550RT; Công suất điện: 300,9kW; Điện áp: 380V/50Hz; Giải nhiệt nước.",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,,,https://drive.google.com/thumbnail?id=1BClKVnAj1bd9yvWVJMuYSamLlPSCt-nj&sz=w1000
+HVAC-CH-02,Chiller 02,"Model: YKFRFJQ75ELH
+Công suất lạnh: 550RT; Công suất điện: 300,9kW; Điện áp: 380V/50Hz; Giải nhiệt nước.",Hệ Thống Lạnh,Utility House,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-02,9,https://drive.google.com/thumbnail?id=1LgEHWiRpQBJy7UZ41E1TtowYr-cGdiR7&sz=w1000
+HVAC-CH-03,Mini Chiller,"Model: YMAA0200PE
+ Công suất lạnh: 54.6RT; công suất điện: 61.4kW; Điện áp: 380V/50Hz; Giải nhiệt gió.",Hệ Thống Lạnh,Utility House,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-03,10,
+HVAC-PAU-01,PAU 01,"Model: YSM25M-2429-S-L
+Công suất lạnh: 137,26 RT
+Công suất điện: 19 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 7250 l/s
+",Hệ Thống Lạnh,AHU Room,,Hoạt động,Monthly,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-PAU-01,,https://drive.google.com/thumbnail?id=1HqQykWFWyenc-K8QFbz808Wi1BhnHOnX&sz=w1000
+HVAC-PAU-02,PAU 02,"Model: YSM25M-2429-S-L
+Công suất lạnh: 137,26 RT
+Công suất điện: 19 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 7250 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,Monthly,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-PAU-02,,https://drive.google.com/thumbnail?id=18JG7VAEceht7nGsXdvXJhKJzVloYZnFJ&sz=w1000
+HVAC-AHU-01,AHU 01,"Model: YSM50M-3232-S-L
+Công suất lạnh: 87,54 RT
+Công suất điện: 45 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 20821 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-01,,https://drive.google.com/thumbnail?id=1zXpWhHlX4rKdjIPSeUl7TQ9OE4pqHHwf&sz=w1000
+HVAC-AHU-02,AHU 02,"Model: YSM50M-3232-S-L
+Công suất lạnh: 87,54 RT
+Công suất điện: 45 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 20821 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-02,,https://drive.google.com/thumbnail?id=1wnltoRI9AbF88X7NOepsq-Dyle3aBhts&sz=w1000
+HVAC-AHU-03,AHU 03,"Model: YSM50M-3232-S-L
+Công suất lạnh: 87,54 RT
+Công suất điện: 45 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 20821 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-03,,https://drive.google.com/thumbnail?id=1fID3KITYvtfRNygk-eYl4nS_h8UVS4wG&sz=w1000
+HVAC-AHU-04,AHU 04,"Model: YSM50M-3232-S-L
+Công suất lạnh: 87,54 RT
+Công suất điện: 45 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 20821 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-04,,https://drive.google.com/thumbnail?id=1dQ9Ql71THummyn8xD8zgTX8Obw1ei5rG&sz=w1000
+HVAC-AHU-05,AHU 05,"Model: YSM50M-3232-S-L
+Công suất lạnh: 87,54 RT
+Công suất điện: 45 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 20821 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-05,,https://drive.google.com/thumbnail?id=18MtVUhQWpoPWwEdKWbox9aZoqC_Oefho&sz=w1000
+HVAC-AHU-06,AHU 06,"Model: YSM50M-3232-S-L
+Công suất lạnh: 87,54 RT
+Công suất điện: 39.3kW
+Điện áp: 380V/50Hz/ VSD
+Motor model: YVF2-45kW-4P
+Fan type: SYQ1000K
+Fan speed: 963r/min
+Cooling Cap:307.82kW
+ESP:600Pa
+TSP:1120.4Pa
+Lưu lượng gió: 74956m3/h
+Belt: SPC2360
+Mfg date: 11/09/2021",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-06,,https://drive.google.com/thumbnail?id=1FkM6YTXT5rYLEvFaQUZG0JP0euncpPsp&sz=w1000
+HVAC-WAH-01,AHU Warehouse 01,"Model: YSM25M-2429-S-L
+Công suất lạnh: 55,46 RT
+Công suất điện: 30 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 14041 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-WAH-01,,https://drive.google.com/thumbnail?id=1UdJdffFsagM3ULIfKCl6BIGEWEDCCPZ7&sz=w1000
+HVAC-WAH-02,AHU Warehouse 02,"Model: YSM25M-2429-S-L
+Công suất lạnh: 55,46 RT
+Công suất điện: 30 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 14041 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-WAH-02,,https://drive.google.com/thumbnail?id=1tw4hfRaWL_E4bcN6wRknk-YsLwRPVP36&sz=w1000
+HVAC-AHU-IQC,AHU IQC,"Model: YSM25M-0715-S-L
+Công suất lạnh: 8,65 RT
+Công suất điện: 4 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 1697 l/s",Hệ Thống Lạnh,IQC ROOM,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-IQC,,
+HVAC-AHU-FIN,AHU FIN,"Model: YSM25M-1117-S-L
+Công suất lạnh: 10.04 RT
+Công suất điện: 5.5 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 2480 l/s",Hệ Thống Lạnh,FIN ROOM,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-FIN,,
+HVAC-AHU-CT,AHU Coating,"Model: YSM25M-1117-S-L
+Công suất lạnh: 30.72 RT
+Công suất điện: 11.5 kW, 2 quạt
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 3000 l/s",Hệ Thống Lạnh,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-CT,,https://drive.google.com/thumbnail?id=1JKINS3upC9A_Ai22f6TOaX0vvSbrtor8&sz=w1000
+HVAC-AHU-BED,AHU Bed,"Model: YSM25M-0915-S-L
+Công suất lạnh: 15.07 RT
+Công suất điện: 4 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 2087 l/s",Hệ Thống Lạnh,BED Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-BED,,
+HVAC-CT-01,Tháp giải nhiệt 01,"Model: NHP-350FX2
+Công suất lạnh: 700 RT
+Lưu lượng: 106.8 l/s
+Nhiệt độ bầu ướt: 28 °C
+Nhiệt độ nước vào/ra: 36/31 °C
+Công suất điện: 22 kW, 2 quạt.
+Điện áp: 380V/3P/50Hz/VSD
+",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CT-01,,
+HVAC-CT-02,Tháp giải nhiệt 02,"Model: NHP-350FX2
+Công suất lạnh: 700 RT
+Lưu lượng: 106.8 l/s
+Nhiệt độ bầu ướt: 28 °C
+Nhiệt độ nước vào/ra: 36/31 °C
+Công suất điện: 22 kW, 2 quạt.
+Điện áp: 380V/3P/50Hz/VSD
+",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CT-02,,
+HVAC-CLWP-01,Bơm nước giải nhiệt 01,"Model: Pump: LF50157G-X58RJG45.0/4
+Motor: 1LE0003-2BB23-3AB4-Z
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 30 kW
+Lưu lượng: 106 l/s
+Cột áp: 21 mH20",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CLWP-01,,https://drive.google.com/thumbnail?id=1dG8cTl71rql1og-awoHRahfd4akiCl_l&sz=w1000
+HVAC-CLWP-02,Bơm nước giải nhiệt 02,"Model: Pump: LF50157G-X58RJG45.0/4
+Motor: 1LE0003-2BB23-3AB4-Z
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 30 kW
+Lưu lượng: 106 l/s
+Cột áp: 21 mH20",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CLWP-02,,https://drive.google.com/thumbnail?id=1FGtQPa_-OpeImauPwnj9XHPHHoi1w9If&sz=w1000
+HVAC-CLWP-03,Bơm nước giải nhiệt 03,"Model: Pump: LF50157G-X58RJG45.0/4
+Motor: 1LE0003-2BB23-3AB4-Z
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 30 kW
+Lưu lượng: 106 l/s
+Cột áp: 21 mH20",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CLWP-03,,https://drive.google.com/thumbnail?id=1ClGiPKjDPHayW4t-W29BYVPRtXyQ4lfw&sz=w1000
+HVAC-CHWP-01,Bơm nước lạnh 01,"Model: Pump: LF60123G-XA6RJG30.0/4
+Motor: 1LE0003-2AB43-3AB4-Z
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 45 kW
+Lưu lượng: 92 l/s
+Cột áp: 35 mH20",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CHWP-01,,https://drive.google.com/thumbnail?id=11vGKRf1Ru7zy6ncCWLcDtJBFhOmHva0O&sz=w1000
+HVAC-CHWP-02,Bơm nước lạnh 02,"Model: Pump: LF60123G-XA6RJG30.0/4
+Motor: 1LE0003-2AB43-3AB4-Z
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 45 kW
+Lưu lượng: 92 l/s
+Cột áp: 35 mH20",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CHWP-02,,https://drive.google.com/thumbnail?id=1GrrP4Wcbi1qoPHKr05SlC6ENz8yLGtdD&sz=w1000
+HVAC-CHWP-03,Bơm nước lạnh 03,"Model: Pump: LF60123G-XA6RJG30.0/4
+Motor: 1LE0003-2AB43-3AB4-Z
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 45 kW
+Lưu lượng: 92 l/s
+Cột áp: 35 mH20",Hệ Thống Lạnh,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CHWP-03,,https://drive.google.com/thumbnail?id=1vF9kgv2MQiSpMgfOpMg7K3xXJqycjrQN&sz=w1000
+HVAC-FCU-FAC,FCU khu vực nhà xưởng,"FCU khu vực kho SMT, Workshop, Xray, Lab, Training, phòng họp Manufacturing, Locker, Receiving. ",Hệ Thống Lạnh,Factory,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-FCU-FAC,,
+HVAC-FCU-FL1,FCU khu vực văn phòng tầng 1,,Hệ Thống Lạnh,Office,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-27,34,
+HVAC-FCU-FL2,FCU khu vực văn phòng tầng 2,,Hệ Thống Lạnh,Office,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-28,35,
+HVAC-FCU-KIT,FCU khu vực bếp,,Hệ Thống Lạnh,Kitchen,Low,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-29,36,
+HVAC-AC-G1,"Máy lạnh nhóm 1: máy lạnh BV cổng 1, cổng 2, MRB, phòng tài xế",,Hệ Thống Lạnh,Office,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-30,37,
+HVAC-AC-G2,"Máy lạnh nhóm 2: máy lạnh AC IT, FC, AD",,Hệ Thống Lạnh,Office,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-31,38,
+HVAC-AC-G3,"Máy lạnh nhóm 3: Kho hoá chất, IQC",,Hệ Thống Lạnh,Office,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-32,39,
+HVAC-EPL-01,Quạt gió thải PL khu sản xuất 01,"model: Axial Fan Type
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 15 kW
+Lưu lượng: 10497 l/s
+Áp suất: 900 Pa",Thông gió,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EPL-01,,
+HVAC-EPL-02,Quạt gió thải PL khu sản xuất 02,"model: Axial Fan Type
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 15 kW
+Lưu lượng: 10497 l/s
+Áp suất: 900 Pa",Thông gió,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EPL-02,,
+HVAC-EWA-01,Quạt gió thải Wave 01,"model: Axial Fan Type
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 3 kW
+Lưu lượng: 1776 l/s
+Áp suất: 800 Pa",Thông gió,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EWA-01,,
+HVAC-EWA-02,Quạt gió thải Wave 02,"model: Axial Fan Type
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 3 kW
+Lưu lượng: 1776 l/s
+Áp suất: 800 Pa",Thông gió,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EWA-02,,
+HVAC-ECT-01,Quạt gió thải phòng Coating 01,"model: Axial Fan Type
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 3 kW
+Lưu lượng: 1300 l/s
+Áp suất: 700 Pa",Thông gió,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-ECT-01,,
+HVAC-ECT-02,Quạt gió thải phòng Coating 02,"model: Axial Fan Type
+Điện áp: 380V/3 pha/50Hz/VSD
+Công suất: 3 kW
+Lưu lượng: 1300 l/s
+Áp suất: 700 Pa",Thông gió,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-ECT-02,,
+HVAC-OEFL1,"Quạt gió tươi, gió thải tầng 1",,Thông gió,Office,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-39,46,
+HVAC-OEFL2,"Quạt gió tươi, gió thải tầng 2",,Thông gió,Office,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-40,47,
+HVAC-OEFAC,"Quạt gió tươi, gió thải nhà xưởng",,Thông gió,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-41,48,
+HVAC-OEKIT,"Quạt gió tươi, gió thải khu vực bếp",,Thông gió,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-42,49,
+HVAC-OEUTI,"Quạt gió tươi, gió thải khu vực Utility",,Thông gió,Utility House,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-43,50,
+CMP-GA90-01,Máy nén khí GA90-1,"Model: Atlas Copco GA90VSD
+Điện áp: 380V/3pha/50Hz/VSD.
+Công suất 90 kW
+Giải nhiệt gió
+Áp suất làm việc: 7-8.5 bar
+Lưu lượng tối đa: 306 l/s
+Độ ồn: 74 dB",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA90-01,,https://drive.google.com/thumbnail?id=14-nlmxcsATcUYB1kCQW6ecpJw9guAyik&sz=w1000
+CMP-GA90-02,Máy nén khí GA90-2,"Model: Atlas Copco GA90VSD
+Điện áp: 380V/3pha/50Hz/VSD.
+Công suất 90 kW
+Giải nhiệt gió
+Áp suất làm việc: 7-8.5 bar
+Lưu lượng tối đa: 306 l/s
+Độ ồn: 74 dB",Máy nén Khí và Nito - Vacuum,Utility House,,Đang sửa chữa,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA90-02,,https://drive.google.com/thumbnail?id=1F6D-TYiTewws-oQ_v1t6-pJWpPHTPwr3&sz=w1000
+CMP-GA75-01,Máy nén khí GA75-1,"Model: Atlas Copco GA75
+Điện áp: 380V/3pha/50Hz
+Công suất 75 kW
+Giải nhiệt gió
+Áp suất làm việc: 7-8.5 bar
+Lưu lượng tối đa: 212 l/s
+Độ ồn: 73 dB",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA75-01,,https://drive.google.com/thumbnail?id=17npHMfMCe4OaDO-S_tx43EsCDxZfz2ph&sz=w1000
+CMP-GA75-02,Máy nén khí GA75-2,"Model: Atlas Copco GA75
+Điện áp: 380V/3pha/50Hz
+Công suất 75 kW
+Giải nhiệt gió
+Áp suất làm việc: 7-8.5 bar
+Lưu lượng tối đa: 212 l/s
+Độ ồn: 73 dB",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA75-02,,https://drive.google.com/thumbnail?id=1-zmxv-PoMikHoCoR7DG_da31tZH4cm2o&sz=w1000
+CMP-NPG-01,Máy Nito NPG-01,"Model: Atlas Copco NGP360+
+Điện áp: 220V/1pha/50Hz
+Độ tinh khiết: 99,999 lưu lượng 107 m3/h, hệ số Air fac: 5.3
+Áp suất khí nén đầu vào: >4.5 bar, dewpoint: <10 °C
+",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-NPG-01,,https://drive.google.com/thumbnail?id=1IJTeRLLn5XFVLb7jnZo22ZaA45Lli6WO&sz=w1000
+CMP-NPG-02,Máy Nito NPG-02,"Model: Atlas Copco NGP360+
+Điện áp: 220V/1pha/50Hz
+Độ tinh khiết: 99,999 lưu lượng 107 m3/h, hệ số Air fac: 5.3
+Áp suất khí nén đầu vào: >4.5 bar, dewpoint: <10 °C
+",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-NPG-02,,https://drive.google.com/thumbnail?id=1AhWm0FCLVVe7y6KqvZi2JIB-Ivv9Zv8g&sz=w1000
+CMP-AD300-01,Máy sấy hấp thụ AD300-1,"Model: Atlas Copco AD300.
+Điện áp: 220V/1pha/50Hz
+Công suất: 6.3 kW
+Lưu lượng: 300l/s tại áp suất 7 bar
+Dewpoint: -41 - -60 °C
+",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-AD300-01,,https://drive.google.com/thumbnail?id=1Zlv5ktCSS_jc5r7mhgD_o5m5VEYyrJfn&sz=w1000
+CMP-AD300-02,Máy sấy hấp thụ AD300-2,"Model: Atlas Copco AD300.
+Điện áp: 220V/1pha/50Hz
+Công suất: 6.3 kW
+Lưu lượng: 300l/s tại áp suất 7 bar
+Dewpoint: -41 - -60 °C
+",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-AD300-02,,https://drive.google.com/thumbnail?id=1-C7rhVXKBzh-Qd1reOBZd0NfcXAQr5AU&sz=w1000
+CMP-AIR-T,Bồn chứa khí nén,,Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-AIR-T,,https://drive.google.com/thumbnail?id=1DMBFhg5gWPrABcoHOMpJF2XVP3hE_7zE&sz=w1000
+CMP-FD220-01,Máy sấy Gas FD220-1,"Model: Atlas Copco FD220.
+Điện áp: 220V/1pha/50Hz
+Công suất: 1.77 kW
+Lưu lượng: 220/s tại áp suất 7 bar
+Dewpoint: 3 - 7 °C
+",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-FD220-01,,https://drive.google.com/thumbnail?id=1vZRXQk9EhcX5rqBE8ZsbXppdLoywwJt0&sz=w1000
+CMP-FD220-02,Máy sấy Gas FD220-2,"Model: Atlas Copco FD220.
+Điện áp: 220V/1pha/50Hz
+Công suất: 1.77 kW
+Lưu lượng: 220/s tại áp suất 7 bar
+Dewpoint: 3 - 7 °C",Máy nén Khí và Nito - Vacuum,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-FD220-02,,https://drive.google.com/thumbnail?id=1-DJ_JQZWTPu4Ni55pM-kPDvEwanDuI0X&sz=w1000
+CMP-VACUM,Máy hút chân không,"Model: Bơm: V-VCS 200 - 2 bơm
+Điện áp: 380V/3pha/50Hz
+Công suất: 5.5 kW
+Lưu lượng: 200 m3/h
+Áp suất làm việc: -600 - -950 mbar ABS",Máy nén Khí và Nito - Vacuum,AHU Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-VACUM,,https://drive.google.com/thumbnail?id=1D_3t6QDnGZ-uUPF5elRZXr1TYdz5befr&sz=w1000
+WAT-DI,Hệ thống nước DI,"Lưu lượng: 2.67 m3/h
+ĐIện trở suất: 18 mOhm
+Áp suất: >40 mH2O.",Sản xuât nước DI- Drinking,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DI,,
+WAT-DK,Hệ thống nước Drinking,"Tiêu chuẩn đầu ra: QCVN6-1:2010/BYT
+Lưu lượng: 400 L/h
+Áp suất: >20 mH2O",Sản xuât nước DI- Drinking,Utility House,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DK,,
+WAT-WW,Hệ thống xử lý nước thải,"Công suất thiết kế: 180 m3/ngày đêm; 150 m3 đạt chuẩn cột B; 30 m3 đạt chuẩn cột A
+Lưu lượng cực đại: 9 m3/h
+Lưu lượng trung bình: 7.5 m3/h",Xử lý nước thải,Trạm xử lý nước thải,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-WW,,
+ELC-MV-01,Trạm trung thế 1,,Hệ thống điện,Nhà điện trung thế 2,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-59,66,
+ELC-MV-02,Trạm trung thế 2,,Hệ thống điện,Nhà điện trung thế 1,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-60,67,
+ELC-MSB-01,Tủ điện MSB 01,,Hệ thống điện,Nhà điện MSB1,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-61,68,
+ELC-MSB-02,Tủ điện MSB 02,,Hệ thống điện,Nhà điện MSB2,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-62,69,
+ELC-GE-01,Máy phát điện,,Hệ thống điện,Nhà máy phát điện,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-63,70,
+ELC-DB-AHU,Tủ điện phòng AHU,,Hệ thống điện,AHU Room,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-64,71,
+ELC-DB-H01,Tủ điện nhà điện 1,,Hệ thống điện,Nhà điện 1,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-65,72,
+ELC-DB-H02,Tủ điện nhà điện 2,,Hệ thống điện,Nhà điện 2,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-66,73,
+ELC-DB-H03,Tủ điện nhà điện 3,,Hệ thống điện,Nhà điện 3,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-67,74,
+ELC-UPS,Tủ điện UPS,,Hệ thống điện,AHU Room,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-68,75,
+ELC-PP100A,Tủ điện máy nén khí,,Hệ thống điện,Utility House,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-69,76,
+ELC-DB-CH,Tủ điện hệ thống chiller,,Hệ thống điện,Utility House,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-70,77,
+ELC-DB-Solar-01,Trạm điện solar -1,,Hệ thống điện,Trạm solar,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-71,78,
+ELC-DB-Solar -02,Trạm điện solar -2,,Hệ thống điện,Trạm solar,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-72,79,
+FFA-FF,Hệ thống chữa cháy,,"Hệ thống báo cháy, chữa cháy",Factory,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-73,80,
+FFA-FA,Hệ thống báo cháy,"Tủ báo cháy FireNetLatitude hochiki, 06 lopp 127địa chỉ/loop. Loop 1: 120/127 tầng 1 nhà văn phòng. Loop 2:98/127 địa chỉ cho chuông khẩn nhà xưởng, nhà điện 2, nhà bơm. Loop 3 : 126/127 khu nhà xưởng (X16- X26) và (Y1-Y2, Y4-Y17). Loop 4: 124/127 nhà xưởng trục (X5-X26) Y1-Y11, nhà xe. Loop5: 125/127 nhà xưởng trục X1-X16, Y1-Y19. Loop 6 : 113/127 nhà xưởng X26-X27, Y1-Y21,nhà phụ trợ, nhà điện 1, kho FC,nhà rác nguy hại.","Hệ thống báo cháy, chữa cháy",FC Room,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=FFA-FA,,https://drive.google.com/thumbnail?id=1WMqj-YnjqklnhokI2Tsa2QGJozx_8Yqf&sz=w1000
+FFA-F200-1,Chữa cháy khí FM200,,"Hệ thống báo cháy, chữa cháy",IT-Sever Room,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-75,82,
+FFA-F200-2,Chữa cháy khí FM200,,"Hệ thống báo cháy, chữa cháy",Trung thế 1,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-76,83,
+FFA-F200-3,Chữa cháy khí FM200,,"Hệ thống báo cháy, chữa cháy",Trung thế 2,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-77,84,
+FFA-EQ,Bình chữa cháy,,"Hệ thống báo cháy, chữa cháy",Factory,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-78,85,
+FFA-FOAM,Chữa cháy foam,,"Hệ thống báo cháy, chữa cháy",Chemical Store,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-79,86,
+FFA-PUMP,Trạm bơm nước chữa cháy,,"Hệ thống báo cháy, chữa cháy",FP Room,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-80,87,
+FFA-DBF,"Trụ chữa cháy, cuộn vòi",,"Hệ thống báo cháy, chữa cháy",Factory,High,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-81,88,
+WAT-PUM1,Trạm bơm nước sinh hoạt,,Hệ thống cấp thoát nước,Nhà bơm,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-82,89,
+WAT-PUM2,Trạm bơm nước tưới cỏ,,Hệ thống cấp thoát nước,Nhà bơm,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-83,90,
+WAT-PUM3,Đài phun nước,,Hệ thống cấp thoát nước,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-84,91,
+SEC-ACS,Hệ thống ACS,,Hệ thống an ninh - PA,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-85,92,
+SEC-FEN,Hệ thống báo động hàng rào,,Hệ thống an ninh - PA,Fence,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-86,93,
+SEC-CCTV,Hệ thống CCTV,,Hệ thống an ninh - PA,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-87,94,
+SEC-PA,Hệ thống âm thanh công cộng,,Hệ thống an ninh - PA,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-88,95,
+KIT-FAU,Vòi nước,,Thiết bị bếp - Nội thất,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-89,96,
+KIT-LPS,Đường ống gas,,Thiết bị bếp - Nội thất,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-90,97,
+KIT-OVE,Bếp nấu,,Thiết bị bếp - Nội thất,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-91,98,
+KIT-OVR,"Nồi cơm, tủ hâm",,Thiết bị bếp - Nội thất,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-92,99,
+KIT-DRY,Tủ sấy,,Thiết bị bếp - Nội thất,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-93,100,
+KIT-FRE,Tủ đông,,Thiết bị bếp - Nội thất,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-94,101,
+KIT-ICE,Máy làm đá,,Thiết bị bếp - Nội thất,Kitchen,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-95,102,
+OFF-P1,Pantry văn phòng,,Thiết bị bếp - Nội thất,Office ,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-96,103,
+OFF-P2,Pantry văn tiếp tân,,Thiết bị bếp - Nội thất,Office ,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-97,104,
+OFF-P3,Pantry Căn tin FL,,Thiết bị bếp - Nội thất,Office ,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-98,105,
+OFF-P4,Pantry nhà ăn phụ,,Thiết bị bếp - Nội thất,Office ,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-99,106,
+OFF-P5,Pantry AD,,Thiết bị bếp - Nội thất,Office ,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-100,107,
+INF-INLIG,Đèn chiếu sáng bên trong,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-101,108,
+INF-OULIG,Đèn chiếu sáng bên ngoài,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-102,109,
+INF-OFLIG,Đèn chiếu sáng khu vực văn phòng,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-103,110,
+INF-PAL1,Đèn chiếu sáng bãi xe tầng 1 + căn tin phụ,,Nhà Xưởng,Nhà xe tầng 1,Low,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-104,111,
+INF-PAL2,Đèn chiếu sáng bãi xe tầng 2,,Nhà Xưởng,Nhà xe tầng 2,Low,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-105,112,
+INF-GAT1,Cổng số 1,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-106,113,
+INF-GAT2,Cổng số 2,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-107,114,
+INF-AIRF,Quạt cắt gió khu vực xưởng,,Nhà Xưởng,Nhà cắt,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-108,115,
+INF-AIRO,Quạt cắt gió khu vực văn phòng,,Nhà Xưởng,Nhà cắt,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-109,116,
+INF-FLP,Bơm chống ngập,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-110,117,
+INF-DOOR,Hệ thống cửa ,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-111,118,
+INF- BUID,Hệ thống tòa nhà,,Nhà Xưởng,Factory,Medium,Hoạt động,Monthly,Khiem Huynh,khiemhuynhggs@gmail.com,https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=HVAC-CH-112,119,
+PUMP- WTANK,Hồ nước sinh hoạt,Bề ngầm 200m3,Hệ thống cấp thoát nước,Trạm bơm nước sinh hoạt,,Hoạt động,,Khiem Huynh,,,,
+HVAC-OAFELC1,Quạt thông gió nhà điện 1,,Thông gió,Nhà điện 1,,Hoạt động,,,,,,
+HVAC-OAFELC2,Quạt thông gió nhà điện 2,,Thông gió,Nhà điện 2,,Hoạt động,,,,,,
+INF-PWC-01,Nhà vệ sinh số 1 khu vực sản xuất,,Nhà Xưởng,Sản xuất,,Hoạt động,,,,,,
+INF-PWC-02,Nhà vệ sinh số 2 khu vực sản xuất,,Nhà Xưởng,Sản xuất,,Hoạt động,,,,,,
+INF-PWC-03,Nhà vệ sinh số 3 khu vực sản xuất,,Nhà Xưởng,Sản xuất,,Hoạt động,,,,,,
+INF-OWC-01,Nhà vệ sinh số 1,,Nhà Xưởng,Phía sau phòng y tế,,Hoạt động,,,,,,
+INF-OWC-02,Nhà vệ sinh khu vực khách,,,Gần phòng họp Excutive,,Hoạt động,,,,,,
+INF-OWC-02,Nhà vệ sinh MD,,Nhà Xưởng,Pantry MD,,Hoạt động,,,,,,
+INF-OWC-03,Nhà vệ sinh số 3,,Nhà Xưởng,Nhà vệ sinh khu open space khu phòng họp 1-1,,Hoạt động,,,,,,
+INF-OWC-04,Nhà vệ sinh số 4,,Nhà Xưởng,Gần Town hall,,Hoạt động,,,,,,
+INF-OWC-05,Nhà vệ sinh số 5,,Nhà Xưởng,Phòng tập Gym,,Hoạt động,,,,,,
+INF-MEET-01,Phòng họp Manufacturing,,Nhà Xưởng,Khu vực văn phòng tầng 1,,Hoạt động,,,,,,
+INF-MEET-01,Phòng họp Cobollaration,,Nhà Xưởng,Khu vực văn phòng tầng trệt,,Hoạt động,,,,,,
+INF-MEET-03,Phòng họp Enlightment,,Nhà Xưởng,Khu vực văn phòng tầng trệt,,Hoạt động,,,,,,
+INF-MEET-04,Phòng họp Excutive,,Nhà Xưởng,Khu vực văn phòng tầng trệt,,Hoạt động,,,,,,
+INF-MEET-05,Phòng họp Vision,,Nhà Xưởng,Khu vực văn phòng tầng 1,,Hoạt động,,,,,,
+INF-MEET-06,Phòng họp Growth,,Nhà Xưởng,Khu vực văn phòng tầng 1,,Hoạt động,,,,,,
+WAT-DBV-01,Máy lọc nước nhà bảo vệ số 1,Máy lọc nước uống 5 cấp lọc,Hệ thống cấp thoát nước,Nhà bảo vệ 1,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DBV-01,,
+WAT-DBV-02,Máy lọc nước nước uống,Máy lọc nước uống 5 cấp lọc,Hệ thống cấp thoát nước,Nhà bảo vệ 2,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DBV-02,,
+HVAC-AHU-ENGINEERING,AHU ENGINEERING,"Model: YSM25M-0915-S-L
+Công suất lạnh: 15.07 RT
+Công suất điện: 4 kW
+Điện áp: 380V/50Hz/ VSD
+Lưu lượng gió: 2110 l/s",Hệ thống lạnh,Engineering Office,,Hoạt động,,,,https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-ENGINEERING,,

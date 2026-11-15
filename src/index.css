@@ -1,0 +1,666 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  body {
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  body.dark-theme,
+  html.dark body {
+    background-color: #060a14;
+    color: #f8fafc;
+  }
+
+  body.light-theme,
+  html.light body {
+    background-color: #eef2f6;
+    color: #0f172a;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================================
+   DARK MODE PRECISION DEPTH & OPTICAL TYPOGRAPHY
+   ============================================================================ */
+html.dark .bg-slate-950 {
+  background-color: #060a14;
+}
+
+html.dark .bg-slate-900 {
+  background-color: #0e1628;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 4px 16px -4px rgba(0, 0, 0, 0.45);
+}
+
+html.dark .bg-slate-900\/95,
+html.dark .bg-slate-900\/90,
+html.dark .bg-slate-900\/85,
+html.dark .bg-slate-900\/80 {
+  background-color: rgba(14, 22, 40, 0.94);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 4px 14px -4px rgba(0, 0, 0, 0.4);
+}
+
+html.dark .bg-slate-800 {
+  background-color: #162238;
+}
+
+html.dark .bg-slate-800\/90,
+html.dark .bg-slate-800\/80,
+html.dark .bg-slate-800\/70,
+html.dark .bg-slate-800\/60,
+html.dark .bg-slate-800\/50 {
+  background-color: rgba(22, 34, 56, 0.82);
+}
+
+html.dark .border-slate-800,
+html.dark .border-slate-800\/80,
+html.dark .border-slate-800\/60 {
+  border-color: #1f2e47;
+}
+
+html.dark .border-slate-700,
+html.dark .border-slate-700\/80,
+html.dark .border-slate-700\/70,
+html.dark .border-slate-700\/60 {
+  border-color: #2c3e5e;
+}
+
+html.dark .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1f2e47;
+}
+
+/* Brighten secondary slate text in dark mode for effortless legibility */
+html.dark .text-slate-400 {
+  color: #a6b6cc;
+}
+
+html.dark .text-slate-500 {
+  color: #8295b0;
+}
+
+html.dark input,
+html.dark select,
+html.dark textarea {
+  border-color: #2e4061;
+}
+
+/* ============================================================================
+   LIGHT MODE CONTRAST & ELEVATION SYSTEM (WCAG AA+ Compliant)
+   ============================================================================ */
+html.light .bg-slate-950 {
+  background-color: #eef2f6 !important;
+}
+
+html.light header.bg-slate-950\/90,
+html.light header.bg-slate-900\/95,
+html.light aside.bg-slate-950,
+html.light .bg-slate-950\/95 {
+  background-color: #ffffff !important;
+}
+
+html.light .bg-slate-950\/90 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  backdrop-filter: blur(12px);
+}
+
+html.light .bg-slate-950\/80,
+html.light .bg-slate-950\/70,
+html.light .bg-slate-950\/60,
+html.light .bg-slate-950\/50,
+html.light .bg-slate-950\/40,
+html.light .bg-slate-950\/30,
+html.light .bg-slate-950\/20 {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .bg-slate-900 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.07), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+}
+
+html.light .bg-slate-900\/95,
+html.light .bg-slate-900\/90,
+html.light .bg-slate-900\/85,
+html.light .bg-slate-900\/80 {
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.07), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+}
+
+html.light .bg-slate-900\/70,
+html.light .bg-slate-900\/60,
+html.light .bg-slate-900\/50,
+html.light .bg-slate-900\/40 {
+  background-color: #f8fafc !important;
+}
+
+html.light .bg-slate-800 {
+  background-color: #e9eef5 !important;
+}
+
+html.light .bg-slate-800\/95,
+html.light .bg-slate-800\/90,
+html.light .bg-slate-800\/80,
+html.light .bg-slate-800\/70,
+html.light .bg-slate-800\/60,
+html.light .bg-slate-800\/50,
+html.light .bg-slate-800\/40,
+html.light .bg-slate-800\/30 {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .bg-slate-700,
+html.light .bg-slate-700\/60,
+html.light .bg-slate-700\/50,
+html.light .bg-slate-700\/40 {
+  background-color: #e2e8f0 !important;
+}
+
+/* Light-mode tinted semantic containers */
+html.light .bg-blue-950,
+html.light .bg-blue-950\/60,
+html.light .bg-blue-950\/50,
+html.light .bg-blue-950\/40,
+html.light .bg-blue-950\/30,
+html.light .bg-blue-950\/20,
+html.light .bg-blue-500\/20,
+html.light .bg-blue-500\/15,
+html.light .bg-blue-500\/10,
+html.light .bg-blue-600\/20 {
+  background-color: #eff6ff !important;
+}
+
+html.light .bg-cyan-950,
+html.light .bg-cyan-950\/60,
+html.light .bg-cyan-950\/50,
+html.light .bg-cyan-950\/45,
+html.light .bg-cyan-950\/40,
+html.light .bg-cyan-950\/30,
+html.light .bg-cyan-500\/20,
+html.light .bg-cyan-500\/15,
+html.light .bg-cyan-500\/10,
+html.light .bg-cyan-600\/20 {
+  background-color: #ecfeff !important;
+}
+
+html.light .bg-indigo-950,
+html.light .bg-indigo-950\/70,
+html.light .bg-indigo-950\/60,
+html.light .bg-indigo-950\/40,
+html.light .bg-indigo-950\/30,
+html.light .bg-indigo-950\/20,
+html.light .bg-indigo-500\/20,
+html.light .bg-indigo-500\/15,
+html.light .bg-indigo-500\/10,
+html.light .bg-indigo-600\/20 {
+  background-color: #eef2ff !important;
+}
+
+html.light .bg-emerald-950,
+html.light .bg-emerald-950\/95,
+html.light .bg-emerald-950\/90,
+html.light .bg-emerald-950\/60,
+html.light .bg-emerald-950\/50,
+html.light .bg-emerald-950\/40,
+html.light .bg-emerald-950\/35,
+html.light .bg-emerald-950\/30,
+html.light .bg-emerald-950\/25,
+html.light .bg-emerald-950\/20,
+html.light .bg-emerald-950\/10,
+html.light .bg-emerald-900\/60,
+html.light .bg-emerald-500\/20,
+html.light .bg-emerald-500\/15,
+html.light .bg-emerald-500\/10 {
+  background-color: #ecfdf5 !important;
+}
+
+html.light .bg-teal-950,
+html.light .bg-teal-950\/40,
+html.light .bg-teal-500\/20,
+html.light .bg-teal-500\/15,
+html.light .bg-teal-500\/10 {
+  background-color: #f0fdfa !important;
+}
+
+html.light .bg-amber-950,
+html.light .bg-amber-950\/40,
+html.light .bg-amber-950\/35,
+html.light .bg-amber-950\/25,
+html.light .bg-amber-950\/20,
+html.light .bg-amber-950\/10,
+html.light .bg-yellow-950\/20,
+html.light .bg-amber-500\/20,
+html.light .bg-amber-500\/15,
+html.light .bg-amber-500\/10 {
+  background-color: #fffbeb !important;
+}
+
+html.light .bg-orange-950,
+html.light .bg-orange-950\/40,
+html.light .bg-orange-500\/20,
+html.light .bg-orange-500\/15,
+html.light .bg-orange-500\/10 {
+  background-color: #fff7ed !important;
+}
+
+html.light .bg-rose-950,
+html.light .bg-rose-950\/60,
+html.light .bg-rose-950\/50,
+html.light .bg-rose-950\/40,
+html.light .bg-rose-950\/30,
+html.light .bg-rose-950\/25,
+html.light .bg-rose-950\/20,
+html.light .bg-rose-950\/15,
+html.light .bg-rose-900\/60,
+html.light .bg-rose-900\/50,
+html.light .bg-rose-900\/40,
+html.light .bg-rose-500\/20,
+html.light .bg-rose-500\/15,
+html.light .bg-rose-500\/10 {
+  background-color: #fff1f2 !important;
+}
+
+html.light .bg-purple-950,
+html.light .bg-purple-950\/40,
+html.light .bg-purple-500\/20,
+html.light .bg-purple-500\/15,
+html.light .bg-purple-500\/10 {
+  background-color: #f5f3ff !important;
+}
+
+/* Neutralize ALL dark surface gradients in light mode (except intentionally dark hero banners and solid action buttons) */
+html.light [class*="bg-gradient-to-"][class*="from-slate-9"]:not(.hero-dark-banner),
+html.light [class*="bg-gradient-to-"][class*="from-slate-8"]:not(.hero-dark-banner),
+html.light [class*="bg-gradient-to-"][class*="-950"]:not(.hero-dark-banner) {
+  background-image: none !important;
+  background-color: #ffffff !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06);
+}
+
+/* Preserve intentionally dark hero banners and dark video viewfinders with crisp light text */
+html.light .hero-dark-banner {
+  background-image: linear-gradient(135deg, #0f172a 0%, #172554 55%, #1e1b4b 100%) !important;
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #1e293b !important;
+}
+html.light .hero-dark-banner h2,
+html.light .hero-dark-banner h3,
+html.light .hero-dark-banner p,
+html.light .hero-dark-banner span:not(.bg-white *),
+html.light .hero-dark-banner .text-white {
+  color: #f8fafc !important;
+}
+html.light .hero-dark-banner .text-slate-300 {
+  color: #cbd5e1 !important;
+}
+
+/* Crisp Borders in Light Mode */
+html.light .border-slate-800,
+html.light .border-slate-800\/80,
+html.light .border-slate-800\/60,
+html.light .border-slate-900 {
+  border-color: #cbd5e1 !important;
+}
+
+html.light .border-slate-700,
+html.light .border-slate-700\/80,
+html.light .border-slate-700\/70,
+html.light .border-slate-700\/60 {
+  border-color: #94a3b8 !important;
+}
+
+html.light .border-emerald-800 {
+  border-color: #6ee7b7 !important;
+}
+
+html.light .border-blue-800 {
+  border-color: #93c5fd !important;
+}
+
+html.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+html.light .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #cbd5e1 !important;
+}
+
+/* Crisp Dark-on-Light Typography Contrast (WCAG AA+) */
+html.light .text-white {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-50,
+html.light .text-slate-100 {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-300 {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-400 {
+  color: #334155 !important;
+}
+
+html.light .text-slate-500 {
+  color: #475569 !important;
+}
+
+html.light .text-slate-600 {
+  color: #334155 !important;
+}
+
+/* High-contrast semantic accent text in light mode (every 100/200/300/400 shade mapped to rich 700/800 ink) */
+html.light .text-cyan-100,
+html.light .text-cyan-200,
+html.light .text-cyan-300,
+html.light .text-cyan-400 {
+  color: #0e7490 !important;
+}
+
+html.light .text-sky-100,
+html.light .text-sky-200,
+html.light .text-sky-300,
+html.light .text-sky-400 {
+  color: #0369a1 !important;
+}
+
+html.light .text-blue-100,
+html.light .text-blue-200,
+html.light .text-blue-300,
+html.light .text-blue-400 {
+  color: #1d4ed8 !important;
+}
+
+html.light .text-indigo-100,
+html.light .text-indigo-200,
+html.light .text-indigo-300,
+html.light .text-indigo-400 {
+  color: #4338ca !important;
+}
+
+html.light .text-emerald-100,
+html.light .text-emerald-200,
+html.light .text-emerald-300,
+html.light .text-emerald-400,
+html.light .text-green-200,
+html.light .text-green-300,
+html.light .text-green-400 {
+  color: #047857 !important;
+}
+
+html.light .text-teal-100,
+html.light .text-teal-200,
+html.light .text-teal-300,
+html.light .text-teal-400 {
+  color: #0f766e !important;
+}
+
+html.light .text-amber-100,
+html.light .text-amber-200,
+html.light .text-amber-300,
+html.light .text-amber-400,
+html.light .text-yellow-100,
+html.light .text-yellow-200,
+html.light .text-yellow-300,
+html.light .text-yellow-400 {
+  color: #b45309 !important;
+}
+
+html.light .text-orange-100,
+html.light .text-orange-200,
+html.light .text-orange-300,
+html.light .text-orange-400 {
+  color: #c2410c !important;
+}
+
+html.light .text-rose-100,
+html.light .text-rose-200,
+html.light .text-rose-300,
+html.light .text-rose-400,
+html.light .text-red-200,
+html.light .text-red-300,
+html.light .text-red-400 {
+  color: #be123c !important;
+}
+
+html.light .text-purple-100,
+html.light .text-purple-200,
+html.light .text-purple-300,
+html.light .text-purple-400,
+html.light .text-violet-200,
+html.light .text-violet-300,
+html.light .text-violet-400 {
+  color: #6d28d9 !important;
+}
+
+/* Hovers in Light Mode */
+html.light .hover\:bg-slate-800:hover,
+html.light .hover\:bg-slate-700:hover,
+html.light .hover\:bg-slate-700\/80:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .hover\:bg-slate-800\/40:hover,
+html.light .hover\:bg-slate-800\/60:hover,
+html.light .hover\:bg-slate-900\/80:hover {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .hover\:text-white:hover,
+html.light .hover\:text-slate-100:hover,
+html.light .hover\:text-slate-200:hover {
+  color: #0f172a !important;
+}
+
+/* Inputs, Selects & Textareas in Light Mode */
+html.light input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+html.light select,
+html.light textarea {
+  color: #0f172a !important;
+  background-color: #ffffff !important;
+  border-color: #94a3b8 !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* Maintain crisp white text on ALL solid & near-solid action buttons and badges in Light Mode */
+html.light .bg-indigo-700,
+html.light .bg-indigo-600,
+html.light .bg-indigo-600\/90,
+html.light .bg-indigo-500,
+html.light .bg-cyan-700,
+html.light .bg-cyan-600,
+html.light .bg-cyan-600\/90,
+html.light .bg-cyan-500,
+html.light .bg-emerald-700,
+html.light .bg-emerald-600,
+html.light .bg-emerald-600\/90,
+html.light .bg-emerald-600\/80,
+html.light .bg-emerald-500,
+html.light .bg-teal-700,
+html.light .bg-teal-600,
+html.light .bg-teal-500,
+html.light .bg-rose-700,
+html.light .bg-rose-600,
+html.light .bg-rose-600\/90,
+html.light .bg-rose-500,
+html.light .bg-red-700,
+html.light .bg-red-600,
+html.light .bg-blue-700,
+html.light .bg-blue-600,
+html.light .bg-blue-600\/90,
+html.light .bg-blue-500,
+html.light .bg-sky-700,
+html.light .bg-sky-600,
+html.light .bg-amber-700,
+html.light .bg-amber-600,
+html.light .bg-amber-600\/90,
+html.light .bg-amber-500,
+html.light .bg-orange-700,
+html.light .bg-orange-600,
+html.light .bg-purple-700,
+html.light .bg-purple-600,
+html.light .bg-purple-500,
+html.light [class*="from-cyan-700"],
+html.light [class*="from-cyan-600"],
+html.light [class*="from-cyan-500"],
+html.light [class*="from-blue-700"],
+html.light [class*="from-blue-600"],
+html.light [class*="from-blue-500"],
+html.light [class*="from-emerald-700"],
+html.light [class*="from-emerald-600"],
+html.light [class*="from-emerald-500"],
+html.light [class*="from-indigo-700"],
+html.light [class*="from-indigo-600"],
+html.light [class*="from-indigo-500"],
+html.light [class*="from-amber-700"],
+html.light [class*="from-amber-600"],
+html.light [class*="from-rose-700"],
+html.light [class*="from-rose-600"],
+html.light [class*="from-purple-700"],
+html.light [class*="from-purple-600"],
+html.light [class*="from-teal-700"],
+html.light [class*="from-teal-600"] {
+  color: #ffffff !important;
+}
+
+html.light .bg-indigo-700 *,
+html.light .bg-indigo-600 *,
+html.light .bg-indigo-600\/90 *,
+html.light .bg-indigo-500 *,
+html.light .bg-cyan-700 *,
+html.light .bg-cyan-600 *,
+html.light .bg-cyan-600\/90 *,
+html.light .bg-cyan-500 *,
+html.light .bg-emerald-700 *,
+html.light .bg-emerald-600 *,
+html.light .bg-emerald-600\/90 *,
+html.light .bg-emerald-600\/80 *,
+html.light .bg-emerald-500 *,
+html.light .bg-teal-700 *,
+html.light .bg-teal-600 *,
+html.light .bg-teal-500 *,
+html.light .bg-rose-700 *,
+html.light .bg-rose-600 *,
+html.light .bg-rose-600\/90 *,
+html.light .bg-rose-500 *,
+html.light .bg-red-700 *,
+html.light .bg-red-600 *,
+html.light .bg-blue-700 *,
+html.light .bg-blue-600 *,
+html.light .bg-blue-600\/90 *,
+html.light .bg-blue-500 *,
+html.light .bg-sky-700 *,
+html.light .bg-sky-600 *,
+html.light .bg-amber-700 *,
+html.light .bg-amber-600 *,
+html.light .bg-amber-600\/90 *,
+html.light .bg-amber-500 *,
+html.light .bg-orange-700 *,
+html.light .bg-orange-600 *,
+html.light .bg-purple-700 *,
+html.light .bg-purple-600 *,
+html.light .bg-purple-500 *,
+html.light [class*="from-cyan-700"] *,
+html.light [class*="from-cyan-600"] *,
+html.light [class*="from-cyan-500"] *,
+html.light [class*="from-blue-700"] *,
+html.light [class*="from-blue-600"] *,
+html.light [class*="from-blue-500"] *,
+html.light [class*="from-emerald-700"] *,
+html.light [class*="from-emerald-600"] *,
+html.light [class*="from-emerald-500"] *,
+html.light [class*="from-indigo-700"] *,
+html.light [class*="from-indigo-600"] *,
+html.light [class*="from-indigo-500"] *,
+html.light [class*="from-amber-700"] *,
+html.light [class*="from-amber-600"] *,
+html.light [class*="from-rose-700"] *,
+html.light [class*="from-rose-600"] *,
+html.light [class*="from-purple-700"] *,
+html.light [class*="from-purple-600"] *,
+html.light [class*="from-teal-700"] *,
+html.light [class*="from-teal-600"] * {
+  color: #ffffff !important;
+}
+
+/* Keep explicit white-badge contrast inside active gradients (e.g. Navigation active badge) */
+html.light [class*="from-cyan-600"] .bg-white,
+html.light [class*="from-cyan-600"] .bg-white * {
+  color: #0f172a !important;
+}
+
+/* Crisp Table Headers & Row Hover Separation in Both Themes */
+html.light table thead tr {
+  background-color: #e8eef5 !important;
+}
+html.light table thead th {
+  color: #1e293b !important;
+  border-bottom-color: #cbd5e1 !important;
+}
+html.light table tbody tr:hover {
+  background-color: #f8fafc !important;
+}
+html.dark table thead tr {
+  background-color: #111b30;
+}
+html.dark table tbody tr:hover {
+  background-color: rgba(30, 48, 80, 0.45);
+}
+
+/* Accessible keyboard focus ring */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #06b6d4;
+  outline-offset: 2px;
+}
+
+/* Donut background ring in light mode */
+html.light .donut-track {
+  stroke: #e2e8f0 !important;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.08);
+}
+
+html.dark ::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.28);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.45);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.75);
+}
