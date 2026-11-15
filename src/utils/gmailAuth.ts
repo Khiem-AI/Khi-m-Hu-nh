@@ -1,21 +1,18 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
-  getAuth,
   signInWithPopup,
   GoogleAuthProvider,
   onAuthStateChanged,
   User,
 } from 'firebase/auth';
-import firebaseConfig from '../../firebase-applet-config.json';
+import { auth } from './firebaseClient';
 
 export const GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.send'];
 
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-
-function buildGoogleProvider(forceConsent: boolean = false): GoogleAuthProvider {
+function buildGoogleProvider(forceConsent: boolean = false, includeGmailScope: boolean = true): GoogleAuthProvider {
   const provider = new GoogleAuthProvider();
-  GMAIL_SCOPES.forEach((scope) => provider.addScope(scope));
+  if (includeGmailScope) {
+    GMAIL_SCOPES.forEach((scope) => provider.addScope(scope));
+  }
   provider.setCustomParameters({
     prompt: forceConsent ? 'consent select_account' : 'select_account',
   });
@@ -59,13 +56,13 @@ function mapFirebaseAuthError(err: unknown): string {
     return 'Trình duyệt đang chặn cửa sổ đăng nhập Google (Popup). Hãy bấm cho phép Popup trên thanh địa chỉ hoặc mở ứng dụng ở tab mới rồi thử lại.';
   }
   if (code === 'auth/popup-closed-by-user') {
-    return 'Bạn đã đóng cửa sổ đăng nhập Google trước khi hoàn tất cấp quyền Gmail.';
+    return 'Bạn đã đóng cửa sổ đăng nhập Google trước khi hoàn tất cấp quyền.';
   }
   if (code === 'auth/cancelled-popup-request') {
     return 'Yêu cầu đăng nhập bị hủy do bấm nhiều lần. Vui lòng bấm lại một lần nữa.';
   }
   if (code === 'auth/unauthorized-domain') {
-    return 'Tên miền hiện tại chưa được cấp quyền đăng nhập Google trong cấu hình Firebase.';
+    return 'Tên miền hiện tại chưa được cấp quyền đăng nhập Google trong cấu hình Firebase (Authorized domains).';
   }
   if (code === 'auth/operation-not-allowed') {
     return 'Đăng nhập Google chưa được kích hoạt trên dự án Firebase.';
@@ -73,7 +70,20 @@ function mapFirebaseAuthError(err: unknown): string {
   if (code === 'auth/network-request-failed') {
     return 'Lỗi kết nối mạng khi đăng nhập Google. Vui lòng kiểm tra kết nối Internet.';
   }
-  return rawMessage || 'Không thể kết nối tài khoản Google để gửi Gmail.';
+  return rawMessage || 'Không thể kết nối tài khoản Google.';
+}
+
+export async function signInWithGoogleAccount(): Promise<{ user: User }> {
+  try {
+    isSigningIn = true;
+    const provider = buildGoogleProvider(false, false);
+    const result = await signInWithPopup(auth, provider);
+    return { user: result.user };
+  } catch (err) {
+    throw new Error(mapFirebaseAuthError(err));
+  } finally {
+    isSigningIn = false;
+  }
 }
 
 export async function signInWithGmail(forceConsent: boolean = false): Promise<{
@@ -82,7 +92,7 @@ export async function signInWithGmail(forceConsent: boolean = false): Promise<{
 }> {
   try {
     isSigningIn = true;
-    const provider = buildGoogleProvider(forceConsent);
+    const provider = buildGoogleProvider(forceConsent, true);
     const result = await signInWithPopup(auth, provider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {

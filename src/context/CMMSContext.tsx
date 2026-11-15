@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { Unsubscribe } from 'firebase/firestore';
 import {
   Equipment,
   MaintenancePlan,
@@ -72,8 +74,49 @@ import {
   initGmailAuth,
   sendViaGmailApi,
   signInWithGmail,
+  signInWithGoogleAccount,
   signOutGmail,
 } from '../utils/gmailAuth';
+import { auth } from '../utils/firebaseClient';
+import {
+  BOOTSTRAPPED_ADMIN_EMAIL,
+  WorkspaceSnapshotData,
+  buildAllowedEmails,
+  deleteCloudDoc,
+  formatFirestoreSyncError,
+  propagateAllowedEmails,
+  sanitizeAuditLog,
+  sanitizeCostRecord,
+  sanitizeDocument,
+  sanitizeEmailLog,
+  sanitizeEmployeePrivate,
+  sanitizeEmployeePublic,
+  sanitizeEquipment,
+  sanitizeMaintenanceHistory,
+  sanitizeMaintenancePlan,
+  sanitizeMeterReading,
+  sanitizePower10Days,
+  sanitizeProject,
+  sanitizeSafetyInspection,
+  sanitizeSparePart,
+  sanitizeStockTx,
+  sanitizeTicket,
+  sanitizeToolItem,
+  sanitizeToolLog,
+  sanitizeWaterMonthly,
+  seedOrPushWorkspaceToFirestore,
+  subscribeCloudCollection,
+  upsertCloudDoc,
+} from '../utils/firestoreSync';
+
+export type CloudSyncStatus = 'offline' | 'connecting' | 'syncing' | 'synced' | 'error';
+
+export interface CloudAccountInfo {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+}
 
 interface CMMSContextType {
   // Data
@@ -271,6 +314,14 @@ interface CMMSContextType {
     details?: string;
     userConfirmed?: boolean;
   }) => Promise<void>;
+
+  // Cloud Real-Time Synchronization
+  cloudSyncStatus: CloudSyncStatus;
+  cloudUser: CloudAccountInfo | null;
+  cloudSyncError: string | null;
+  lastSyncedAt: string | null;
+  connectCloudWithGoogle: () => Promise<{ success: boolean; message: string }>;
+  forceSyncLocalToCloud: () => Promise<{ success: boolean; message: string }>;
 
   // System Actions
   addAuditLog: (action: AuditLog['hanhDong'], chucNang: string, doiTuong: string, details: string) => void;
@@ -498,6 +549,626 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved && saved.maNhanVien ? saved : INITIAL_EMPLOYEES[0];
   });
 
+  // Cloud Sync State & Refs
+  const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('offline');
+  const [cloudUser, setCloudUser] = useState<CloudAccountInfo | null>(null);
+  const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+
+  const cloudUserRef = useRef<CloudAccountInfo | null>(null);
+  const knownCloudIdsRef = useRef<Set<string>>(new Set());
+  const employeesRef = useRef<Employee[]>(employees);
+  const cloudEmpPublicRef = useRef<Record<string, Partial<Employee>>>({});
+  const cloudEmpPrivateRef = useRef<Record<string, { maNhanVien: string; email?: string; soDienThoai?: string }>>({});
+  const workspaceReadyRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    employeesRef.current = employees;
+  }, [employees]);
+
+  const latestSnapshotRef = useRef<WorkspaceSnapshotData>({
+    equipment,
+    maintenancePlans,
+    maintenanceHistory,
+    tickets,
+    spareParts,
+    stockTransactions,
+    power10Days,
+    waterMonthly,
+    meterReadings,
+    costRecords,
+    employees,
+    documents,
+    projects,
+    safetyInspections,
+    tools,
+    toolLogs,
+    emailLogs,
+    auditLogs,
+    emailConfig,
+    tariffConfig,
+  });
+
+  useEffect(() => {
+    latestSnapshotRef.current = {
+      equipment,
+      maintenancePlans,
+      maintenanceHistory,
+      tickets,
+      spareParts,
+      stockTransactions,
+      power10Days,
+      waterMonthly,
+      meterReadings,
+      costRecords,
+      employees,
+      documents,
+      projects,
+      safetyInspections,
+      tools,
+      toolLogs,
+      emailLogs,
+      auditLogs,
+      emailConfig,
+      tariffConfig,
+    };
+  }, [
+    equipment,
+    maintenancePlans,
+    maintenanceHistory,
+    tickets,
+    spareParts,
+    stockTransactions,
+    power10Days,
+    waterMonthly,
+    meterReadings,
+    costRecords,
+    employees,
+    documents,
+    projects,
+    safetyInspections,
+    tools,
+    toolLogs,
+    emailLogs,
+    auditLogs,
+    emailConfig,
+    tariffConfig,
+  ]);
+
+  const syncDoc = (
+    colName: string,
+    rawId: string,
+    sanitizedData: Record<string, unknown>,
+    employeesOverride?: Employee[]
+  ) => {
+    const user = cloudUserRef.current;
+    if (!user) return;
+    const allowed = buildAllowedEmails(employeesOverride || employeesRef.current, user.email);
+    void upsertCloudDoc(
+      colName,
+      rawId,
+      sanitizedData,
+      user.uid,
+      allowed,
+      knownCloudIdsRef.current
+    )
+      .then(() => {
+        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+        setCloudSyncError(null);
+        setCloudSyncStatus('synced');
+      })
+      .catch((err) => {
+        setCloudSyncError(formatFirestoreSyncError(err));
+        setCloudSyncStatus('error');
+      });
+  };
+
+  const removeDocCloud = (colName: string, rawId: string) => {
+    if (!cloudUserRef.current) return;
+    void deleteCloudDoc(colName, rawId, knownCloudIdsRef.current)
+      .then(() => {
+        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+        setCloudSyncError(null);
+        setCloudSyncStatus('synced');
+      })
+      .catch((err) => {
+        setCloudSyncError(formatFirestoreSyncError(err));
+        setCloudSyncStatus('error');
+      });
+  };
+
+  const mergeAndApplyEmployees = () => {
+    const pubEntries = Object.values(cloudEmpPublicRef.current);
+    if (pubEntries.length === 0) return;
+
+    setEmployees((prev) => {
+      const prevById = new Map(prev.map((e) => [e.maNhanVien, e]));
+      const initById = new Map(INITIAL_EMPLOYEES.map((e) => [e.maNhanVien, e]));
+
+      const merged = pubEntries.map((pub) => {
+        const id = pub.maNhanVien || '';
+        const fallback = prevById.get(id) || initById.get(id);
+        const priv = cloudEmpPrivateRef.current[id];
+        return {
+          ...(fallback || {
+            maNhanVien: id,
+            tenNhanVien: pub.tenNhanVien || id,
+            date: '',
+            chucVu: pub.chucVu || 'Kỹ thuật viên',
+            ngayVao: '',
+            soDienThoai: '',
+            email: '',
+            username: pub.username || id,
+          }),
+          ...pub,
+          email: priv?.email !== undefined ? priv.email : fallback?.email || '',
+          soDienThoai: priv?.soDienThoai !== undefined ? priv.soDienThoai : fallback?.soDienThoai || '',
+          password: fallback?.password,
+        } as Employee;
+      });
+
+      return merged.sort((a, b) => a.maNhanVien.localeCompare(b.maNhanVien));
+    });
+  };
+
+  const matchOrApplyCloudUser = (fbUser: User) => {
+    const emailLower = (fbUser.email || '').trim().toLowerCase();
+    if (!emailLower) return;
+
+    const list = employeesRef.current;
+    let matched =
+      list.find((e) => (e.email || '').trim().toLowerCase() === emailLower) ||
+      (emailLower === BOOTSTRAPPED_ADMIN_EMAIL
+        ? list.find((e) => e.maNhanVien === 'ID1460' || e.chucVu === 'Admin') || INITIAL_EMPLOYEES[0]
+        : undefined);
+
+    if (matched) {
+      setCurrentUserState(matched);
+      saveStorage('currentUser', matched);
+    } else if (sessionStorage.getItem('cmms_authenticated') !== 'true') {
+      const guestMember: Employee = {
+        maNhanVien: `GG-${fbUser.uid.slice(0, 6).toUpperCase()}`,
+        tenNhanVien: fbUser.displayName || fbUser.email || 'Google User',
+        date: '',
+        chucVu: 'Kỹ thuật viên',
+        ngayVao: new Date().toISOString().slice(0, 10),
+        soDienThoai: '',
+        email: fbUser.email || '',
+        username: emailLower,
+        anhDaiDien: fbUser.photoURL || undefined,
+      };
+      setCurrentUserState(guestMember);
+    }
+
+    setIsAuthenticated(true);
+    sessionStorage.setItem('cmms_authenticated', 'true');
+  };
+
+  useEffect(() => {
+    let unsubs: Unsubscribe[] = [];
+    let cancelled = false;
+
+    const cleanupListeners = () => {
+      unsubs.forEach((u) => {
+        try {
+          u();
+        } catch {
+          // ignore
+        }
+      });
+      unsubs = [];
+    };
+
+    const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
+      cleanupListeners();
+
+      if (!fbUser || !fbUser.email) {
+        cloudUserRef.current = null;
+        workspaceReadyRef.current = false;
+        setCloudUser(null);
+        setCloudSyncStatus('offline');
+        setCloudSyncError(null);
+        return;
+      }
+
+      const info: CloudAccountInfo = {
+        uid: fbUser.uid,
+        email: fbUser.email,
+        displayName: fbUser.displayName || fbUser.email,
+        photoURL: fbUser.photoURL || undefined,
+      };
+      cloudUserRef.current = info;
+      setCloudUser(info);
+      setCloudSyncStatus('syncing');
+      setCloudSyncError(null);
+      matchOrApplyCloudUser(fbUser);
+
+      const emailLower = fbUser.email.trim().toLowerCase();
+      if (emailLower === BOOTSTRAPPED_ADMIN_EMAIL) {
+        try {
+          await seedOrPushWorkspaceToFirestore(
+            fbUser.uid,
+            fbUser.email,
+            latestSnapshotRef.current,
+            { knownCloudIds: knownCloudIdsRef.current }
+          );
+          if (cancelled) return;
+          workspaceReadyRef.current = true;
+        } catch (err) {
+          if (cancelled) return;
+          setCloudSyncError(formatFirestoreSyncError(err));
+          setCloudSyncStatus('error');
+        }
+      }
+
+      if (cancelled) return;
+
+      const onSnapError = (err: Error) => {
+        setCloudSyncError(formatFirestoreSyncError(err));
+        setCloudSyncStatus('error');
+      };
+
+      const markSynced = (paths: string[]) => {
+        paths.forEach((p) => knownCloudIdsRef.current.add(p));
+        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+        setCloudSyncStatus('synced');
+        setCloudSyncError(null);
+      };
+
+      unsubs = [
+        subscribeCloudCollection<{ key: string; payload: Record<string, unknown> }>(
+          'settings',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            for (const s of items) {
+              if (s.key === 'workspace_meta') {
+                workspaceReadyRef.current = true;
+              } else if (s.key === 'email_config' && s.payload) {
+                setEmailConfig((prev) => ({ ...prev, ...(s.payload as Partial<EmailConfig>) }));
+              } else if (s.key === 'tariff_config' && s.payload) {
+                setTariffConfig((prev) => ({ ...prev, ...(s.payload as Partial<EnergyTariffConfig>) }));
+              }
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<Equipment>(
+          'equipment',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setEquipment([...items].sort((a, b) => a.maThietBi.localeCompare(b.maThietBi)));
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<MaintenancePlan>(
+          'maintenance_plans',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setMaintenancePlans(
+                [...items].sort((a, b) =>
+                  (a.ngayBaoTriTiepTheo || '').localeCompare(b.ngayBaoTriTiepTheo || '')
+                )
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<MaintenanceHistory>(
+          'maintenance_history',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setMaintenanceHistory(
+                [...items].sort((a, b) => (b.ngayThucHien || '').localeCompare(a.ngayThucHien || ''))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<Ticket>(
+          'tickets',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setTickets(
+                [...items].sort((a, b) => (b.ngayTao || '').localeCompare(a.ngayTao || ''))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<SparePart>(
+          'spare_parts',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setSpareParts([...items].sort((a, b) => a.maVatTu.localeCompare(b.maVatTu)));
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<StockTransaction>(
+          'stock_transactions',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setStockTransactions(
+                [...items].sort((a, b) => (b.ngay || '').localeCompare(a.ngay || ''))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<Power10Days>(
+          'power_10days',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setPower10Days(
+                [...items].sort((a, b) => (b.tuNgay || '').localeCompare(a.tuNgay || ''))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<WaterMonthly>(
+          'water_monthly',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setWaterMonthly([...items].sort((a, b) => b.month.localeCompare(a.month)));
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<MeterReading>(
+          'meter_readings',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setMeterReadings(
+                [...items].sort((a, b) => (b.ngayChot || '').localeCompare(a.ngayChot || ''))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<CostRecord>(
+          'cost_records',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setCostRecords(
+                [...items].sort((a, b) => (b.ngayGhiNhan || '').localeCompare(a.ngayGhiNhan || ''))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<Partial<Employee>>(
+          'employees_public',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            const map: Record<string, Partial<Employee>> = {};
+            items.forEach((emp) => {
+              if (emp.maNhanVien) map[emp.maNhanVien] = emp;
+            });
+            cloudEmpPublicRef.current = map;
+            mergeAndApplyEmployees();
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<{ maNhanVien: string; email?: string; soDienThoai?: string }>(
+          'employees_private',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            const map: Record<string, { maNhanVien: string; email?: string; soDienThoai?: string }> = {};
+            items.forEach((emp) => {
+              if (emp.maNhanVien) map[emp.maNhanVien] = emp;
+            });
+            cloudEmpPrivateRef.current = map;
+            mergeAndApplyEmployees();
+          },
+          onSnapError,
+          'private_employee'
+        ),
+        subscribeCloudCollection<FacilityDocument>(
+          'documents',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setDocuments([...items].sort((a, b) => a.maTaiLieu.localeCompare(b.maTaiLieu)));
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<FacilityProject>(
+          'projects',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setProjects(
+                [...items].sort((a, b) => (b.ngayCapNhat || '').localeCompare(a.ngayCapNhat || ''))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<SafetyInspectionItem>(
+          'safety_inspections',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setSafetyInspections(
+                items.map((item) => ({
+                  ...item,
+                  trangThai: getInspectionStatus(
+                    item.ngayHetHan,
+                    item.nhacTruocNgay ?? 30,
+                    item.trangThai === 'Đang kiểm định'
+                  ),
+                }))
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<ToolItem>(
+          'tools',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setTools([...items].sort((a, b) => a.maDungCu.localeCompare(b.maDungCu)));
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<ToolBorrowLog>(
+          'tool_logs',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setToolLogs(
+                [...items].sort((a, b) =>
+                  (b.ngayGiaoDich || '').localeCompare(a.ngayGiaoDich || '')
+                )
+              );
+            }
+          },
+          onSnapError
+        ),
+        subscribeCloudCollection<EmailLog>(
+          'email_logs',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setEmailLogs(
+                deduplicateById(
+                  [...items].sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || '')),
+                  'EML'
+                )
+              );
+            }
+          },
+          onSnapError,
+          'email_log'
+        ),
+        subscribeCloudCollection<AuditLog>(
+          'audit_logs',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setAuditLogs(
+                deduplicateById(
+                  [...items].sort((a, b) => (b.thoiGian || '').localeCompare(a.thoiGian || '')),
+                  'LOG'
+                )
+              );
+            }
+          },
+          onSnapError
+        ),
+      ];
+    });
+
+    return () => {
+      cancelled = true;
+      unsubAuth();
+      cleanupListeners();
+    };
+  }, []);
+
+  const connectCloudWithGoogle = async (): Promise<{ success: boolean; message: string }> => {
+    setCloudSyncStatus('connecting');
+    setCloudSyncError(null);
+    try {
+      const { user } = await signInWithGoogleAccount();
+      return {
+        success: true,
+        message: `Đã kết nối đồng bộ Cloud (${user.email}) thành công!`,
+      };
+    } catch (err) {
+      const msg = formatFirestoreSyncError(err);
+      setCloudSyncError(msg);
+      setCloudSyncStatus(cloudUserRef.current ? 'error' : 'offline');
+      return { success: false, message: msg };
+    }
+  };
+
+  const forceSyncLocalToCloud = async (): Promise<{ success: boolean; message: string }> => {
+    const user = cloudUserRef.current;
+    if (!user) {
+      return {
+        success: false,
+        message: 'Vui lòng kết nối tài khoản Google trước khi đồng bộ lên Cloud.',
+      };
+    }
+    setCloudSyncStatus('syncing');
+    setCloudSyncError(null);
+    try {
+      const res = await seedOrPushWorkspaceToFirestore(
+        user.uid,
+        user.email,
+        latestSnapshotRef.current,
+        { forcePushAll: true, knownCloudIds: knownCloudIdsRef.current }
+      );
+      setCloudSyncStatus('synced');
+      setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+      return {
+        success: true,
+        message: `Đã đồng bộ thành công ${res.totalWritten} bản ghi lên Cloud Firestore!`,
+      };
+    } catch (err) {
+      const msg = formatFirestoreSyncError(err);
+      setCloudSyncError(msg);
+      setCloudSyncStatus('error');
+      return { success: false, message: msg };
+    }
+  };
+
   // Sync state to localStorage
   useEffect(() => {
     localStorage.setItem('cmms_data_version', CMMS_DATA_VERSION);
@@ -542,6 +1213,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       chiTietNoiDung: details,
     };
     setAuditLogs((prev) => [newLog, ...prev]);
+    syncDoc('audit_logs', newLog.id, sanitizeAuditLog(newLog));
   };
 
   // Equipment Actions
@@ -561,43 +1233,52 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ghiChu: `Tạo tự động cho thiết bị ${item.tenThietBi}`,
     };
     setMaintenancePlans((prev) => [newPlan, ...prev]);
+    syncDoc('equipment', item.maThietBi, sanitizeEquipment(item));
+    syncDoc('maintenance_plans', newPlan.id, sanitizeMaintenancePlan(newPlan));
     addAuditLog('Thêm', 'Danh sách thiết bị', item.maThietBi, `Thêm thiết bị mới: ${item.tenThietBi} (${item.heThong})`);
   };
 
   const updateEquipment = (item: Equipment) => {
     setEquipment((prev) => prev.map((e) => (e.maThietBi === item.maThietBi ? item : e)));
+    syncDoc('equipment', item.maThietBi, sanitizeEquipment(item));
     // Also sync plan if equipment name / freq / handler changed
     setMaintenancePlans((prev) =>
-      prev.map((p) =>
-        p.maThietBi === item.maThietBi
-          ? {
-              ...p,
-              tenThietBi: item.tenThietBi,
-              tanSuat: item.tanSuat,
-              nguoiPhuTrach: item.nguoiPhuTrach,
-              trangThai: getMaintenanceStatus(p.ngayBaoTriTiepTheo),
-            }
-          : p
-      )
+      prev.map((p) => {
+        if (p.maThietBi !== item.maThietBi) return p;
+        const updatedPlan: MaintenancePlan = {
+          ...p,
+          tenThietBi: item.tenThietBi,
+          tanSuat: item.tanSuat,
+          nguoiPhuTrach: item.nguoiPhuTrach,
+          trangThai: getMaintenanceStatus(p.ngayBaoTriTiepTheo),
+        };
+        syncDoc('maintenance_plans', updatedPlan.id, sanitizeMaintenancePlan(updatedPlan));
+        return updatedPlan;
+      })
     );
     addAuditLog('Sửa', 'Danh sách thiết bị', item.maThietBi, `Cập nhật thông tin thiết bị: ${item.tenThietBi}`);
   };
 
   const deleteEquipment = (maThietBi: string) => {
     const item = equipment.find((e) => e.maThietBi === maThietBi);
+    const plansToDelete = maintenancePlans.filter((p) => p.maThietBi === maThietBi);
     setEquipment((prev) => prev.filter((e) => e.maThietBi !== maThietBi));
     setMaintenancePlans((prev) => prev.filter((p) => p.maThietBi !== maThietBi));
+    removeDocCloud('equipment', maThietBi);
+    plansToDelete.forEach((p) => removeDocCloud('maintenance_plans', p.id));
     addAuditLog('Xóa', 'Danh sách thiết bị', maThietBi, `Xóa thiết bị: ${item?.tenThietBi || maThietBi}`);
   };
 
   // Maintenance Actions
   const addMaintenancePlan = (plan: MaintenancePlan) => {
     setMaintenancePlans((prev) => [plan, ...prev]);
+    syncDoc('maintenance_plans', plan.id, sanitizeMaintenancePlan(plan));
     addAuditLog('Thêm', 'Kế hoạch bảo trì', plan.maThietBi, `Thêm kế hoạch bảo trì: ${plan.tenThietBi}`);
   };
 
   const updateMaintenancePlan = (plan: MaintenancePlan) => {
     setMaintenancePlans((prev) => prev.map((p) => (p.id === plan.id ? plan : p)));
+    syncDoc('maintenance_plans', plan.id, sanitizeMaintenancePlan(plan));
     addAuditLog('Sửa', 'Kế hoạch bảo trì', plan.maThietBi, `Cập nhật kế hoạch bảo trì: ${plan.tenThietBi}`);
   };
 
@@ -616,6 +1297,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setMaintenancePlans((prev) =>
       prev.map((p) => (p.id === planId ? updatedPlan : p))
     );
+    syncDoc('maintenance_plans', updatedPlan.id, sanitizeMaintenancePlan(updatedPlan));
 
     const matchingEq = equipment.find((eq) => eq.maThietBi === target.maThietBi);
     if (matchingEq) {
@@ -623,6 +1305,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setEquipment((prev) =>
         prev.map((eq) => (eq.maThietBi === target.maThietBi ? updatedEq : eq))
       );
+      syncDoc('equipment', updatedEq.maThietBi, sanitizeEquipment(updatedEq));
     }
 
     addAuditLog(
@@ -651,6 +1334,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const nextHistory = [newRecord, ...maintenanceHistory];
     setMaintenanceHistory(nextHistory);
+    syncDoc('maintenance_history', newRecord.id, sanitizeMaintenanceHistory(newRecord));
 
     if (workType === 'Bảo trì theo kế hoạch') {
       const freq = matchingPlan?.tanSuat || matchingEq?.tanSuat || 'Monthly';
@@ -676,6 +1360,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         finalPlans = [autoNextPlan, ...synced];
       }
       setMaintenancePlans(finalPlans);
+      finalPlans
+        .filter((p) => p.maThietBi === recordData.maThietBi)
+        .forEach((p) => syncDoc('maintenance_plans', p.id, sanitizeMaintenancePlan(p)));
 
       if (matchingEq) {
         const eqNextDate = calculateNextMaintenanceDate(recordData.ngayThucHien, matchingEq.tanSuat);
@@ -687,6 +1374,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEquipment((prev) =>
           prev.map((eq) => (eq.maThietBi === recordData.maThietBi ? updatedEq : eq))
         );
+        syncDoc('equipment', updatedEq.maThietBi, sanitizeEquipment(updatedEq));
       }
 
       addAuditLog(
@@ -705,6 +1393,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEquipment((prev) =>
           prev.map((eq) => (eq.maThietBi === recordData.maThietBi ? updatedEq : eq))
         );
+        syncDoc('equipment', updatedEq.maThietBi, sanitizeEquipment(updatedEq));
       }
 
       addAuditLog(
@@ -736,6 +1425,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextPlans = syncPlansWithHistory(maintenancePlans, nextHistory);
     setMaintenanceHistory(nextHistory);
     setMaintenancePlans(nextPlans);
+    syncDoc('maintenance_history', updatedRecord.id, sanitizeMaintenanceHistory(updatedRecord));
+    nextPlans
+      .filter((p) => p.maThietBi === updatedRecord.maThietBi)
+      .forEach((p) => syncDoc('maintenance_plans', p.id, sanitizeMaintenancePlan(p)));
 
     const plannedForEq = nextHistory.filter(
       (h) => h.maThietBi === updatedRecord.maThietBi && getHistoryWorkType(h) === 'Bảo trì theo kế hoạch'
@@ -754,6 +1447,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setEquipment((prevEq) =>
           prevEq.map((eq) => (eq.maThietBi === updatedRecord.maThietBi ? updatedEq : eq))
         );
+        syncDoc('equipment', updatedEq.maThietBi, sanitizeEquipment(updatedEq));
       }
     }
 
@@ -773,6 +1467,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextPlans = syncPlansWithHistory(maintenancePlans, nextHistory);
     setMaintenanceHistory(nextHistory);
     setMaintenancePlans(nextPlans);
+    removeDocCloud('maintenance_history', id);
+    nextPlans
+      .filter((p) => p.maThietBi === target.maThietBi)
+      .forEach((p) => syncDoc('maintenance_plans', p.id, sanitizeMaintenancePlan(p)));
 
     addAuditLog(
       'Xóa',
@@ -795,6 +1493,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ngayTao: today,
     };
     setTickets((prev) => [newTicket, ...prev]);
+    syncDoc('tickets', newTicket.maTicket, sanitizeTicket(newTicket));
     addAuditLog('Thêm', 'Tickets', newTicket.maTicket, `Tạo ticket mới: ${newTicket.tieuDe} (Ưu tiên: ${newTicket.mucDoUuTien})`);
 
     const assigneeEmails = resolveAssigneeEmails(newTicket.nguoiPhuTrach, employees);
@@ -841,6 +1540,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateTicket = (ticket: Ticket, options?: { userConfirmedEmail?: boolean }) => {
     const prevTicket = tickets.find((t) => t.maTicket === ticket.maTicket);
     setTickets((prev) => prev.map((t) => (t.maTicket === ticket.maTicket ? ticket : t)));
+    syncDoc('tickets', ticket.maTicket, sanitizeTicket(ticket));
     addAuditLog('Sửa', 'Tickets', ticket.maTicket, `Cập nhật trạng thái ticket: ${ticket.trangThai}`);
 
     const canSend =
@@ -880,22 +1580,26 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteTicket = (maTicket: string) => {
     setTickets((prev) => prev.filter((t) => t.maTicket !== maTicket));
+    removeDocCloud('tickets', maTicket);
     addAuditLog('Xóa', 'Tickets', maTicket, `Xóa ticket: ${maTicket}`);
   };
 
   // Spare Parts Actions
   const addSparePart = (part: SparePart) => {
     setSpareParts((prev) => [part, ...prev]);
+    syncDoc('spare_parts', part.maVatTu, sanitizeSparePart(part));
     addAuditLog('Thêm', 'Kho vật tư', part.maVatTu, `Thêm vật tư mới: ${part.tenVatTu} (Tồn: ${part.tonThucTe})`);
   };
 
   const updateSparePart = (part: SparePart) => {
     setSpareParts((prev) => prev.map((p) => (p.maVatTu === part.maVatTu ? part : p)));
+    syncDoc('spare_parts', part.maVatTu, sanitizeSparePart(part));
     addAuditLog('Sửa', 'Kho vật tư', part.maVatTu, `Cập nhật thông tin vật tư: ${part.tenVatTu}`);
   };
 
   const deleteSparePart = (maVatTu: string) => {
     setSpareParts((prev) => prev.filter((p) => p.maVatTu !== maVatTu));
+    removeDocCloud('spare_parts', maVatTu);
     addAuditLog('Xóa', 'Kho vật tư', maVatTu, `Xóa vật tư: ${maVatTu}`);
   };
 
@@ -907,6 +1611,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       transId: newId,
     };
     setStockTransactions((prev) => [newTx, ...prev]);
+    syncDoc('stock_transactions', newTx.transId, sanitizeStockTx(newTx));
 
     const targetPart = spareParts.find((sp) => sp.maVatTu === txData.maVatTu);
     if (targetPart) {
@@ -915,6 +1620,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tonThucTe: applyStockTransaction(targetPart.tonThucTe, txData.loaiGD, txData.soLuong),
       };
       setSpareParts((prev) => prev.map((sp) => (sp.maVatTu === txData.maVatTu ? updatedPart : sp)));
+      syncDoc('spare_parts', updatedPart.maVatTu, sanitizeSparePart(updatedPart));
     }
 
     const actionType = txData.loaiGD === 'Xuất kho sử dụng' ? 'Xuất kho' : 'Nhập kho';
@@ -933,22 +1639,26 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: nextUniqueId('POW'),
     };
     setPower10Days((prev) => [newRec, ...prev]);
+    syncDoc('power_10days', newRec.id, sanitizePower10Days(newRec));
     addAuditLog('Chốt số', 'Điện 10 Ngày', newRec.chuKy, `Ghi nhận dữ liệu điện 10 ngày chu kỳ: ${newRec.chuKy}`);
   };
 
   const updatePower10DaysRecord = (record: Power10Days) => {
     setPower10Days((prev) => prev.map((r) => (r.id === record.id ? record : r)));
+    syncDoc('power_10days', record.id, sanitizePower10Days(record));
     addAuditLog('Sửa', 'Điện 10 Ngày', record.chuKy, `Cập nhật số liệu điện chu kỳ: ${record.chuKy}`);
   };
 
   // Water Monthly Actions
   const addWaterMonthlyRecord = (record: WaterMonthly) => {
     setWaterMonthly((prev) => [record, ...prev]);
+    syncDoc('water_monthly', record.month, sanitizeWaterMonthly(record));
     addAuditLog('Chốt số', 'Nước Tháng', record.month, `Ghi nhận số liệu nước tháng: ${record.month}`);
   };
 
   const updateWaterMonthlyRecord = (record: WaterMonthly) => {
     setWaterMonthly((prev) => prev.map((r) => (r.month === record.month ? record : r)));
+    syncDoc('water_monthly', record.month, sanitizeWaterMonthly(record));
     addAuditLog('Sửa', 'Nước Tháng', record.month, `Cập nhật số liệu nước tháng: ${record.month}`);
   };
 
@@ -961,6 +1671,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tieuThu: consumption,
     };
     setMeterReadings((prev) => [newReading, ...prev]);
+    syncDoc('meter_readings', newReading.id, sanitizeMeterReading(newReading));
     addAuditLog(
       'Chốt số',
       'Chốt Điện Nước',
@@ -980,6 +1691,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     });
     setMeterReadings((prev) => [...newItems, ...prev]);
+    newItems.forEach((item) => syncDoc('meter_readings', item.id, sanitizeMeterReading(item)));
     addAuditLog(
       'Chốt số',
       'Chốt Điện Nước',
@@ -991,6 +1703,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateTariffConfig = (cfg: Partial<EnergyTariffConfig>) => {
     const nextCfg = { ...tariffConfig, ...cfg };
     setTariffConfig(nextCfg);
+    syncDoc('settings', 'tariff_config', {
+      key: 'tariff_config',
+      payload: nextCfg as unknown as Record<string, unknown>,
+    });
     addAuditLog(
       'Sửa',
       'Cấu hình Đơn Giá',
@@ -1006,16 +1722,19 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       idChiPhi: nextUniqueId('CP'),
     };
     setCostRecords((prev) => [newCost, ...prev]);
+    syncDoc('cost_records', newCost.idChiPhi, sanitizeCostRecord(newCost));
     addAuditLog('Thêm', 'Quản lý chi phí', newCost.idChiPhi, `Ghi nhận chi phí: ${newCost.phanLoai} (${newCost.soTienVND.toLocaleString()} đ)`);
   };
 
   const updateCostRecord = (cost: CostRecord) => {
     setCostRecords((prev) => prev.map((c) => (c.idChiPhi === cost.idChiPhi ? cost : c)));
+    syncDoc('cost_records', cost.idChiPhi, sanitizeCostRecord(cost));
     addAuditLog('Sửa', 'Quản lý chi phí', cost.idChiPhi, `Cập nhật chi phí ${cost.idChiPhi}: Trạng thái ${cost.trangThai}`);
   };
 
   const deleteCostRecord = (idChiPhi: string) => {
     setCostRecords((prev) => prev.filter((c) => c.idChiPhi !== idChiPhi));
+    removeDocCloud('cost_records', idChiPhi);
     addAuditLog('Xóa', 'Quản lý chi phí', idChiPhi, `Xóa chi phí: ${idChiPhi}`);
   };
 
@@ -1026,14 +1745,41 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const addEmployee = (emp: Employee) => {
-    setEmployees((prev) => [...prev, emp]);
+    const nextEmployees = [...employeesRef.current, emp];
+    setEmployees(nextEmployees);
+    syncDoc('employees_public', emp.maNhanVien, sanitizeEmployeePublic(emp), nextEmployees);
+    syncDoc('employees_private', emp.maNhanVien, sanitizeEmployeePrivate(emp), nextEmployees);
+    const mail = (emp.email || '').trim().toLowerCase();
+    if (
+      cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL &&
+      mail &&
+      isValidEmailFormat(mail) &&
+      !isPlaceholderEmail(mail)
+    ) {
+      void propagateAllowedEmails(buildAllowedEmails(nextEmployees, cloudUserRef.current.email));
+    }
     addAuditLog('Thêm', 'Nhân viên', emp.maNhanVien, `Thêm nhân sự mới: ${emp.tenNhanVien} (${emp.chucVu})`);
   };
 
   const updateEmployee = (emp: Employee) => {
-    setEmployees((prev) => prev.map((e) => (e.maNhanVien === emp.maNhanVien ? emp : e)));
+    const prevEmp = employeesRef.current.find((e) => e.maNhanVien === emp.maNhanVien);
+    const nextEmployees = employeesRef.current.map((e) => (e.maNhanVien === emp.maNhanVien ? emp : e));
+    setEmployees(nextEmployees);
     if (currentUser.maNhanVien === emp.maNhanVien) {
       setCurrentUserState(emp);
+    }
+    syncDoc('employees_public', emp.maNhanVien, sanitizeEmployeePublic(emp), nextEmployees);
+    syncDoc('employees_private', emp.maNhanVien, sanitizeEmployeePrivate(emp), nextEmployees);
+    const oldMail = (prevEmp?.email || '').trim().toLowerCase();
+    const newMail = (emp.email || '').trim().toLowerCase();
+    if (
+      cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL &&
+      oldMail !== newMail &&
+      newMail &&
+      isValidEmailFormat(newMail) &&
+      !isPlaceholderEmail(newMail)
+    ) {
+      void propagateAllowedEmails(buildAllowedEmails(nextEmployees, cloudUserRef.current.email));
     }
     addAuditLog('Sửa', 'Nhân viên', emp.maNhanVien, `Cập nhật thông tin nhân viên: ${emp.tenNhanVien}`);
   };
@@ -1045,17 +1791,20 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: nextUniqueId('DOC'),
     };
     setDocuments((prev) => [newDoc, ...prev]);
+    syncDoc('documents', newDoc.id, sanitizeDocument(newDoc));
     addAuditLog('Thêm', 'Tài liệu & SOP', newDoc.maTaiLieu, `Thêm tài liệu mới: ${newDoc.tieuDe}`);
   };
 
   const updateDocument = (docItem: FacilityDocument) => {
     setDocuments((prev) => prev.map((d) => (d.id === docItem.id ? docItem : d)));
+    syncDoc('documents', docItem.id, sanitizeDocument(docItem));
     addAuditLog('Sửa', 'Tài liệu & SOP', docItem.maTaiLieu, `Cập nhật tài liệu: ${docItem.tieuDe}`);
   };
 
   const deleteDocument = (id: string) => {
     const target = documents.find((d) => d.id === id);
     setDocuments((prev) => prev.filter((d) => d.id !== id));
+    removeDocCloud('documents', id);
     addAuditLog('Xóa', 'Tài liệu & SOP', target?.maTaiLieu || id, `Xóa tài liệu: ${target?.tieuDe || id}`);
   };
 
@@ -1066,17 +1815,20 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: nextUniqueId('PRJ'),
     };
     setProjects((prev) => [newProject, ...prev]);
+    syncDoc('projects', newProject.id, sanitizeProject(newProject));
     addAuditLog('Thêm', 'Quản Lý Dự Án', newProject.maDuAn, `Tạo dự án mới: ${newProject.tenDuAn}`);
   };
 
   const updateProject = (project: FacilityProject) => {
     setProjects((prev) => prev.map((p) => (p.id === project.id ? project : p)));
+    syncDoc('projects', project.id, sanitizeProject(project));
     addAuditLog('Sửa', 'Quản Lý Dự Án', project.maDuAn, `Cập nhật dự án: ${project.tenDuAn} (${project.trangThai})`);
   };
 
   const deleteProject = (id: string) => {
     const target = projects.find((p) => p.id === id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
+    removeDocCloud('projects', id);
     addAuditLog('Xóa', 'Quản Lý Dự Án', target?.maDuAn || id, `Xóa dự án: ${target?.tenDuAn || id}`);
   };
 
@@ -1089,6 +1841,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       trangThai: computedStatus,
     };
     setSafetyInspections((prev) => [newItem, ...prev]);
+    syncDoc('safety_inspections', newItem.id, sanitizeSafetyInspection(newItem));
     addAuditLog(
       'Thêm',
       'Kiểm định & Hiệu chuẩn',
@@ -1105,6 +1858,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
     const normalized: SafetyInspectionItem = { ...item, trangThai: computedStatus };
     setSafetyInspections((prev) => prev.map((x) => (x.id === item.id ? normalized : x)));
+    syncDoc('safety_inspections', normalized.id, sanitizeSafetyInspection(normalized));
     addAuditLog(
       'Sửa',
       'Kiểm định & Hiệu chuẩn',
@@ -1116,6 +1870,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteSafetyInspection = (id: string) => {
     const target = safetyInspections.find((x) => x.id === id);
     setSafetyInspections((prev) => prev.filter((x) => x.id !== id));
+    removeDocCloud('safety_inspections', id);
     addAuditLog(
       'Xóa',
       'Kiểm định & Hiệu chuẩn',
@@ -1162,6 +1917,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setSafetyInspections((prev) => prev.map((x) => (x.id === params.id ? updated : x)));
+    syncDoc('safety_inspections', updated.id, sanitizeSafetyInspection(updated));
     addAuditLog(
       'Hoàn thành',
       'Kiểm định & Hiệu chuẩn',
@@ -1177,6 +1933,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       id: nextUniqueId('TL'),
     };
     setTools((prev) => [newTool, ...prev]);
+    syncDoc('tools', newTool.id, sanitizeToolItem(newTool));
     addAuditLog(
       'Thêm',
       'Dụng cụ & Đồ nghề',
@@ -1187,12 +1944,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateTool = (tool: ToolItem) => {
     setTools((prev) => prev.map((t) => (t.id === tool.id ? tool : t)));
+    syncDoc('tools', tool.id, sanitizeToolItem(tool));
     addAuditLog('Sửa', 'Dụng cụ & Đồ nghề', tool.maDungCu, `Cập nhật dụng cụ: ${tool.tenDungCu}`);
   };
 
   const deleteTool = (id: string) => {
     const target = tools.find((t) => t.id === id);
     setTools((prev) => prev.filter((t) => t.id !== id));
+    removeDocCloud('tools', id);
     addAuditLog(
       'Xóa',
       'Dụng cụ & Đồ nghề',
@@ -1290,6 +2049,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     setTools((prev) => prev.map((t) => (t.id === params.toolId ? updatedTool : t)));
     setToolLogs((prev) => [newLog, ...prev]);
+    syncDoc('tools', updatedTool.id, sanitizeToolItem(updatedTool));
+    syncDoc('tool_logs', newLog.id, sanitizeToolLog(newLog));
 
     addAuditLog(
       params.loaiGiaoDich === 'Mượn' ? 'Xuất kho' : params.loaiGiaoDich === 'Trả' ? 'Nhập kho' : 'Cập nhật',
@@ -1395,11 +2156,19 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     sessionStorage.removeItem('cmms_authenticated');
     sessionStorage.removeItem('cmms_auth_user');
     addAuditLog('Đăng xuất' as any, 'Hệ thống', currentUser.maNhanVien, `Người dùng ${currentUser.tenNhanVien} đăng xuất khỏi hệ thống`);
+    void signOutGmail();
   };
 
   // Email & Alert Service Methods
   const updateEmailConfig = (cfg: Partial<EmailConfig>) => {
-    setEmailConfig((prev) => ({ ...prev, ...cfg }));
+    setEmailConfig((prev) => {
+      const next = { ...prev, ...cfg };
+      syncDoc('settings', 'email_config', {
+        key: 'email_config',
+        payload: next as unknown as Record<string, unknown>,
+      });
+      return next;
+    });
     addAuditLog('Sửa', 'Cấu hình Email', 'EmailService', 'Cập nhật cài đặt dịch vụ thông báo email');
   };
 
@@ -1417,26 +2186,27 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updatedFields?: { to?: string; cc?: string; subject?: string; body?: string }
   ) => {
     setEmailLogs((prev) =>
-      prev.map((log) =>
-        log.id === logId
-          ? {
-              ...log,
-              status,
-              recipient: updatedFields?.to !== undefined ? updatedFields.to : log.recipient,
-              cc: updatedFields?.cc !== undefined ? updatedFields.cc : log.cc,
-              subject: updatedFields?.subject !== undefined ? updatedFields.subject : log.subject,
-              fullContent: updatedFields?.body !== undefined ? updatedFields.body : log.fullContent,
-              bodySnippet:
-                updatedFields?.body !== undefined
-                  ? updatedFields.body.slice(0, 160) + (updatedFields.body.length > 160 ? '...' : '')
-                  : log.bodySnippet,
-              errorMessage:
-                status === 'Đã gửi' || status === 'Đã gửi (Webhook)' || status === 'Đã gửi (Gmail)'
-                  ? undefined
-                  : log.errorMessage,
-            }
-          : log
-      )
+      prev.map((log) => {
+        if (log.id !== logId) return log;
+        const nextLog: EmailLog = {
+          ...log,
+          status,
+          recipient: updatedFields?.to !== undefined ? updatedFields.to : log.recipient,
+          cc: updatedFields?.cc !== undefined ? updatedFields.cc : log.cc,
+          subject: updatedFields?.subject !== undefined ? updatedFields.subject : log.subject,
+          fullContent: updatedFields?.body !== undefined ? updatedFields.body : log.fullContent,
+          bodySnippet:
+            updatedFields?.body !== undefined
+              ? updatedFields.body.slice(0, 160) + (updatedFields.body.length > 160 ? '...' : '')
+              : log.bodySnippet,
+          errorMessage:
+            status === 'Đã gửi' || status === 'Đã gửi (Webhook)' || status === 'Đã gửi (Gmail)'
+              ? undefined
+              : log.errorMessage,
+        };
+        syncDoc('email_logs', nextLog.id, sanitizeEmailLog(nextLog));
+        return nextLog;
+      })
     );
   };
 
@@ -1677,6 +2447,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         relatedId: params.relatedId,
       };
       setEmailLogs((prev) => [sentLog, ...prev]);
+      syncDoc('email_logs', sentLog.id, sanitizeEmailLog(sentLog));
       addAuditLog(
         'Thêm',
         'Thông báo Email',
@@ -1726,6 +2497,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     setEmailLogs((prev) => [failedLog, ...prev]);
+    syncDoc('email_logs', failedLog.id, sanitizeEmailLog(failedLog));
     addAuditLog(
       'Thêm',
       'Thông báo Email',
@@ -1770,59 +2542,83 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetEmail = overrideEmail || resolvedEmails.join(', ') || emailConfig.primaryRecipient;
 
     // Optionally persist updated real email to single assignee's employee profile
+    let updatedEmployeesList = employeesRef.current;
     if (overrideEmail && params.saveEmailToProfile && parsedList.length === 1 && !overrideEmail.includes(',')) {
       const targetNameLower = parsedList[0].trim().toLowerCase();
-      setEmployees((prev) =>
-        prev.map((emp) =>
+      updatedEmployeesList = employeesRef.current.map((emp) => {
+        if (
           emp.tenNhanVien.trim().toLowerCase() === targetNameLower ||
           emp.maNhanVien.trim().toLowerCase() === targetNameLower
-            ? { ...emp, email: overrideEmail }
-            : emp
-        )
-      );
+        ) {
+          const nextEmp = { ...emp, email: overrideEmail };
+          syncDoc('employees_private', nextEmp.maNhanVien, sanitizeEmployeePrivate(nextEmp), updatedEmployeesList);
+          return nextEmp;
+        }
+        return emp;
+      });
+      setEmployees(updatedEmployeesList);
       if (
         currentUser.tenNhanVien.trim().toLowerCase() === targetNameLower ||
         currentUser.maNhanVien.trim().toLowerCase() === targetNameLower
       ) {
         setCurrentUserState((prev) => ({ ...prev, email: overrideEmail }));
       }
+      if (cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
+        void propagateAllowedEmails(buildAllowedEmails(updatedEmployeesList, cloudUserRef.current.email));
+      }
     }
 
     if (params.module === 'THIET_BI') {
       setEquipment((prev) =>
-        prev.map((eq) =>
-          eq.maThietBi === params.targetId
-            ? {
-                ...eq,
-                nguoiPhuTrach: formattedAssignee,
-                nguoiGiaoViec: params.assignerName,
-                email: targetEmail || eq.email,
-              }
-            : eq
-        )
+        prev.map((eq) => {
+          if (eq.maThietBi !== params.targetId) return eq;
+          const nextEq: Equipment = {
+            ...eq,
+            nguoiPhuTrach: formattedAssignee,
+            nguoiGiaoViec: params.assignerName,
+            email: targetEmail || eq.email,
+          };
+          syncDoc('equipment', nextEq.maThietBi, sanitizeEquipment(nextEq), updatedEmployeesList);
+          return nextEq;
+        })
       );
       setMaintenancePlans((prev) =>
-        prev.map((p) =>
-          p.maThietBi === params.targetId
-            ? { ...p, nguoiPhuTrach: formattedAssignee, nguoiGiaoViec: params.assignerName }
-            : p
-        )
+        prev.map((p) => {
+          if (p.maThietBi !== params.targetId) return p;
+          const nextPlan: MaintenancePlan = {
+            ...p,
+            nguoiPhuTrach: formattedAssignee,
+            nguoiGiaoViec: params.assignerName,
+          };
+          syncDoc('maintenance_plans', nextPlan.id, sanitizeMaintenancePlan(nextPlan), updatedEmployeesList);
+          return nextPlan;
+        })
       );
     } else if (params.module === 'KE_HOACH_BAO_TRI') {
       setMaintenancePlans((prev) =>
-        prev.map((p) =>
-          p.id === params.targetId || p.maThietBi === params.targetId
-            ? { ...p, nguoiPhuTrach: formattedAssignee, nguoiGiaoViec: params.assignerName }
-            : p
-        )
+        prev.map((p) => {
+          if (p.id !== params.targetId && p.maThietBi !== params.targetId) return p;
+          const nextPlan: MaintenancePlan = {
+            ...p,
+            nguoiPhuTrach: formattedAssignee,
+            nguoiGiaoViec: params.assignerName,
+          };
+          syncDoc('maintenance_plans', nextPlan.id, sanitizeMaintenancePlan(nextPlan), updatedEmployeesList);
+          return nextPlan;
+        })
       );
     } else if (params.module === 'TICKET') {
       setTickets((prev) =>
-        prev.map((t) =>
-          t.maTicket === params.targetId
-            ? { ...t, nguoiPhuTrach: formattedAssignee, nguoiGiaoViec: params.assignerName }
-            : t
-        )
+        prev.map((t) => {
+          if (t.maTicket !== params.targetId) return t;
+          const nextTicket: Ticket = {
+            ...t,
+            nguoiPhuTrach: formattedAssignee,
+            nguoiGiaoViec: params.assignerName,
+          };
+          syncDoc('tickets', nextTicket.maTicket, sanitizeTicket(nextTicket), updatedEmployeesList);
+          return nextTicket;
+        })
       );
     }
 
@@ -2051,10 +2847,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const deleteEmailLog = (id: string) => {
     setEmailLogs((prev) => prev.filter((l) => l.id !== id));
+    removeDocCloud('email_logs', id);
   };
 
   const clearEmailLogs = () => {
+    const toRemove = [...emailLogs];
     setEmailLogs([]);
+    toRemove.forEach((l) => removeDocCloud('email_logs', l.id));
     addAuditLog('Xóa', 'Thông báo Email', 'All', 'Xóa toàn bộ nhật ký gửi email');
   };
 
@@ -2081,6 +2880,35 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToolLogs(INITIAL_TOOL_LOGS);
     setCurrentUserState(INITIAL_EMPLOYEES[0]);
     localStorage.clear();
+    if (cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
+      void seedOrPushWorkspaceToFirestore(
+        cloudUserRef.current.uid,
+        cloudUserRef.current.email,
+        {
+          equipment: INITIAL_EQUIPMENT,
+          maintenancePlans: INITIAL_MAINTENANCE_PLANS,
+          maintenanceHistory: INITIAL_MAINTENANCE_HISTORY,
+          tickets: INITIAL_TICKETS,
+          spareParts: INITIAL_SPARE_PARTS,
+          stockTransactions: INITIAL_STOCK_TRANSACTIONS,
+          power10Days: INITIAL_POWER_10DAYS,
+          waterMonthly: INITIAL_WATER_MONTHLY,
+          meterReadings: INITIAL_METER_READINGS,
+          costRecords: INITIAL_COST_RECORDS,
+          employees: INITIAL_EMPLOYEES,
+          documents: INITIAL_DOCUMENTS,
+          projects: INITIAL_PROJECTS,
+          safetyInspections: INITIAL_SAFETY_INSPECTIONS,
+          tools: INITIAL_TOOLS,
+          toolLogs: INITIAL_TOOL_LOGS,
+          emailLogs: INITIAL_EMAIL_LOGS,
+          auditLogs: INITIAL_AUDIT_LOGS,
+          emailConfig: INITIAL_EMAIL_CONFIG,
+          tariffConfig: DEFAULT_ENERGY_TARIFF_CONFIG,
+        },
+        { forcePushAll: true, knownCloudIds: knownCloudIdsRef.current }
+      );
+    }
   };
 
   // Export full backup
@@ -2139,6 +2967,38 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.tariffConfig && typeof data.tariffConfig === 'object') setTariffConfig(data.tariffConfig);
       if (data.emailConfig && typeof data.emailConfig === 'object') setEmailConfig(data.emailConfig);
       addAuditLog('Cập nhật', 'Sao Lưu & Khôi Phục', 'Toàn bộ dữ liệu', 'Khôi phục thành công từ file sao lưu');
+      if (cloudUserRef.current) {
+        const snapToPush: WorkspaceSnapshotData = {
+          equipment: Array.isArray(data.equipment) ? data.equipment : equipment,
+          maintenancePlans: Array.isArray(data.maintenancePlans) ? data.maintenancePlans : maintenancePlans,
+          maintenanceHistory: Array.isArray(data.maintenanceHistory) ? data.maintenanceHistory : maintenanceHistory,
+          tickets: Array.isArray(data.tickets) ? data.tickets : tickets,
+          spareParts: Array.isArray(data.spareParts) ? data.spareParts : spareParts,
+          stockTransactions: Array.isArray(data.stockTransactions) ? data.stockTransactions : stockTransactions,
+          power10Days: Array.isArray(data.power10Days) ? data.power10Days : power10Days,
+          waterMonthly: Array.isArray(data.waterMonthly) ? data.waterMonthly : waterMonthly,
+          meterReadings: Array.isArray(data.meterReadings) ? data.meterReadings : meterReadings,
+          costRecords: Array.isArray(data.costRecords) ? data.costRecords : costRecords,
+          employees: Array.isArray(data.employees) ? data.employees : employees,
+          documents: Array.isArray(data.documents) ? data.documents : documents,
+          projects: Array.isArray(data.projects) ? data.projects : projects,
+          safetyInspections: Array.isArray(data.safetyInspections) ? data.safetyInspections : safetyInspections,
+          tools: Array.isArray(data.tools) ? data.tools : tools,
+          toolLogs: Array.isArray(data.toolLogs) ? data.toolLogs : toolLogs,
+          emailLogs: Array.isArray(data.emailLogs) ? data.emailLogs : emailLogs,
+          auditLogs,
+          emailConfig:
+            data.emailConfig && typeof data.emailConfig === 'object' ? data.emailConfig : emailConfig,
+          tariffConfig:
+            data.tariffConfig && typeof data.tariffConfig === 'object' ? data.tariffConfig : tariffConfig,
+        };
+        void seedOrPushWorkspaceToFirestore(
+          cloudUserRef.current.uid,
+          cloudUserRef.current.email,
+          snapToPush,
+          { forcePushAll: true, knownCloudIds: knownCloudIdsRef.current }
+        );
+      }
       return true;
     } catch (err) {
       console.error('Lỗi khôi phục sao lưu:', err);
@@ -2242,6 +3102,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         resetToDefaultData,
         exportDatabaseJSON,
         restoreFullBackup,
+        cloudSyncStatus,
+        cloudUser,
+        cloudSyncError,
+        lastSyncedAt,
+        connectCloudWithGoogle,
+        forceSyncLocalToCloud,
       }}
     >
       {children}

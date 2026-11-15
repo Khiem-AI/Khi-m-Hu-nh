@@ -27,6 +27,9 @@ import {
   EyeOff,
   Database,
   KeyRound,
+  Cloud,
+  CloudOff,
+  RefreshCw,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -57,10 +60,22 @@ export const Header: React.FC<HeaderProps> = ({
     login,
     changePassword,
     logout,
+    cloudSyncStatus,
+    cloudUser,
+    cloudSyncError,
+    lastSyncedAt,
+    connectCloudWithGoogle,
+    forceSyncLocalToCloud,
   } = useCMMS();
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showCloudPopover, setShowCloudPopover] = useState(false);
+  const [isCloudActionLoading, setIsCloudActionLoading] = useState(false);
+  const [cloudActionNotice, setCloudActionNotice] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [modalTab, setModalTab] = useState<'login' | 'change_password'>('login');
@@ -232,12 +247,197 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* Cloud Real-Time Sync Status Button & Popover */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setShowCloudPopover(!showCloudPopover);
+                setShowNotifications(false);
+                setShowUserDropdown(false);
+                setCloudActionNotice(null);
+              }}
+              title={
+                cloudSyncStatus === 'synced'
+                  ? `Đã đồng bộ Cloud (${cloudUser?.email || ''})`
+                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting'
+                  ? 'Đang đồng bộ dữ liệu Cloud...'
+                  : cloudSyncStatus === 'error'
+                  ? 'Lỗi đồng bộ Cloud — nhấn để xem chi tiết'
+                  : 'Chế độ nội bộ — nhấn để bật đồng bộ Cloud'
+              }
+              className={`h-9 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold transition whitespace-nowrap shrink-0 ${
+                cloudSyncStatus === 'synced'
+                  ? 'bg-emerald-50 dark:bg-emerald-500/15 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
+                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/40'
+                  : cloudSyncStatus === 'error'
+                  ? 'bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/40'
+                  : 'bg-amber-50 dark:bg-amber-500/15 hover:bg-amber-100 dark:hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/40'
+              }`}
+            >
+              {cloudSyncStatus === 'synced' ? (
+                <>
+                  <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="hidden xl:inline">Cloud Sync</span>
+                </>
+              ) : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-600 dark:text-cyan-400" />
+                  <span className="hidden xl:inline">Đang đồng bộ...</span>
+                </>
+              ) : cloudSyncStatus === 'error' ? (
+                <>
+                  <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
+                  <span className="hidden xl:inline">Lỗi Cloud</span>
+                </>
+              ) : (
+                <>
+                  <CloudOff className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                  <span className="hidden xl:inline">Bật Cloud</span>
+                </>
+              )}
+            </button>
+
+            {showCloudPopover && (
+              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3 text-xs">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Cloud className="w-4 h-4 text-cyan-500" />
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                      Đồng Bộ Đám Mây
+                    </span>
+                  </div>
+                  <span
+                    className={`font-bold text-[11px] px-2 py-0.5 rounded-lg ${
+                      cloudSyncStatus === 'synced'
+                        ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
+                        : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting'
+                        ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
+                        : cloudSyncStatus === 'error'
+                        ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300'
+                        : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
+                    }`}
+                  >
+                    {cloudSyncStatus === 'synced'
+                      ? 'Trực tuyến'
+                      : cloudSyncStatus === 'syncing'
+                      ? 'Đang đồng bộ'
+                      : cloudSyncStatus === 'connecting'
+                      ? 'Đang kết nối'
+                      : cloudSyncStatus === 'error'
+                      ? 'Gặp lỗi'
+                      : 'Chế độ nội bộ'}
+                  </span>
+                </div>
+
+                {cloudUser ? (
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-1">
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Tài khoản Google Cloud:
+                    </div>
+                    <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                      {cloudUser.email}
+                    </div>
+                    {lastSyncedAt && (
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Cập nhật lúc: <span className="font-mono">{lastSyncedAt}</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Hiện đang lưu dữ liệu trên trình duyệt này. Đăng nhập Google để tự động đồng bộ thời gian thực giữa mọi thiết bị và nhân sự.
+                  </p>
+                )}
+
+                {cloudSyncError && (
+                  <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 leading-relaxed">
+                    {cloudSyncError}
+                  </div>
+                )}
+
+                {cloudActionNotice && (
+                  <div
+                    className={`p-2.5 rounded-xl border leading-relaxed ${
+                      cloudActionNotice.ok
+                        ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-rose-500/10 border-rose-500/30 text-rose-700 dark:text-rose-300'
+                    }`}
+                  >
+                    {cloudActionNotice.text}
+                  </div>
+                )}
+
+                <div className="space-y-1.5 pt-1">
+                  {!cloudUser || cloudSyncStatus === 'offline' ? (
+                    <button
+                      type="button"
+                      disabled={isCloudActionLoading}
+                      onClick={async () => {
+                        setIsCloudActionLoading(true);
+                        setCloudActionNotice(null);
+                        const res = await connectCloudWithGoogle();
+                        setIsCloudActionLoading(false);
+                        setCloudActionNotice({ ok: res.success, text: res.message });
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                    >
+                      {isCloudActionLoading ? (
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Cloud className="w-4 h-4" />
+                      )}
+                      <span>Kết nối Google Cloud Sync</span>
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isCloudActionLoading}
+                        onClick={async () => {
+                          setIsCloudActionLoading(true);
+                          setCloudActionNotice(null);
+                          const res = await forceSyncLocalToCloud();
+                          setIsCloudActionLoading(false);
+                          setCloudActionNotice({ ok: res.success, text: res.message });
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
+                        />
+                        <span>Đẩy lại toàn bộ dữ liệu lên Cloud</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isCloudActionLoading}
+                        onClick={async () => {
+                          setIsCloudActionLoading(true);
+                          setCloudActionNotice(null);
+                          const res = await connectCloudWithGoogle();
+                          setIsCloudActionLoading(false);
+                          setCloudActionNotice({ ok: res.success, text: res.message });
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        <span>Đổi tài khoản Google Cloud</span>
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Notifications Bell */}
           <div className="relative">
             <button
               onClick={() => {
                 setShowNotifications(!showNotifications);
                 setShowUserDropdown(false);
+                setShowCloudPopover(false);
               }}
               aria-label="Thông báo hệ thống"
               className="relative h-9 w-9 flex items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition"
@@ -380,6 +580,7 @@ export const Header: React.FC<HeaderProps> = ({
               onClick={() => {
                 setShowUserDropdown(!showUserDropdown);
                 setShowNotifications(false);
+                setShowCloudPopover(false);
               }}
               className="flex items-center gap-2 p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 transition"
             >

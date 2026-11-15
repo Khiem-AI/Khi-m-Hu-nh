@@ -1,0 +1,608 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Default-Deny Catch-All
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Core Primitives
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && request.auth.token.email == 'khiemhuynhggs@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isMemberOnDoc(data) {
+      return isBootstrappedAdmin() ||
+        data.ownerUid == request.auth.uid ||
+        (data.allowedEmails is list && data.allowedEmails.size() <= 50 && request.auth.token.email in data.allowedEmails);
+    }
+
+    function isValidMeta(data) {
+      return data.ownerUid is string &&
+        data.ownerUid.size() >= 1 &&
+        data.ownerUid.size() <= 128 &&
+        data.allowedEmails is list &&
+        data.allowedEmails.size() >= 1 &&
+        data.allowedEmails.size() <= 50 &&
+        data.allowedEmails[0] is string &&
+        data.allowedEmails[0].size() <= 200 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCreateMeta(data) {
+      return isValidMeta(data) &&
+        (data.ownerUid == request.auth.uid || isAdmin()) &&
+        data.createdAt == request.time &&
+        data.updatedAt == request.time;
+    }
+
+    function isValidUpdateMeta() {
+      return incoming().ownerUid == existing().ownerUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time;
+    }
+
+    // Entity Validators (Create & Update compatible: never use existing() or diff() inside validators)
+    function isValidAdminDoc(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['uid', 'email', 'createdAt', 'updatedAt']) &&
+        data.uid is string && data.uid.size() >= 1 && data.uid.size() <= 128 &&
+        data.email is string && data.email.size() >= 3 && data.email.size() <= 200 &&
+        data.createdAt is timestamp && data.updatedAt is timestamp;
+    }
+
+    function isValidSetting(data) {
+      return data.keys().hasAll(['key', 'payload', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['key', 'payload', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.key is string && data.key.size() >= 1 && data.key.size() <= 64 &&
+        data.payload is map;
+    }
+
+    function isValidEquipment(data) {
+      return data.keys().hasAll(['maThietBi', 'tenThietBi', 'heThong', 'viTri', 'mucDoRuiRo', 'trangThai', 'tanSuat', 'hanBaoTriTiepTheo', 'nguoiPhuTrach', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['maThietBi', 'tenThietBi', 'thongSoKyThuat', 'heThong', 'viTri', 'mucDoRuiRo', 'trangThai', 'tanSuat', 'hanBaoTriTiepTheo', 'nguoiPhuTrach', 'nguoiGiaoViec', 'email', 'qrCode', 'hinhAnh', 'ngayLapDat', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.maThietBi is string && data.maThietBi.size() >= 1 && data.maThietBi.size() <= 80 &&
+        data.tenThietBi is string && data.tenThietBi.size() >= 1 && data.tenThietBi.size() <= 200 &&
+        data.heThong is string && data.heThong.size() <= 120 &&
+        data.viTri is string && data.viTri.size() <= 160 &&
+        data.mucDoRuiRo in ['High', 'Medium', 'Low'] &&
+        data.trangThai in ['Hoạt động', 'Bảo trì', 'Đang sửa chữa', 'Tạm dừng'] &&
+        data.tanSuat in ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'] &&
+        data.hanBaoTriTiepTheo is string && data.hanBaoTriTiepTheo.size() <= 32 &&
+        data.nguoiPhuTrach is string && data.nguoiPhuTrach.size() <= 300 &&
+        (!('thongSoKyThuat' in data) || (data.thongSoKyThuat is string && data.thongSoKyThuat.size() <= 4000)) &&
+        (!('nguoiGiaoViec' in data) || (data.nguoiGiaoViec is string && data.nguoiGiaoViec.size() <= 160)) &&
+        (!('email' in data) || (data.email is string && data.email.size() <= 500)) &&
+        (!('qrCode' in data) || (data.qrCode is string && data.qrCode.size() <= 500)) &&
+        (!('hinhAnh' in data) || (data.hinhAnh is string && data.hinhAnh.size() <= 450000)) &&
+        (!('ngayLapDat' in data) || (data.ngayLapDat is string && data.ngayLapDat.size() <= 32));
+    }
+
+    function isValidMaintenancePlan(data) {
+      return data.keys().hasAll(['id', 'maThietBi', 'tenThietBi', 'loaiBaoTri', 'tanSuat', 'ngayBaoTriTiepTheo', 'nguoiPhuTrach', 'trangThai', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maThietBi', 'tenThietBi', 'loaiBaoTri', 'tanSuat', 'ngayBaoTriGanNhat', 'ngayBaoTriTiepTheo', 'nguoiPhuTrach', 'nguoiGiaoViec', 'trangThai', 'ghiChu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+        data.maThietBi is string && data.maThietBi.size() >= 1 && data.maThietBi.size() <= 80 &&
+        data.tenThietBi is string && data.tenThietBi.size() >= 1 && data.tenThietBi.size() <= 200 &&
+        data.loaiBaoTri is string && data.loaiBaoTri.size() <= 80 &&
+        data.tanSuat in ['Daily', 'Weekly', 'Monthly', 'Quarterly', 'Yearly'] &&
+        data.ngayBaoTriTiepTheo is string && data.ngayBaoTriTiepTheo.size() <= 32 &&
+        data.nguoiPhuTrach is string && data.nguoiPhuTrach.size() <= 300 &&
+        data.trangThai in ['Quá hạn', 'Tới hạn', 'Sắp tới', 'Đúng hạn', 'Bình thường'] &&
+        (!('ngayBaoTriGanNhat' in data) || (data.ngayBaoTriGanNhat is string && data.ngayBaoTriGanNhat.size() <= 32)) &&
+        (!('nguoiGiaoViec' in data) || (data.nguoiGiaoViec is string && data.nguoiGiaoViec.size() <= 160)) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1500));
+    }
+
+    function isValidMaintenanceHistory(data) {
+      return data.keys().hasAll(['id', 'maThietBi', 'tenThietBi', 'ngayThucHien', 'nguoiThucHien', 'moTaCongViec', 'ketQua', 'nguoiLapBaoCao', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maThietBi', 'tenThietBi', 'loaiCongViec', 'ngayThucHien', 'nguoiThucHien', 'nguoiGiaoViec', 'moTaCongViec', 'thoiGianDungMay', 'ketQua', 'anhTruocXuLy', 'hinhAnh', 'nguoiLapBaoCao', 'chiPhiUocTinh', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 128 &&
+        data.maThietBi is string && data.maThietBi.size() >= 1 && data.maThietBi.size() <= 80 &&
+        data.tenThietBi is string && data.tenThietBi.size() >= 1 && data.tenThietBi.size() <= 200 &&
+        data.ngayThucHien is string && data.ngayThucHien.size() <= 32 &&
+        data.nguoiThucHien is string && data.nguoiThucHien.size() <= 300 &&
+        data.moTaCongViec is string && data.moTaCongViec.size() <= 3000 &&
+        data.ketQua in ['Đạt', 'Hoàn thành', 'Cần theo dõi', 'Chưa đạt'] &&
+        data.nguoiLapBaoCao is string && data.nguoiLapBaoCao.size() <= 160 &&
+        (!('loaiCongViec' in data) || (data.loaiCongViec is string && data.loaiCongViec.size() <= 80)) &&
+        (!('nguoiGiaoViec' in data) || (data.nguoiGiaoViec is string && data.nguoiGiaoViec.size() <= 160)) &&
+        (!('thoiGianDungMay' in data) || data.thoiGianDungMay is number) &&
+        (!('chiPhiUocTinh' in data) || data.chiPhiUocTinh is number) &&
+        (!('anhTruocXuLy' in data) || (data.anhTruocXuLy is string && data.anhTruocXuLy.size() <= 450000)) &&
+        (!('hinhAnh' in data) || (data.hinhAnh is string && data.hinhAnh.size() <= 450000));
+    }
+
+    function isValidTicket(data) {
+      return data.keys().hasAll(['maTicket', 'tieuDe', 'mucDoUuTien', 'trangThai', 'nguoiLap', 'nguoiPhuTrach', 'ngayTao', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['maTicket', 'tieuDe', 'moTaChiTiet', 'mucDoUuTien', 'trangThai', 'nguoiLap', 'nguoiGiaoViec', 'nguoiPhuTrach', 'ngayTao', 'maThietBi', 'ketQua', 'ngayHoanThanh', 'anhTruocXuLy', 'anhSauXuLy', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.maTicket is string && data.maTicket.size() >= 1 && data.maTicket.size() <= 80 &&
+        data.tieuDe is string && data.tieuDe.size() >= 1 && data.tieuDe.size() <= 300 &&
+        data.mucDoUuTien in ['Khẩn cấp', 'Cao', 'Trung bình', 'Bình thường', 'Thấp'] &&
+        data.trangThai in ['Mới tiếp nhận', 'Chờ xử lý', 'Đang thực hiện', 'Đang xử lý', 'Hoàn thành', 'Hủy'] &&
+        data.nguoiLap is string && data.nguoiLap.size() <= 160 &&
+        data.nguoiPhuTrach is string && data.nguoiPhuTrach.size() <= 300 &&
+        data.ngayTao is string && data.ngayTao.size() <= 32 &&
+        (!('moTaChiTiet' in data) || (data.moTaChiTiet is string && data.moTaChiTiet.size() <= 4000)) &&
+        (!('nguoiGiaoViec' in data) || (data.nguoiGiaoViec is string && data.nguoiGiaoViec.size() <= 160)) &&
+        (!('maThietBi' in data) || (data.maThietBi is string && data.maThietBi.size() <= 80)) &&
+        (!('ketQua' in data) || (data.ketQua is string && data.ketQua.size() <= 2000)) &&
+        (!('ngayHoanThanh' in data) || (data.ngayHoanThanh is string && data.ngayHoanThanh.size() <= 32)) &&
+        (!('anhTruocXuLy' in data) || (data.anhTruocXuLy is string && data.anhTruocXuLy.size() <= 450000)) &&
+        (!('anhSauXuLy' in data) || (data.anhSauXuLy is string && data.anhSauXuLy.size() <= 450000));
+    }
+
+    function isValidSparePart(data) {
+      return data.keys().hasAll(['maVatTu', 'tenVatTu', 'tonThucTe', 'tonToiThieu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['maVatTu', 'tenVatTu', 'thongSo', 'maThietBi', 'tenThietBiSuDung', 'tonToiThieu', 'tonThucTe', 'donViTinh', 'viTriLuu', 'ghiChu', 'donGia', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.maVatTu is string && data.maVatTu.size() >= 1 && data.maVatTu.size() <= 80 &&
+        data.tenVatTu is string && data.tenVatTu.size() >= 1 && data.tenVatTu.size() <= 200 &&
+        data.tonThucTe is number && data.tonToiThieu is number &&
+        (!('thongSo' in data) || (data.thongSo is string && data.thongSo.size() <= 1000)) &&
+        (!('maThietBi' in data) || (data.maThietBi is string && data.maThietBi.size() <= 80)) &&
+        (!('tenThietBiSuDung' in data) || (data.tenThietBiSuDung is string && data.tenThietBiSuDung.size() <= 300)) &&
+        (!('donViTinh' in data) || (data.donViTinh is string && data.donViTinh.size() <= 40)) &&
+        (!('viTriLuu' in data) || (data.viTriLuu is string && data.viTriLuu.size() <= 120)) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1000)) &&
+        (!('donGia' in data) || data.donGia is number);
+    }
+
+    function isValidStockTx(data) {
+      return data.keys().hasAll(['transId', 'ngay', 'loaiGD', 'maVatTu', 'soLuong', 'nguoiThucHien', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['transId', 'ngay', 'loaiGD', 'maVatTu', 'thietBiSuDung', 'soLuong', 'nguoiThucHien', 'ghiChu', 'donGiaSnapshot', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.transId is string && data.transId.size() >= 1 && data.transId.size() <= 80 &&
+        data.ngay is string && data.ngay.size() <= 32 &&
+        data.loaiGD in ['Nhập kho', 'Xuất kho sử dụng', 'Hoàn kho'] &&
+        data.maVatTu is string && data.maVatTu.size() <= 80 &&
+        data.soLuong is number &&
+        data.nguoiThucHien is string && data.nguoiThucHien.size() <= 160 &&
+        (!('thietBiSuDung' in data) || (data.thietBiSuDung is string && data.thietBiSuDung.size() <= 200)) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1000)) &&
+        (!('donGiaSnapshot' in data) || data.donGiaSnapshot is number);
+    }
+
+    function isValidPower10Days(data) {
+      return data.keys().hasAll(['id', 'chuKy', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'thoiGianLuu', 'chuKy', 'tuNgay', 'denNgay', 'ngayLamViec', 'loaiCa', 'tbNgayKwh', 'evnBT', 'evnCD', 'evnTD', 'solarBT', 'solarCD', 'pLighting', 'pAcmv', 'pEquipment', 'uChiller', 'uMChiller', 'uComp', 'uPump', 'uCooling', 'uOther', 'oAcmv', 'oSocket', 'oKit', 'oServer', 'oLighting', 'nguoiChot', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.chuKy is string && data.chuKy.size() <= 80 &&
+        (!('thoiGianLuu' in data) || (data.thoiGianLuu is string && data.thoiGianLuu.size() <= 40)) &&
+        (!('tuNgay' in data) || (data.tuNgay is string && data.tuNgay.size() <= 32)) &&
+        (!('denNgay' in data) || (data.denNgay is string && data.denNgay.size() <= 32)) &&
+        (!('ngayLamViec' in data) || data.ngayLamViec is number) &&
+        (!('loaiCa' in data) || (data.loaiCa is string && data.loaiCa.size() <= 40)) &&
+        (!('tbNgayKwh' in data) || data.tbNgayKwh is number) &&
+        (!('evnBT' in data) || data.evnBT is number) &&
+        (!('evnCD' in data) || data.evnCD is number) &&
+        (!('evnTD' in data) || data.evnTD is number) &&
+        (!('solarBT' in data) || data.solarBT is number) &&
+        (!('solarCD' in data) || data.solarCD is number) &&
+        (!('pLighting' in data) || data.pLighting is number) &&
+        (!('pAcmv' in data) || data.pAcmv is number) &&
+        (!('pEquipment' in data) || data.pEquipment is number) &&
+        (!('uChiller' in data) || data.uChiller is number) &&
+        (!('uMChiller' in data) || data.uMChiller is number) &&
+        (!('uComp' in data) || data.uComp is number) &&
+        (!('uPump' in data) || data.uPump is number) &&
+        (!('uCooling' in data) || data.uCooling is number) &&
+        (!('uOther' in data) || data.uOther is number) &&
+        (!('oAcmv' in data) || data.oAcmv is number) &&
+        (!('oSocket' in data) || data.oSocket is number) &&
+        (!('oKit' in data) || data.oKit is number) &&
+        (!('oServer' in data) || data.oServer is number) &&
+        (!('oLighting' in data) || data.oLighting is number) &&
+        (!('nguoiChot' in data) || (data.nguoiChot is string && data.nguoiChot.size() <= 160));
+    }
+
+    function isValidWaterMonthly(data) {
+      return data.keys().hasAll(['month', 'waterM3', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['month', 'waterM3', 'waterVND', 'waterUSD', 'sewageVND', 'sewageUSD', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.month is string && data.month.size() >= 1 && data.month.size() <= 32 &&
+        data.waterM3 is number &&
+        (!('waterVND' in data) || data.waterVND is number) &&
+        (!('waterUSD' in data) || data.waterUSD is number) &&
+        (!('sewageVND' in data) || data.sewageVND is number) &&
+        (!('sewageUSD' in data) || data.sewageUSD is number);
+    }
+
+    function isValidMeterReading(data) {
+      return data.keys().hasAll(['id', 'ngayChot', 'nguon', 'tenDongHo', 'chiSoCu', 'chiSoMoi', 'tieuThu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'timestamp', 'ngayChot', 'nguon', 'tenDongHo', 'chiSoCu', 'chiSoMoi', 'tieuThu', 'donVi', 'nguoiGhi', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.ngayChot is string && data.ngayChot.size() <= 32 &&
+        data.nguon is string && data.nguon.size() <= 60 &&
+        data.tenDongHo is string && data.tenDongHo.size() <= 160 &&
+        data.chiSoCu is number && data.chiSoMoi is number && data.tieuThu is number &&
+        (!('timestamp' in data) || (data.timestamp is string && data.timestamp.size() <= 40)) &&
+        (!('donVi' in data) || (data.donVi is string && data.donVi.size() <= 32)) &&
+        (!('nguoiGhi' in data) || (data.nguoiGhi is string && data.nguoiGhi.size() <= 160));
+    }
+
+    function isValidCostRecord(data) {
+      return data.keys().hasAll(['idChiPhi', 'ngayGhiNhan', 'phanLoai', 'soTienVND', 'trangThai', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['idChiPhi', 'ngayGhiNhan', 'phanLoai', 'thamChieu', 'soTienVND', 'nhaCungCap', 'trangThai', 'ghiChu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.idChiPhi is string && data.idChiPhi.size() >= 1 && data.idChiPhi.size() <= 80 &&
+        data.ngayGhiNhan is string && data.ngayGhiNhan.size() <= 32 &&
+        data.phanLoai is string && data.phanLoai.size() <= 120 &&
+        data.soTienVND is number &&
+        data.trangThai is string && data.trangThai.size() <= 60 &&
+        (!('thamChieu' in data) || (data.thamChieu is string && data.thamChieu.size() <= 160)) &&
+        (!('nhaCungCap' in data) || (data.nhaCungCap is string && data.nhaCungCap.size() <= 200)) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1000));
+    }
+
+    function isValidEmployeePublic(data) {
+      return data.keys().hasAll(['maNhanVien', 'tenNhanVien', 'chucVu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['maNhanVien', 'tenNhanVien', 'date', 'chucVu', 'ngayVao', 'username', 'quyenHan', 'allowedViews', 'anhDaiDien', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.maNhanVien is string && data.maNhanVien.size() >= 1 && data.maNhanVien.size() <= 60 &&
+        data.tenNhanVien is string && data.tenNhanVien.size() >= 1 && data.tenNhanVien.size() <= 160 &&
+        data.chucVu is string && data.chucVu.size() <= 120 &&
+        (!('date' in data) || (data.date is string && data.date.size() <= 32)) &&
+        (!('ngayVao' in data) || (data.ngayVao is string && data.ngayVao.size() <= 32)) &&
+        (!('username' in data) || (data.username is string && data.username.size() <= 120)) &&
+        (!('quyenHan' in data) || (data.quyenHan is list && data.quyenHan.size() <= 30 && (data.quyenHan.size() == 0 || data.quyenHan[0] is string))) &&
+        (!('allowedViews' in data) || (data.allowedViews is list && data.allowedViews.size() <= 30 && (data.allowedViews.size() == 0 || data.allowedViews[0] is string))) &&
+        (!('anhDaiDien' in data) || (data.anhDaiDien is string && data.anhDaiDien.size() <= 450000));
+    }
+
+    function isValidEmployeePrivate(data) {
+      return data.keys().hasAll(['maNhanVien', 'email', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['maNhanVien', 'email', 'soDienThoai', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.maNhanVien is string && data.maNhanVien.size() >= 1 && data.maNhanVien.size() <= 60 &&
+        data.email is string && data.email.size() <= 200 &&
+        (!('soDienThoai' in data) || (data.soDienThoai is string && data.soDienThoai.size() <= 40));
+    }
+
+    function isValidFacilityDocument(data) {
+      return data.keys().hasAll(['id', 'maTaiLieu', 'tieuDe', 'phanLoai', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maTaiLieu', 'tieuDe', 'phanLoai', 'heThong', 'maThietBi', 'loaiNguon', 'duongDanUrl', 'fileDataUrl', 'fileName', 'fileType', 'fileSizeKb', 'noiDung', 'moTaNgan', 'nguoiTao', 'ngayCapNhat', 'mobileFriendly', 'checklistSteps', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.maTaiLieu is string && data.maTaiLieu.size() <= 80 &&
+        data.tieuDe is string && data.tieuDe.size() <= 300 &&
+        data.phanLoai is string && data.phanLoai.size() <= 120 &&
+        (!('heThong' in data) || (data.heThong is string && data.heThong.size() <= 120)) &&
+        (!('maThietBi' in data) || (data.maThietBi is string && data.maThietBi.size() <= 80)) &&
+        (!('loaiNguon' in data) || (data.loaiNguon is string && data.loaiNguon.size() <= 40)) &&
+        (!('duongDanUrl' in data) || (data.duongDanUrl is string && data.duongDanUrl.size() <= 2000)) &&
+        (!('fileDataUrl' in data) || (data.fileDataUrl is string && data.fileDataUrl.size() <= 450000)) &&
+        (!('fileName' in data) || (data.fileName is string && data.fileName.size() <= 260)) &&
+        (!('fileType' in data) || (data.fileType is string && data.fileType.size() <= 120)) &&
+        (!('fileSizeKb' in data) || data.fileSizeKb is number) &&
+        (!('noiDung' in data) || (data.noiDung is string && data.noiDung.size() <= 30000)) &&
+        (!('moTaNgan' in data) || (data.moTaNgan is string && data.moTaNgan.size() <= 2000)) &&
+        (!('nguoiTao' in data) || (data.nguoiTao is string && data.nguoiTao.size() <= 160)) &&
+        (!('ngayCapNhat' in data) || (data.ngayCapNhat is string && data.ngayCapNhat.size() <= 32)) &&
+        (!('mobileFriendly' in data) || data.mobileFriendly is bool) &&
+        (!('checklistSteps' in data) || (data.checklistSteps is list && data.checklistSteps.size() <= 100 && (data.checklistSteps.size() == 0 || data.checklistSteps[0] is map)));
+    }
+
+    function isValidFacilityProject(data) {
+      return data.keys().hasAll(['id', 'maDuAn', 'tenDuAn', 'trangThai', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maDuAn', 'tenDuAn', 'danhMuc', 'moTa', 'mucTieu', 'phamVi', 'trangThai', 'uuTien', 'quanLyDuAn', 'thanhVien', 'ngayBatDau', 'ngayKetThucDuKien', 'ngayHoanThanhThucTe', 'ngayCapNhat', 'nganSachDuKien', 'chiPhiThucTe', 'tienDoThuCong', 'maThietBiLienQuan', 'congViec', 'cotMoc', 'khoanChi', 'ruiRo', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.maDuAn is string && data.maDuAn.size() <= 80 &&
+        data.tenDuAn is string && data.tenDuAn.size() <= 300 &&
+        data.trangThai is string && data.trangThai.size() <= 60 &&
+        (!('danhMuc' in data) || (data.danhMuc is string && data.danhMuc.size() <= 120)) &&
+        (!('moTa' in data) || (data.moTa is string && data.moTa.size() <= 4000)) &&
+        (!('mucTieu' in data) || (data.mucTieu is string && data.mucTieu.size() <= 2000)) &&
+        (!('phamVi' in data) || (data.phamVi is string && data.phamVi.size() <= 2000)) &&
+        (!('uuTien' in data) || (data.uuTien is string && data.uuTien.size() <= 40)) &&
+        (!('quanLyDuAn' in data) || (data.quanLyDuAn is string && data.quanLyDuAn.size() <= 160)) &&
+        (!('thanhVien' in data) || (data.thanhVien is string && data.thanhVien.size() <= 600)) &&
+        (!('ngayBatDau' in data) || (data.ngayBatDau is string && data.ngayBatDau.size() <= 32)) &&
+        (!('ngayKetThucDuKien' in data) || (data.ngayKetThucDuKien is string && data.ngayKetThucDuKien.size() <= 32)) &&
+        (!('ngayHoanThanhThucTe' in data) || (data.ngayHoanThanhThucTe is string && data.ngayHoanThanhThucTe.size() <= 32)) &&
+        (!('ngayCapNhat' in data) || (data.ngayCapNhat is string && data.ngayCapNhat.size() <= 32)) &&
+        (!('nganSachDuKien' in data) || data.nganSachDuKien is number) &&
+        (!('chiPhiThucTe' in data) || data.chiPhiThucTe is number) &&
+        (!('tienDoThuCong' in data) || data.tienDoThuCong is number) &&
+        (!('maThietBiLienQuan' in data) || (data.maThietBiLienQuan is list && data.maThietBiLienQuan.size() <= 100 && (data.maThietBiLienQuan.size() == 0 || data.maThietBiLienQuan[0] is string))) &&
+        (!('congViec' in data) || (data.congViec is list && data.congViec.size() <= 200 && (data.congViec.size() == 0 || data.congViec[0] is map))) &&
+        (!('cotMoc' in data) || (data.cotMoc is list && data.cotMoc.size() <= 100 && (data.cotMoc.size() == 0 || data.cotMoc[0] is map))) &&
+        (!('khoanChi' in data) || (data.khoanChi is list && data.khoanChi.size() <= 200 && (data.khoanChi.size() == 0 || data.khoanChi[0] is map))) &&
+        (!('ruiRo' in data) || (data.ruiRo is list && data.ruiRo.size() <= 100 && (data.ruiRo.size() == 0 || data.ruiRo[0] is map)));
+    }
+
+    function isValidSafetyInspection(data) {
+      return data.keys().hasAll(['id', 'maHoSo', 'tenThietBi', 'ngayHetHan', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maHoSo', 'maThietBi', 'tenThietBi', 'phanLoai', 'viTri', 'soTemGiayChungNhan', 'donViKiemDinh', 'chuKy', 'ngayKiemDinhGanNhat', 'ngayHetHan', 'nhacTruocNgay', 'nguoiPhuTrach', 'emailCanhBao', 'trangThai', 'ghiChu', 'lichSu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.maHoSo is string && data.maHoSo.size() <= 80 &&
+        data.tenThietBi is string && data.tenThietBi.size() <= 300 &&
+        data.ngayHetHan is string && data.ngayHetHan.size() <= 32 &&
+        (!('maThietBi' in data) || (data.maThietBi is string && data.maThietBi.size() <= 80)) &&
+        (!('phanLoai' in data) || (data.phanLoai is string && data.phanLoai.size() <= 120)) &&
+        (!('viTri' in data) || (data.viTri is string && data.viTri.size() <= 160)) &&
+        (!('soTemGiayChungNhan' in data) || (data.soTemGiayChungNhan is string && data.soTemGiayChungNhan.size() <= 120)) &&
+        (!('donViKiemDinh' in data) || (data.donViKiemDinh is string && data.donViKiemDinh.size() <= 200)) &&
+        (!('chuKy' in data) || (data.chuKy is string && data.chuKy.size() <= 40)) &&
+        (!('ngayKiemDinhGanNhat' in data) || (data.ngayKiemDinhGanNhat is string && data.ngayKiemDinhGanNhat.size() <= 32)) &&
+        (!('nhacTruocNgay' in data) || data.nhacTruocNgay is number) &&
+        (!('nguoiPhuTrach' in data) || (data.nguoiPhuTrach is string && data.nguoiPhuTrach.size() <= 300)) &&
+        (!('emailCanhBao' in data) || (data.emailCanhBao is string && data.emailCanhBao.size() <= 300)) &&
+        (!('trangThai' in data) || (data.trangThai is string && data.trangThai.size() <= 60)) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1500)) &&
+        (!('lichSu' in data) || (data.lichSu is list && data.lichSu.size() <= 100 && (data.lichSu.size() == 0 || data.lichSu[0] is map)));
+    }
+
+    function isValidToolItem(data) {
+      return data.keys().hasAll(['id', 'maDungCu', 'tenDungCu', 'soLuongTong', 'soLuongKhaDung', 'soLuongDangMuon', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maDungCu', 'tenDungCu', 'danhMuc', 'thuongHieu', 'serialNumber', 'soLuongTong', 'soLuongKhaDung', 'soLuongDangMuon', 'donViTinh', 'viTriLuu', 'tinhTrang', 'nguoiDangGiu', 'ngayMuonGanNhat', 'hanTraDuKien', 'canHieuChuan', 'hanHieuChuan', 'ghiChu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.maDungCu is string && data.maDungCu.size() <= 80 &&
+        data.tenDungCu is string && data.tenDungCu.size() <= 200 &&
+        data.soLuongTong is number && data.soLuongKhaDung is number && data.soLuongDangMuon is number &&
+        (!('danhMuc' in data) || (data.danhMuc is string && data.danhMuc.size() <= 120)) &&
+        (!('thuongHieu' in data) || (data.thuongHieu is string && data.thuongHieu.size() <= 160)) &&
+        (!('serialNumber' in data) || (data.serialNumber is string && data.serialNumber.size() <= 160)) &&
+        (!('donViTinh' in data) || (data.donViTinh is string && data.donViTinh.size() <= 40)) &&
+        (!('viTriLuu' in data) || (data.viTriLuu is string && data.viTriLuu.size() <= 160)) &&
+        (!('tinhTrang' in data) || (data.tinhTrang is string && data.tinhTrang.size() <= 80)) &&
+        (!('nguoiDangGiu' in data) || (data.nguoiDangGiu is string && data.nguoiDangGiu.size() <= 300)) &&
+        (!('ngayMuonGanNhat' in data) || (data.ngayMuonGanNhat is string && data.ngayMuonGanNhat.size() <= 32)) &&
+        (!('hanTraDuKien' in data) || (data.hanTraDuKien is string && data.hanTraDuKien.size() <= 32)) &&
+        (!('canHieuChuan' in data) || data.canHieuChuan is bool) &&
+        (!('hanHieuChuan' in data) || (data.hanHieuChuan is string && data.hanHieuChuan.size() <= 32)) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1000));
+    }
+
+    function isValidToolLog(data) {
+      return data.keys().hasAll(['id', 'ngayGiaoDich', 'maDungCu', 'loaiGiaoDich', 'soLuong', 'nguoiMuon', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maDungCu', 'tenDungCu', 'loaiGiaoDich', 'soLuong', 'nguoiMuon', 'nguoiBanGiao', 'ngayGiaoDich', 'hanTra', 'tinhTrangKhiTra', 'ghiChu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.ngayGiaoDich is string && data.ngayGiaoDich.size() <= 32 &&
+        data.maDungCu is string && data.maDungCu.size() <= 80 &&
+        data.loaiGiaoDich in ['Mượn', 'Trả', 'Bảo dưỡng', 'Kiểm kê'] &&
+        data.soLuong is number &&
+        data.nguoiMuon is string && data.nguoiMuon.size() <= 160 &&
+        (!('tenDungCu' in data) || (data.tenDungCu is string && data.tenDungCu.size() <= 200)) &&
+        (!('nguoiBanGiao' in data) || (data.nguoiBanGiao is string && data.nguoiBanGiao.size() <= 160)) &&
+        (!('hanTra' in data) || (data.hanTra is string && data.hanTra.size() <= 32)) &&
+        (!('tinhTrangKhiTra' in data) || (data.tinhTrangKhiTra is string && data.tinhTrangKhiTra.size() <= 200)) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1000));
+    }
+
+    function isValidEmailLog(data) {
+      return data.keys().hasAll(['id', 'timestamp', 'type', 'recipient', 'subject', 'status', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'timestamp', 'type', 'recipient', 'cc', 'subject', 'bodySnippet', 'fullContent', 'status', 'relatedId', 'errorMessage', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.timestamp is string && data.timestamp.size() <= 40 &&
+        data.type is string && data.type.size() <= 40 &&
+        data.recipient is string && data.recipient.size() <= 500 &&
+        data.subject is string && data.subject.size() <= 500 &&
+        data.status is string && data.status.size() <= 60 &&
+        (!('cc' in data) || (data.cc is string && data.cc.size() <= 500)) &&
+        (!('bodySnippet' in data) || (data.bodySnippet is string && data.bodySnippet.size() <= 500)) &&
+        (!('fullContent' in data) || (data.fullContent is string && data.fullContent.size() <= 20000)) &&
+        (!('relatedId' in data) || (data.relatedId is string && data.relatedId.size() <= 80)) &&
+        (!('errorMessage' in data) || (data.errorMessage is string && data.errorMessage.size() <= 1000));
+    }
+
+    function isValidAuditLog(data) {
+      return data.keys().hasAll(['id', 'thoiGian', 'nguoiThaoTac', 'hanhDong', 'chucNang', 'doiTuong', 'chiTietNoiDung', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'thoiGian', 'nguoiThaoTac', 'hanhDong', 'chucNang', 'doiTuong', 'chiTietNoiDung', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.thoiGian is string && data.thoiGian.size() <= 40 &&
+        data.nguoiThaoTac is string && data.nguoiThaoTac.size() <= 160 &&
+        data.hanhDong is string && data.hanhDong.size() <= 60 &&
+        data.chucNang is string && data.chucNang.size() <= 120 &&
+        data.doiTuong is string && data.doiTuong.size() <= 160 &&
+        data.chiTietNoiDung is string && data.chiTietNoiDung.size() <= 2000;
+    }
+
+    // Collection Rules
+    match /admins/{uid} {
+      allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isBootstrappedAdmin());
+      allow list: if isBootstrappedAdmin();
+      allow create: if isBootstrappedAdmin() && isValidId(uid) && isValidAdminDoc(incoming()) && incoming().createdAt == request.time && incoming().updatedAt == request.time;
+      allow update: if isBootstrappedAdmin() && isValidId(uid) && isValidAdminDoc(incoming()) && incoming().createdAt == existing().createdAt && incoming().updatedAt == request.time && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'updatedAt']);
+      allow delete: if isBootstrappedAdmin() && isValidId(uid);
+    }
+
+    match /settings/{settingId} {
+      allow get: if isValidId(settingId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(settingId) && isSignedIn() && isValidSetting(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(settingId) && isSignedIn() && isValidSetting(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['payload', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(settingId) && isAdmin();
+    }
+
+    match /equipment/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidEquipment(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidEquipment(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['tenThietBi', 'thongSoKyThuat', 'heThong', 'viTri', 'mucDoRuiRo', 'trangThai', 'tanSuat', 'hanBaoTriTiepTheo', 'nguoiPhuTrach', 'nguoiGiaoViec', 'email', 'qrCode', 'hinhAnh', 'ngayLapDat', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /maintenance_plans/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidMaintenancePlan(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidMaintenancePlan(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['maThietBi', 'tenThietBi', 'loaiBaoTri', 'tanSuat', 'ngayBaoTriGanNhat', 'ngayBaoTriTiepTheo', 'nguoiPhuTrach', 'nguoiGiaoViec', 'trangThai', 'ghiChu', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /maintenance_history/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidMaintenanceHistory(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidMaintenanceHistory(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['maThietBi', 'tenThietBi', 'loaiCongViec', 'ngayThucHien', 'nguoiThucHien', 'nguoiGiaoViec', 'moTaCongViec', 'thoiGianDungMay', 'ketQua', 'anhTruocXuLy', 'hinhAnh', 'nguoiLapBaoCao', 'chiPhiUocTinh', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /tickets/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidTicket(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidTicket(incoming()) && isValidUpdateMeta() && (
+        isAdmin() ||
+        (!(existing().trangThai in ['Hoàn thành', 'Hủy']) && isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['tieuDe', 'moTaChiTiet', 'mucDoUuTien', 'trangThai', 'nguoiGiaoViec', 'nguoiPhuTrach', 'maThietBi', 'ketQua', 'ngayHoanThanh', 'anhTruocXuLy', 'anhSauXuLy', 'allowedEmails', 'updatedAt']))
+      );
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /spare_parts/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidSparePart(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidSparePart(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['tenVatTu', 'thongSo', 'maThietBi', 'tenThietBiSuDung', 'tonThucTe', 'tonToiThieu', 'donViTinh', 'viTriLuu', 'ghiChu', 'donGia', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /stock_transactions/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidStockTx(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isAdmin() && isValidStockTx(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['ghiChu', 'donGiaSnapshot', 'allowedEmails', 'updatedAt']);
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /power_10days/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidPower10Days(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidPower10Days(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['thoiGianLuu', 'chuKy', 'tuNgay', 'denNgay', 'ngayLamViec', 'loaiCa', 'tbNgayKwh', 'evnBT', 'evnCD', 'evnTD', 'solarBT', 'solarCD', 'pLighting', 'pAcmv', 'pEquipment', 'uChiller', 'uMChiller', 'uComp', 'uPump', 'uCooling', 'uOther', 'oAcmv', 'oSocket', 'oKit', 'oServer', 'oLighting', 'nguoiChot', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /water_monthly/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidWaterMonthly(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidWaterMonthly(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['waterM3', 'waterVND', 'waterUSD', 'sewageVND', 'sewageUSD', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /meter_readings/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidMeterReading(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidMeterReading(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['chiSoCu', 'chiSoMoi', 'tieuThu', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /cost_records/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidCostRecord(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidCostRecord(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['ngayGhiNhan', 'phanLoai', 'thamChieu', 'soTienVND', 'nhaCungCap', 'trangThai', 'ghiChu', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /employees_public/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isAdmin() && isValidEmployeePublic(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isAdmin() && isValidEmployeePublic(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['tenNhanVien', 'date', 'chucVu', 'ngayVao', 'username', 'quyenHan', 'allowedViews', 'anhDaiDien', 'allowedEmails', 'updatedAt']);
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /employees_private/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email);
+      allow list: if isSignedIn() && (isBootstrappedAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email);
+      allow create: if isValidId(docId) && isAdmin() && isValidEmployeePrivate(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isValidEmployeePrivate(incoming()) && isValidUpdateMeta() && (isAdmin() || (isSignedIn() && existing().email == request.auth.token.email && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'soDienThoai', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /documents/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidFacilityDocument(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidFacilityDocument(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['maTaiLieu', 'tieuDe', 'phanLoai', 'heThong', 'maThietBi', 'loaiNguon', 'duongDanUrl', 'fileDataUrl', 'fileName', 'fileType', 'fileSizeKb', 'noiDung', 'moTaNgan', 'ngayCapNhat', 'mobileFriendly', 'checklistSteps', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /projects/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidFacilityProject(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidFacilityProject(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['maDuAn', 'tenDuAn', 'danhMuc', 'moTa', 'mucTieu', 'phamVi', 'trangThai', 'uuTien', 'quanLyDuAn', 'thanhVien', 'ngayBatDau', 'ngayKetThucDuKien', 'ngayHoanThanhThucTe', 'ngayCapNhat', 'nganSachDuKien', 'chiPhiThucTe', 'tienDoThuCong', 'maThietBiLienQuan', 'congViec', 'cotMoc', 'khoanChi', 'ruiRo', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /safety_inspections/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidSafetyInspection(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidSafetyInspection(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['maHoSo', 'maThietBi', 'tenThietBi', 'phanLoai', 'viTri', 'soTemGiayChungNhan', 'donViKiemDinh', 'chuKy', 'ngayKiemDinhGanNhat', 'ngayHetHan', 'nhacTruocNgay', 'nguoiPhuTrach', 'emailCanhBao', 'trangThai', 'ghiChu', 'lichSu', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /tools/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidToolItem(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidToolItem(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['maDungCu', 'tenDungCu', 'danhMuc', 'thuongHieu', 'serialNumber', 'soLuongTong', 'soLuongKhaDung', 'soLuongDangMuon', 'donViTinh', 'viTriLuu', 'tinhTrang', 'nguoiDangGiu', 'ngayMuonGanNhat', 'hanTraDuKien', 'canHieuChuan', 'hanHieuChuan', 'ghiChu', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /tool_logs/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidToolLog(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isAdmin() && isValidToolLog(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['tinhTrangKhiTra', 'ghiChu', 'allowedEmails', 'updatedAt']);
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /email_logs/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || existing().ownerUid == request.auth.uid);
+      allow list: if isSignedIn() && (isBootstrappedAdmin() || existing().ownerUid == request.auth.uid);
+      allow create: if isValidId(docId) && isSignedIn() && isValidEmailLog(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidEmailLog(incoming()) && isValidUpdateMeta() && (isAdmin() || (existing().ownerUid == request.auth.uid && incoming().diff(existing()).affectedKeys().hasOnly(['recipient', 'cc', 'subject', 'bodySnippet', 'fullContent', 'status', 'errorMessage', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /audit_logs/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidAuditLog(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isAdmin() && isValidAuditLog(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['allowedEmails', 'updatedAt']);
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+  }
+}

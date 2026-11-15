@@ -15,6 +15,8 @@ import {
   CheckCircle2,
   ArrowRight,
   KeyRound,
+  Cloud,
+  RefreshCw,
 } from 'lucide-react';
 
 export const LoginPage: React.FC = () => {
@@ -23,6 +25,9 @@ export const LoginPage: React.FC = () => {
     changePassword,
     theme,
     toggleTheme,
+    connectCloudWithGoogle,
+    cloudSyncStatus,
+    cloudSyncError,
   } = useCMMS();
 
   const [mode, setMode] = useState<'login' | 'change_password'>('login');
@@ -33,6 +38,7 @@ export const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
   // Change password form
   const [cpUsername, setCpUsername] = useState('');
@@ -46,6 +52,21 @@ export const LoginPage: React.FC = () => {
     setMode(nextMode);
     setErrorMessage('');
     setCpSuccessMessage('');
+  };
+
+  const handleGoogleLogin = async () => {
+    setErrorMessage('');
+    setIsGoogleLoading(true);
+    try {
+      const res = await connectCloudWithGoogle();
+      if (!res.success) {
+        setErrorMessage(res.message || 'Không thể đăng nhập bằng Google Cloud.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Đăng nhập Google thất bại.');
+    } finally {
+      setIsGoogleLoading(false);
+    }
   };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
@@ -197,17 +218,17 @@ export const LoginPage: React.FC = () => {
               </p>
             </div>
 
-            {errorMessage && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2.5">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400" />
-                <span>{errorMessage}</span>
+            {(errorMessage || cloudSyncError) && (
+              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500 dark:text-rose-400" />
+                <span>{errorMessage || cloudSyncError}</span>
               </div>
             )}
 
             {cpSuccessMessage && (
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-center justify-between gap-2">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-500 dark:text-emerald-400" />
                   <span>{cpSuccessMessage}</span>
                 </div>
                 <button
@@ -221,7 +242,34 @@ export const LoginPage: React.FC = () => {
             )}
 
             {mode === 'login' ? (
-              <form onSubmit={handleLoginSubmit} className="space-y-4">
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={handleGoogleLogin}
+                  disabled={isGoogleLoading || cloudSyncStatus === 'connecting'}
+                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-sm shadow-md transition flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 border border-slate-800 dark:border-slate-200"
+                >
+                  {isGoogleLoading || cloudSyncStatus === 'connecting' ? (
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Cloud className="w-4 h-4 text-cyan-400 dark:text-cyan-600" />
+                  )}
+                  <span>
+                    {isGoogleLoading || cloudSyncStatus === 'connecting'
+                      ? 'Đang kết nối Google Cloud...'
+                      : 'Đăng nhập bằng Google (Đồng bộ Đám mây)'}
+                  </span>
+                </button>
+
+                <div className="relative flex items-center py-1">
+                  <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
+                  <span className="shrink-0 mx-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                    Hoặc đăng nhập nội bộ
+                  </span>
+                  <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
+                </div>
+
+                <form onSubmit={handleLoginSubmit} className="space-y-4">
                   <div>
                     <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
                       Tên đăng nhập / Mã nhân viên *
@@ -280,6 +328,7 @@ export const LoginPage: React.FC = () => {
                     )}
                   </button>
                 </form>
+              </div>
             ) : (
               <form onSubmit={handleChangePasswordSubmit} className="space-y-3.5">
                 <div>
