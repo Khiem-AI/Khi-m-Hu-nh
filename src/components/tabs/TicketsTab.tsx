@@ -140,8 +140,18 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
   return (
     <div className="space-y-6">
       {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/40 text-emerald-200 shadow-2xl text-xs font-semibold">
-          <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl border shadow-2xl text-xs font-semibold max-w-md ${
+            /Chưa gửi được|Thất bại|Lỗi/i.test(toastMsg)
+              ? 'bg-amber-950/95 border-amber-500/40 text-amber-100'
+              : 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200'
+          }`}
+        >
+          {/Chưa gửi được|Thất bại|Lỗi/i.test(toastMsg) ? (
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          ) : (
+            <CheckCircle className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span>{toastMsg}</span>
         </div>
       )}

@@ -1,34 +1,86 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { EmailLog } from '../../types/cmms';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
+import { GoogleSignInButton } from '../common/GoogleSignInButton';
 import {
   Mail,
   Send,
   BellRing,
   AlertTriangle,
   CheckCircle2,
-  Clock,
   Settings,
   Eye,
   Trash2,
-  RefreshCw,
-  FileText,
-  ExternalLink,
-  ShieldCheck,
   Sparkles,
   Inbox,
   UserCheck,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  XCircle,
 } from 'lucide-react';
+
+const APPS_SCRIPT_SNIPPET = `function doGet() {
+  return ContentService.createTextOutput(
+    JSON.stringify({ ok: true, service: "FSM Email Webhook Ready" })
+  ).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var data = JSON.parse((e && e.postData && e.postData.contents) || "{}");
+    var to = String(data.to || "").trim();
+    var subject = String(data.subject || "").trim();
+    var body = String(data.body || "").trim();
+    if (!to || !subject || !body) {
+      return ContentService.createTextOutput(
+        JSON.stringify({ ok: false, error: "Thiếu to, subject hoặc body" })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+    var quota = MailApp.getRemainingDailyQuota();
+    if (quota <= 0) {
+      return ContentService.createTextOutput(
+        JSON.stringify({ ok: false, error: "Hết hạn mức gửi Gmail miễn phí trong ngày của Apps Script (quota = 0)." })
+      ).setMimeType(ContentService.MimeType.JSON);
+    }
+    var mailOptions = {
+      to: to,
+      subject: subject,
+      body: body,
+      name: data.sender || "FACILITY SYSTEM MANAGEMENT"
+    };
+    if (data.cc && String(data.cc).trim()) {
+      mailOptions.cc = String(data.cc).trim();
+    }
+    MailApp.sendEmail(mailOptions);
+    return ContentService.createTextOutput(
+      JSON.stringify({ ok: true, sentTo: to, remainingQuota: quota - 1 })
+    ).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(
+      JSON.stringify({ ok: false, error: err && err.message ? err.message : String(err) })
+    ).setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
 
 export const EmailAlertsTab: React.FC = () => {
   const {
     emailConfig,
     emailLogs,
+    autoEmailServerStatus,
+    refreshAutoEmailStatus,
+    gmailUser,
+    isGmailConnected,
+    connectGmail,
+    disconnectGmail,
     updateEmailConfig,
     sendEmailNotification,
     triggerMaintenanceDueAlerts,
+    openEmailDispatchModal,
     deleteEmailLog,
     clearEmailLogs,
     maintenancePlans,
@@ -49,21 +101,71 @@ export const EmailAlertsTab: React.FC = () => {
   const [webhookUrl, setWebhookUrl] = useState(emailConfig.webhookUrl || '');
   const [autoDispatchMethod, setAutoDispatchMethod] = useState(emailConfig.autoDispatchMethod);
 
+  useEffect(() => {
+    setEnabled(emailConfig.enabled);
+    setNotifyOnNewTicket(emailConfig.notifyOnNewTicket);
+    setNotifyOnMaintenanceDue(emailConfig.notifyOnMaintenanceDue);
+    setNotifyOnOverdue(emailConfig.notifyOnOverdue);
+    setNotifyOnInspectionDue(emailConfig.notifyOnInspectionDue ?? true);
+    setPrimaryRecipient(emailConfig.primaryRecipient);
+    setCcRecipients(emailConfig.ccRecipients);
+    setSenderName(emailConfig.senderName);
+    setWebhookUrl(emailConfig.webhookUrl || '');
+    setAutoDispatchMethod(emailConfig.autoDispatchMethod);
+  }, [emailConfig]);
+
   // UI state
   const [isSaved, setIsSaved] = useState(false);
   const [activePreview, setActivePreview] = useState<'ticket' | 'maintenance'>('ticket');
   const [selectedLogForDetail, setSelectedLogForDetail] = useState<EmailLog | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showAppsScriptGuide, setShowAppsScriptGuide] = useState(
+    () => !emailConfig.webhookUrl?.trim()
+  );
+  const [copiedScript, setCopiedScript] = useState(false);
+  const [confirmClearLogs, setConfirmClearLogs] = useState(false);
+  const [confirmSendAction, setConfirmSendAction] = useState<'test' | 'due_alerts' | null>(null);
+  const [isConnectingGmail, setIsConnectingGmail] = useState(false);
+  const [toastType, setToastType] = useState<'success' | 'warning'>('success');
 
   // Statistics
   const duePlansCount = maintenancePlans.filter(
     (p) => p.trangThai === 'Quá hạn' || p.trangThai === 'Tới hạn' || p.trangThai === 'Sắp tới'
   ).length;
 
-  const showToast = (msg: string) => {
+  const isDevAppsScript = Boolean(
+    webhookUrl.trim().includes('script.google.com') && /\/dev(\?|$)/i.test(webhookUrl.trim())
+  );
+
+  const isAutoSendReady = Boolean(
+    isGmailConnected ||
+      (webhookUrl.trim() && !isDevAppsScript) ||
+      (emailConfig.webhookUrl?.trim() && !/\/dev(\?|$)/i.test(emailConfig.webhookUrl)) ||
+      autoEmailServerStatus.smtpConfigured ||
+      autoEmailServerStatus.resendConfigured ||
+      autoEmailServerStatus.envWebhookConfigured
+  );
+
+  const showToast = (msg: string, kind: 'success' | 'warning' = 'success') => {
+    setToastType(kind);
     setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 4000);
+    setTimeout(() => setToastMessage(null), 5000);
+  };
+
+  const handleCopyAppsScript = async () => {
+    try {
+      await navigator.clipboard.writeText(APPS_SCRIPT_SNIPPET);
+    } catch {
+      const el = document.createElement('textarea');
+      el.value = APPS_SCRIPT_SNIPPET;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand('copy');
+      document.body.removeChild(el);
+    }
+    setCopiedScript(true);
+    setTimeout(() => setCopiedScript(false), 2500);
   };
 
   const handleSaveSettings = (e: React.FormEvent) => {
@@ -80,38 +182,65 @@ export const EmailAlertsTab: React.FC = () => {
       webhookUrl: webhookUrl.trim(),
       autoDispatchMethod,
     });
+    void refreshAutoEmailStatus();
     setIsSaved(true);
-    showToast('Đã lưu cấu hình dịch vụ gửi email thông báo thành công!');
+    showToast('Đã lưu cấu hình dịch vụ gửi email thông báo thành công!', 'success');
     setTimeout(() => setIsSaved(false), 2500);
   };
 
-  // Test email trigger
-  const handleSendTestEmail = async () => {
-    setIsProcessing(true);
-    const subj = `[FSM Test] Thử nghiệm hệ thống gửi email thông báo tự động`;
-    const body = `Kính gửi ${currentUser.tenNhanVien},\n\nĐây là email kiểm tra tính năng gửi thông báo tự động từ Hệ thống FACILITY SYSTEM MANAGEMENT.\nDịch vụ thông báo email đang hoạt động tốt trên hệ thống.\n\nThông tin kiểm tra:\n- Người gửi: ${senderName}\n- Người nhận: ${primaryRecipient}\n- Danh sách CC: ${ccRecipients}\n- Thời gian: ${new Date().toLocaleString('vi-VN')}\n\nTrân trọng,\n${senderName}`;
+  const handleConnectGmail = async () => {
+    setIsConnectingGmail(true);
+    const res = await connectGmail(true);
+    setIsConnectingGmail(false);
+    showToast(res.message, res.success ? 'success' : 'warning');
+  };
 
-    await sendEmailNotification({
+  // Test email trigger (executed after explicit confirmation modal)
+  const executeSendTestEmail = async () => {
+    setConfirmSendAction(null);
+    setIsProcessing(true);
+    const trimmedWebhook = webhookUrl.trim();
+    if (trimmedWebhook !== (emailConfig.webhookUrl || '').trim()) {
+      updateEmailConfig({ webhookUrl: trimmedWebhook });
+    }
+    const subj = `[FSM Test] Thử nghiệm hệ thống gửi email thông báo`;
+    const body = `Kính gửi ${currentUser.tenNhanVien},\n\nĐây là email kiểm tra tính năng gửi thông báo tự động từ Hệ thống FACILITY SYSTEM MANAGEMENT.\n\nThông tin kiểm tra:\n- Người gửi: ${senderName}\n- Người nhận: ${primaryRecipient}\n- Danh sách CC: ${ccRecipients}\n- Thời gian: ${new Date().toLocaleString('vi-VN')}\n\nTrân trọng,\n${senderName}`;
+
+    const result = await sendEmailNotification({
       type: 'THU_NGHIEM',
       subject: subj,
       body,
       recipient: primaryRecipient,
+      cc: ccRecipients,
       relatedId: 'TEST-PING',
+      webhookUrlOverride: trimmedWebhook,
+      userConfirmed: true,
     });
 
     setIsProcessing(false);
-    showToast(`Đã gửi email thử nghiệm thành công tới ${primaryRecipient}!`);
+    showToast(result.message, result.success ? 'success' : 'warning');
   };
 
-  // Trigger batch maintenance due alert
-  const handleTriggerDueAlerts = async () => {
+  // Trigger batch maintenance due alert (executed after explicit confirmation modal)
+  const executeTriggerDueAlerts = async () => {
+    setConfirmSendAction(null);
     setIsProcessing(true);
-    const result = await triggerMaintenanceDueAlerts();
+    const res = await triggerMaintenanceDueAlerts({ userConfirmed: true });
     setIsProcessing(false);
-    if (result.sentCount > 0) {
-      showToast(`Đã phát thông báo email cảnh báo cho ${result.dueCount} thiết bị đến hạn tới ${primaryRecipient}!`);
+    if (res.sentCount > 0) {
+      if (res.result?.success) {
+        showToast(
+          `Đã tự động gửi email cảnh báo ${res.dueCount} thiết bị đến hạn tới ${primaryRecipient}!`,
+          'success'
+        );
+      } else {
+        showToast(
+          res.result?.message || 'Chưa kết nối kênh gửi email tự động.',
+          'warning'
+        );
+      }
     } else {
-      showToast('Hiện tại không có thiết bị nào quá hạn hoặc tới hạn bảo trì.');
+      showToast('Hiện tại không có thiết bị nào quá hạn hoặc tới hạn bảo trì.', 'success');
     }
   };
 
@@ -119,8 +248,18 @@ export const EmailAlertsTab: React.FC = () => {
     <div className="space-y-6">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-950/90 border border-emerald-500/40 text-emerald-200 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5">
-          <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-5 max-w-md ${
+            toastType === 'warning'
+              ? 'bg-amber-950/95 border-amber-500/40 text-amber-100'
+              : 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200'
+          }`}
+        >
+          {toastType === 'warning' ? (
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" />
+          )}
           <span className="text-xs sm:text-sm font-semibold">{toastMessage}</span>
         </div>
       )}
@@ -145,7 +284,13 @@ export const EmailAlertsTab: React.FC = () => {
         {/* Quick actions */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={handleTriggerDueAlerts}
+            onClick={() => {
+              if (duePlansCount === 0) {
+                showToast('Hiện tại không có thiết bị nào quá hạn hoặc tới hạn bảo trì.', 'success');
+                return;
+              }
+              setConfirmSendAction('due_alerts');
+            }}
             disabled={isProcessing}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 text-xs sm:text-sm font-semibold shadow-sm transition"
           >
@@ -154,13 +299,83 @@ export const EmailAlertsTab: React.FC = () => {
           </button>
 
           <button
-            onClick={handleSendTestEmail}
+            onClick={() => setConfirmSendAction('test')}
             disabled={isProcessing}
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-cyan-900/30 transition"
           >
             <Send className="w-4 h-4" />
             <span>Gửi Thử Email</span>
           </button>
+        </div>
+      </div>
+
+      {/* Direct Gmail Connection Card (1-Click Sign In) */}
+      <div
+        className={`rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+          isGmailConnected
+            ? 'bg-emerald-950/30 border-emerald-500/40'
+            : 'bg-cyan-950/25 border-cyan-500/40'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <div
+            className={`p-2.5 rounded-xl shrink-0 ${
+              isGmailConnected
+                ? 'bg-emerald-500/20 text-emerald-400'
+                : 'bg-cyan-500/20 text-cyan-400'
+            }`}
+          >
+            <Mail className="w-5 h-5" />
+          </div>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-sm font-bold text-white">
+                {isGmailConnected
+                  ? `Đã kết nối Gmail: ${gmailUser?.email}`
+                  : 'Kết Nối Gmail Trực Tiếp (Gửi Mail Tự Động 1-Chạm)'}
+              </h3>
+              <span
+                className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                  isGmailConnected
+                    ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                }`}
+              >
+                {isGmailConnected ? 'Đang hoạt động' : 'Chưa kết nối'}
+              </span>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {isGmailConnected
+                ? 'Khi bạn xác nhận giao việc hoặc gửi cảnh báo, hệ thống sẽ tự động gửi email trực tiếp bằng Gmail của bạn ngay lập tức mà không cần mở thêm cửa sổ mail.'
+                : gmailUser
+                ? `Phiên gửi Gmail của ${gmailUser.email} cần làm mới sau khi tải lại trang. Bấm nút bên cạnh để bật lại gửi mail tự động.`
+                : 'Đăng nhập bằng tài khoản Google của bạn để ứng dụng tự động gửi email giao việc và cảnh báo ngay khi bạn bấm Xác nhận.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2.5 shrink-0">
+          {isGmailConnected ? (
+            <button
+              type="button"
+              onClick={() => void disconnectGmail()}
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
+            >
+              Ngắt kết nối Gmail
+            </button>
+          ) : (
+            <GoogleSignInButton
+              disabled={isConnectingGmail}
+              label={
+                isConnectingGmail
+                  ? 'Đang kết nối...'
+                  : gmailUser
+                  ? `Kết nối lại (${gmailUser.email})`
+                  : 'Sign in with Google'
+              }
+              onClick={handleConnectGmail}
+            />
+          )}
         </div>
       </div>
 
@@ -177,7 +392,7 @@ export const EmailAlertsTab: React.FC = () => {
             </div>
           </div>
           <div className="p-2.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-            <ShieldCheck className="w-5 h-5" />
+            <CheckCircle2 className="w-5 h-5" />
           </div>
         </div>
 
@@ -375,24 +590,136 @@ export const EmailAlertsTab: React.FC = () => {
                   onChange={(e) => setAutoDispatchMethod(e.target.value as any)}
                   className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 >
-                  <option value="direct_service">Tự động ngầm (Direct Service / Webhook & Nhật ký)</option>
-                  <option value="mailto">Mở Trình Email Máy Khách (mailto: Gmail / Outlook)</option>
+                  <option value="direct_service">Tự động gửi ngầm 1-chạm (Gmail OAuth / SMTP / Webhook)</option>
+                  <option value="gmail_compose">Tự động gửi ngầm qua Gmail OAuth / Webhook (Mặc định)</option>
+                  <option value="mailto">Tự động gửi ngầm (Gửi thủ công trong Nhật ký khi cần)</option>
                 </select>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-slate-300">
-                  Webhook Endpoint (Tùy chọn Resend / Brevo / Apps Script)
-                </label>
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-xs font-semibold text-slate-300">
+                    Webhook Endpoint (Tùy chọn nếu không dùng Gmail OAuth)
+                  </label>
+                  {webhookUrl.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setWebhookUrl('');
+                        updateEmailConfig({ webhookUrl: '' });
+                        showToast('Đã xóa Webhook. Hãy dùng Sign in with Google để gửi trực tiếp qua Gmail.', 'success');
+                      }}
+                      className="text-[11px] font-bold text-rose-400 hover:text-rose-300 underline"
+                    >
+                      Xóa Webhook
+                    </button>
+                  )}
+                </div>
                 <input
                   type="url"
                   value={webhookUrl}
                   onChange={(e) => setWebhookUrl(e.target.value)}
-                  placeholder="https://api.resend.com/emails hoặc Webhook URL..."
+                  placeholder="https://script.google.com/macros/s/.../exec"
                   className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
                 />
+                {isDevAppsScript && (
+                  <p className="text-[11px] text-rose-400 font-semibold">
+                    Link đang kết thúc bằng <code>/dev</code> (chỉ test nội bộ). Hãy Deploy Web App để lấy link kết thúc bằng <code>/exec</code>.
+                  </p>
+                )}
               </div>
             </div>
+
+            {isGmailConnected && gmailUser?.email ? (
+              <div className="p-3 rounded-xl bg-emerald-950/35 border border-emerald-500/35 text-xs text-emerald-200 flex items-center justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Đã sẵn sàng gửi mail trực tiếp qua Gmail ({gmailUser.email}):</strong> Khi nhấn{' '}
+                    <strong className="text-white">"Xác Nhận Giao Việc &amp; Gửi Mail"</strong>, hệ thống tự động gửi thư trực tiếp từ Gmail của bạn mà không cần Webhook trung gian.
+                  </span>
+                </div>
+              </div>
+            ) : !isGmailConnected && webhookUrl.trim() ? (
+              <div className="p-3.5 rounded-xl bg-amber-950/35 border border-amber-500/40 text-xs text-amber-100 space-y-2">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Chưa đăng nhập Gmail — hệ thống đang dùng Webhook đã lưu:</strong> Nếu bạn thấy báo{' '}
+                    <em>"Đã gửi (Webhook)"</em> nhưng người nhận không nhận được mail, có thể Apps Script chưa Deploy phiên bản mới (<strong>New version</strong>) hoặc URL Webhook không thực hiện lệnh gửi mail.
+                    <br />• Khuyên dùng: Bấm <strong>Sign in with Google</strong> ở trên để gửi thẳng qua Gmail của bạn (nhận thư thật ngay lập tức), hoặc bấm <strong>Xóa Webhook</strong>.
+                  </span>
+                </div>
+              </div>
+            ) : isAutoSendReady ? (
+              <div className="p-3 rounded-xl bg-emerald-950/35 border border-emerald-500/35 text-xs text-emerald-200 flex items-center justify-between gap-2">
+                <div className="flex items-start gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>
+                    <strong>Đã sẵn sàng gửi mail tự động 1-chạm:</strong> Khi nhấn{' '}
+                    <strong className="text-white">"Xác Nhận Giao Việc &amp; Gửi Mail"</strong>, hệ thống tự động gửi thư ngầm qua{' '}
+                    <strong>
+                      {autoEmailServerStatus.envWebhookConfigured
+                        ? 'Webhook (Server Proxy)'
+                        : autoEmailServerStatus.smtpConfigured
+                        ? `SMTP (${autoEmailServerStatus.smtpUser})`
+                        : 'Resend API'}
+                    </strong>{' '}
+                    mà không cần mở ứng dụng mail.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-amber-950/35 border border-amber-500/35 text-xs text-amber-100 space-y-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Chưa kích hoạt kênh gửi tự động ngầm:</strong> Để khi nhấn{' '}
+                      <strong>"Xác Nhận Giao Việc &amp; Gửi Mail"</strong> là thư tự động bay đi luôn không tốn bước mở mail, hãy chọn 1 trong 3 cách miễn phí:
+                      <br />• <strong>Cách 1 (Nhanh nhất):</strong> Bấm nút <strong>Sign in with Google</strong> ở thẻ Kết Nối Gmail phía trên để cấp quyền gửi qua Gmail của bạn.
+                      <br />• <strong>Cách 2 (Google Apps Script):</strong> Dán link Web App vào ô <em>Webhook Endpoint</em> ở trên.
+                      <br />• <strong>Cách 3 (Server SMTP):</strong> Thêm <code className="text-amber-300">SMTP_USER</code> + <code className="text-amber-300">SMTP_PASS</code> (Gmail App Password) vào Secrets.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowAppsScriptGuide((prev) => !prev)}
+                    className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-[11px] transition"
+                  >
+                    <span>Hướng dẫn 30s</span>
+                    {showAppsScriptGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+
+                {showAppsScriptGuide && (
+                  <div className="pt-2 border-t border-amber-500/20 space-y-2 text-[11px] text-slate-300">
+                    <p className="font-semibold text-white">
+                      Tạo Webhook gửi mail tự động 100% miễn phí bằng chính Gmail của bạn (không cần Google Cloud Billing):
+                    </p>
+                    <ol className="list-decimal list-inside space-y-1 text-slate-300">
+                      <li>Mở <strong>script.google.com</strong> bằng Gmail của bạn → bấm <strong>Dự án mới</strong>.</li>
+                      <li>Dán đoạn mã bên dưới vào file <code className="text-cyan-300">Code.gs</code> rồi bấm Lưu.</li>
+                      <li>Bấm <strong>Triển khai (Deploy) → Tùy chọn triển khai mới → Ứng dụng web (Web App)</strong>, chọn Quyền truy cập: <strong>Bất kỳ ai (Anyone)</strong>.</li>
+                      <li>Sao chép URL Web App (<code className="text-cyan-300">https://script.google.com/macros/s/.../exec</code>) dán vào ô <strong>Webhook Endpoint</strong> ở trên rồi bấm <strong>Lưu Cấu Hình Dịch Vụ</strong>.</li>
+                    </ol>
+                    <div className="relative">
+                      <pre className="p-2.5 rounded-lg bg-slate-950 border border-slate-800 text-[10px] font-mono text-emerald-300 overflow-x-auto">
+                        {APPS_SCRIPT_SNIPPET}
+                      </pre>
+                      <button
+                        type="button"
+                        onClick={handleCopyAppsScript}
+                        className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-semibold"
+                      >
+                        {copiedScript ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                        <span>{copiedScript ? 'Đã chép' : 'Sao chép mã'}</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Submit Button */}
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
@@ -537,17 +864,37 @@ export const EmailAlertsTab: React.FC = () => {
           </div>
 
           {emailLogs.length > 0 && (
-            <button
-              onClick={() => {
-                if (window.confirm('Bạn có chắc chắn muốn xóa toàn bộ lịch sử thông báo email đã gửi?')) {
-                  clearEmailLogs();
-                }
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 text-xs font-semibold transition"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Xóa Lịch Sử Email</span>
-            </button>
+            confirmClearLogs ? (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    clearEmailLogs();
+                    setConfirmClearLogs(false);
+                    showToast('Đã xóa toàn bộ nhật ký email.');
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition"
+                >
+                  Xác nhận xóa hết
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearLogs(false)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                >
+                  Hủy
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmClearLogs(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-rose-900/40 text-slate-400 hover:text-rose-400 text-xs font-semibold transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xóa Lịch Sử Email</span>
+              </button>
+            )
           )}
         </div>
 
@@ -569,8 +916,8 @@ export const EmailAlertsTab: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800 text-slate-300">
-                {emailLogs.map((log) => (
-                  <tr key={log.id} className="hover:bg-slate-800/40 transition">
+                {emailLogs.map((log, index) => (
+                  <tr key={`${log.id}-${index}`} className="hover:bg-slate-800/40 transition">
                     <td className="py-3 px-3 font-mono text-[11px] text-slate-400 whitespace-nowrap">
                       {log.timestamp}
                     </td>
@@ -613,15 +960,60 @@ export const EmailAlertsTab: React.FC = () => {
                     <td className="py-3 px-3 font-semibold text-slate-100 max-w-xs truncate">
                       {log.subject}
                     </td>
-                    <td className="py-3 px-3 whitespace-nowrap">
-                      <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/60">
-                        <CheckCircle2 className="w-3 h-3" />
-                        {log.status}
-                      </span>
+                    <td className="py-3 px-3">
+                      {log.status === 'Đã gửi' ||
+                      log.status === 'Đã gửi (Gmail)' ||
+                      log.status === 'Đã gửi (Webhook)' ? (
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/60">
+                          <CheckCircle2 className="w-3 h-3" />
+                          {log.status}
+                        </span>
+                      ) : log.status === 'Thất bại' ? (
+                        <div className="space-y-1 max-w-[240px]">
+                          <span
+                            title={log.errorMessage || 'Gửi thất bại'}
+                            className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold text-rose-400 bg-rose-950/40 px-2 py-0.5 rounded border border-rose-800/60"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            {log.status}
+                          </span>
+                          {log.errorMessage && (
+                            <p className="text-[10px] leading-snug text-rose-300/90 line-clamp-2">
+                              {log.errorMessage}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold text-amber-300 bg-amber-950/40 px-2 py-0.5 rounded border border-amber-700/60">
+                          <Clock className="w-3 h-3" />
+                          {log.status}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-3 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-1.5">
                         <button
+                          type="button"
+                          onClick={() =>
+                            openEmailDispatchModal({
+                              logId: log.id,
+                              type: log.type,
+                              to: log.recipient,
+                              cc: log.cc || emailConfig.ccRecipients || '',
+                              subject: log.subject,
+                              body: log.fullContent || log.bodySnippet,
+                              relatedId: log.relatedId,
+                              webhookError: log.errorMessage,
+                            })
+                          }
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/35 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition"
+                          title="Mở gửi qua Gmail / Mailto"
+                        >
+                          <Send className="w-3 h-3" />
+                          <span>Gửi</span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setSelectedLogForDetail(log)}
                           className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition"
                           title="Xem chi tiết toàn văn email"
@@ -629,6 +1021,7 @@ export const EmailAlertsTab: React.FC = () => {
                           <Eye className="w-3.5 h-3.5" />
                         </button>
                         <button
+                          type="button"
                           onClick={() => deleteEmailLog(log.id)}
                           className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-900/50 text-slate-400 hover:text-rose-400 transition"
                           title="Xóa nhật ký này"
@@ -699,6 +1092,64 @@ export const EmailAlertsTab: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition"
               >
                 Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Explicit Confirmation Modal before sending email */}
+      {confirmSendAction && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4">
+            <div className="flex items-center gap-3 text-cyan-400">
+              <div className="p-2 rounded-xl bg-cyan-500/20 border border-cyan-500/30">
+                <Send className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-white">
+                {confirmSendAction === 'test'
+                  ? 'Xác Nhận Gửi Email Thử Nghiệm'
+                  : 'Xác Nhận Gửi Email Cảnh Báo Bảo Trì'}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              {confirmSendAction === 'test' ? (
+                <>
+                  Hệ thống sẽ gửi 1 email thử nghiệm tới{' '}
+                  <strong className="text-cyan-300">{primaryRecipient}</strong>
+                  {isGmailConnected && gmailUser?.email
+                    ? ` qua tài khoản Gmail ${gmailUser.email}.`
+                    : '.'}
+                </>
+              ) : (
+                <>
+                  Hệ thống sẽ gửi email cảnh báo danh sách{' '}
+                  <strong className="text-amber-300">{duePlansCount} thiết bị</strong> đến hạn/quá hạn bảo trì tới{' '}
+                  <strong className="text-cyan-300">{primaryRecipient}</strong>
+                  {isGmailConnected && gmailUser?.email
+                    ? ` qua tài khoản Gmail ${gmailUser.email}.`
+                    : '.'}
+                </>
+              )}
+            </p>
+            <div className="flex items-center justify-end gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmSendAction(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  confirmSendAction === 'test'
+                    ? void executeSendTestEmail()
+                    : void executeTriggerDueAlerts()
+                }
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition shadow"
+              >
+                Xác Nhận Gửi Email
               </button>
             </div>
           </div>

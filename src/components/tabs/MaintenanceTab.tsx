@@ -118,6 +118,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
   const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
   const [excelIncludePrintLayout, setExcelIncludePrintLayout] = useState(true);
   const [excelOnlyFiltered, setExcelOnlyFiltered] = useState(true);
+  const [confirmDueAlertEmail, setConfirmDueAlertEmail] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -437,8 +438,18 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
   return (
     <div className="space-y-6">
       {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/40 text-emerald-200 shadow-2xl text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl border shadow-2xl text-xs font-semibold max-w-md ${
+            /Chưa gửi được|Thất bại|Lỗi/i.test(toastMsg)
+              ? 'bg-amber-950/95 border-amber-500/40 text-amber-100'
+              : 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200'
+          }`}
+        >
+          {/Chưa gửi được|Thất bại|Lỗi/i.test(toastMsg) ? (
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span>{toastMsg}</span>
           {undoMove && activeSubTab === 'calendar' && (
             <button
@@ -612,16 +623,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
         <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
           {(activeSubTab === 'plans' || activeSubTab === 'calendar') && (
             <button
-              onClick={async () => {
-                const res = await triggerMaintenanceDueAlerts();
-                if (res.sentCount > 0) {
-                  showToast(
-                    `Đã gửi email cảnh báo ${res.dueCount} thiết bị đến hạn tới: ${emailConfig.primaryRecipient}`
-                  );
-                } else {
-                  showToast('Hiện tại không có thiết bị nào quá hạn hoặc tới hạn bảo trì.');
-                }
-              }}
+              onClick={() => setConfirmDueAlertEmail(true)}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 text-xs font-semibold border border-amber-500/40 transition whitespace-nowrap"
               title="Gửi email cảnh báo thiết bị đến hạn bảo trì"
             >
@@ -2007,6 +2009,51 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                   <FileSpreadsheet className="w-4 h-4 text-amber-400 shrink-0" />
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmDueAlertEmail && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-amber-400">
+              <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30">
+                <Mail className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-100">Xác Nhận Gửi Cảnh Báo Bảo Trì</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Hệ thống sẽ tổng hợp các thiết bị quá hạn/tới hạn bảo trì và gửi email thông báo tới{' '}
+              <strong className="text-cyan-300">{emailConfig.primaryRecipient}</strong>.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDueAlertEmail(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  setConfirmDueAlertEmail(false);
+                  const res = await triggerMaintenanceDueAlerts({ userConfirmed: true });
+                  if (res.sentCount > 0) {
+                    showToast(
+                      res.result?.success
+                        ? `Đã tự động gửi email cảnh báo ${res.dueCount} thiết bị đến hạn tới: ${emailConfig.primaryRecipient}`
+                        : `Chưa gửi được email cảnh báo: ${res.result?.message || 'Chưa kết nối kênh gửi email'}`
+                    );
+                  } else {
+                    showToast('Hiện tại không có thiết bị nào quá hạn hoặc tới hạn bảo trì.');
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold transition shadow"
+              >
+                Xác Nhận Gửi Email
+              </button>
             </div>
           </div>
         </div>

@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Equipment, MaintenanceFrequency, RiskLevel, EquipmentStatus } from '../types/cmms';
-import { parseAssigneeNames, resolveAssigneeEmails } from '../utils/cmmsLogic';
+import { parseAssigneeNames, resolveAssigneeEmails, isPlaceholderEmail, isValidEmailFormat } from '../utils/cmmsLogic';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
-import { X, Cpu, CheckCircle, AlertTriangle, Mail } from 'lucide-react';
+import { GoogleSignInButton } from './common/GoogleSignInButton';
+import { X, Cpu, CheckCircle, AlertTriangle, Mail, Settings, RefreshCw } from 'lucide-react';
 
 interface EquipmentModalProps {
   isOpen: boolean;
@@ -17,7 +18,17 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   onClose,
   equipmentToEdit,
 }) => {
-  const { addEquipment, updateEquipment, currentUser, employees, assignWorkAndNotify } = useCMMS();
+  const {
+    addEquipment,
+    updateEquipment,
+    currentUser,
+    employees,
+    assignWorkAndNotify,
+    connectGmail,
+    isGmailConnected,
+    emailConfig,
+    autoEmailServerStatus,
+  } = useCMMS();
 
   const defaultEngineer =
     employees.find((e) => e.chucVu === 'Kỹ sư thiết bị')?.tenNhanVien || currentUser.tenNhanVien;
@@ -48,6 +59,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   );
   const [sendAssignmentEmail, setSendAssignmentEmail] = useState(false);
   const [error, setError] = useState('');
+  const [emailFailure, setEmailFailure] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -85,9 +97,18 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       setSendAssignmentEmail(true);
     }
     setError('');
+    setEmailFailure(null);
   }, [isOpen, equipmentToEdit, currentUser, defaultEngineer, employees]);
 
   if (!isOpen) return null;
+
+  const isAutoSendReady = Boolean(
+    isGmailConnected ||
+      emailConfig.webhookUrl?.trim() ||
+      autoEmailServerStatus.smtpConfigured ||
+      autoEmailServerStatus.resendConfigured ||
+      autoEmailServerStatus.envWebhookConfigured
+  );
 
   const handleAssigneeChange = (formattedNames: string) => {
     setNguoiPhuTrach(formattedNames);
@@ -100,6 +121,24 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     }
   };
 
+  const sendEquipmentAssignment = async (payloadCode: string, payloadName: string, payloadViTri: string) => {
+    const res = await assignWorkAndNotify({
+      module: 'THIET_BI',
+      targetId: payloadCode,
+      targetName: payloadName,
+      assigneeName: nguoiPhuTrach,
+      assignerName: nguoiGiaoViec || currentUser.tenNhanVien,
+      note: `Phân công phụ trách thiết bị tại ${payloadViTri} (Hạn bảo trì: ${hanBaoTriTiepTheo})`,
+      sendEmail: true,
+      recipientEmailOverride: email.trim() || undefined,
+    });
+    if (res && !res.success) {
+      setEmailFailure(res.message);
+      return false;
+    }
+    return true;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!maThietBi.trim() || !tenThietBi.trim()) {
@@ -109,6 +148,25 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     if (parseAssigneeNames(nguoiPhuTrach).length === 0) {
       setError('Vui lòng chọn ít nhất 1 người phụ trách thiết bị');
       return;
+    }
+
+    if (sendAssignmentEmail) {
+      const parsedEmails = email
+        .split(/[,;]+/)
+        .map((s) => s.trim())
+        .filter((s) => isValidEmailFormat(s));
+      const realEmails = parsedEmails.filter((addr) => !isPlaceholderEmail(addr));
+      if (parsedEmails.length === 0 || realEmails.length === 0) {
+        setError('Vui lòng nhập Gmail / email thực tế (không dùng @factory.com) để gửi thông báo.');
+        return;
+      }
+      if (!isAutoSendReady) {
+        const authRes = await connectGmail(true);
+        if (!authRes.success) {
+          setError(authRes.message);
+          return;
+        }
+      }
     }
 
     const code = maThietBi.trim().toUpperCase();
@@ -137,15 +195,8 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     }
 
     if (sendAssignmentEmail && nguoiPhuTrach) {
-      await assignWorkAndNotify({
-        module: 'THIET_BI',
-        targetId: code,
-        targetName: payload.tenThietBi,
-        assigneeName: nguoiPhuTrach,
-        assignerName: nguoiGiaoViec || currentUser.tenNhanVien,
-        note: `Phân công phụ trách thiết bị tại ${payload.viTri} (Hạn bảo trì: ${hanBaoTriTiepTheo})`,
-        sendEmail: true,
-      });
+      const ok = await sendEquipmentAssignment(code, payload.tenThietBi, payload.viTri);
+      if (!ok) return;
     }
 
     onClose();
@@ -333,18 +384,37 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
             </div>
           </div>
 
-          <label className="flex items-center gap-2.5 p-3 rounded-xl bg-cyan-950/30 border border-cyan-500/30 cursor-pointer text-xs text-slate-300">
-            <input
-              type="checkbox"
-              checked={sendAssignmentEmail}
-              onChange={(e) => setSendAssignmentEmail(e.target.checked)}
-              className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500"
-            />
-            <span className="flex items-center gap-1.5 font-semibold text-cyan-300">
-              <Mail className="w-4 h-4" />
-              Gửi email giao việc tới người phụ trách ({email})
-            </span>
-          </label>
+          <div className="rounded-xl bg-cyan-950/30 border border-cyan-500/30 p-3 space-y-2">
+            <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={sendAssignmentEmail}
+                onChange={(e) => setSendAssignmentEmail(e.target.checked)}
+                className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500"
+              />
+              <span className="flex items-center gap-1.5 font-semibold text-cyan-300">
+                <Mail className="w-4 h-4" />
+                Gửi email giao việc tới người phụ trách ({email})
+              </span>
+            </label>
+            {sendAssignmentEmail && !isGmailConnected && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
+                <span>
+                  {emailConfig.webhookUrl?.trim()
+                    ? 'Chưa đăng nhập Gmail nên đang dùng Webhook cũ. Bấm Sign in with Google để gửi trực tiếp qua Gmail thật.'
+                    : 'Kết nối Gmail để tự động gửi email giao việc ngay khi bấm lưu.'}
+                </span>
+                <GoogleSignInButton
+                  compact
+                  label="Sign in with Google"
+                  onClick={async () => {
+                    const res = await connectGmail(true);
+                    if (!res.success) setError(res.message);
+                  }}
+                />
+              </div>
+            )}
+          </div>
 
           {/* Thông số kỹ thuật */}
           <div className="space-y-1.5">
@@ -366,6 +436,77 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
             placeholder="Dán link Google Drive, URL ảnh hoặc bấm Chụp Trực Tiếp..."
             previewShape="wide"
           />
+
+          {emailFailure && (
+            <div className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/35 text-amber-100 text-xs space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold text-amber-300">
+                    Đã lưu thông tin thiết bị, nhưng chưa gửi được email tự động:
+                  </p>
+                  <p className="text-amber-100/90 mt-0.5">{emailFailure}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1">
+                {!isGmailConnected ? (
+                  <GoogleSignInButton
+                    compact
+                    label="Sign in with Google & Gửi lại"
+                    onClick={async () => {
+                      const res = await connectGmail(true);
+                      if (res.success) {
+                        setEmailFailure(null);
+                        const ok = await sendEquipmentAssignment(
+                          maThietBi.trim().toUpperCase(),
+                          tenThietBi.trim(),
+                          viTri.trim()
+                        );
+                        if (ok) onClose();
+                      } else {
+                        setEmailFailure(res.message);
+                      }
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      setEmailFailure(null);
+                      const ok = await sendEquipmentAssignment(
+                        maThietBi.trim().toUpperCase(),
+                        tenThietBi.trim(),
+                        viTri.trim()
+                      );
+                      if (ok) onClose();
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold transition"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Gửi Lại Email Ngay</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    window.dispatchEvent(new CustomEvent('fsm:navigate-tab', { detail: 'email_alerts' }));
+                  }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold transition"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Cài Đặt Email</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold transition"
+                >
+                  Đóng
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">

@@ -167,6 +167,11 @@ export const ProjectsTab: React.FC = () => {
 
   // Feedback banner
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+  const [feedbackKind, setFeedbackKind] = useState<'success' | 'warning'>('success');
+  const [pendingTaskEmail, setPendingTaskEmail] = useState<{
+    task: ProjectTask;
+    recipientStr: string;
+  } | null>(null);
 
   // Project Create / Edit Modal
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -235,9 +240,10 @@ export const ProjectsTab: React.FC = () => {
     [projects, selectedProjectId]
   );
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, kind: 'success' | 'warning' = 'success') => {
+    setFeedbackKind(kind);
     setFeedbackMsg(msg);
-    setTimeout(() => setFeedbackMsg(null), 4500);
+    setTimeout(() => setFeedbackMsg(null), 5000);
   };
 
   // Filtered Projects
@@ -512,7 +518,7 @@ export const ProjectsTab: React.FC = () => {
       showToast(`Đã cập nhật đầu việc ${taskForm.maCongViec}.`);
     } else {
       const newTask: ProjectTask = {
-        id: `TSK-${Date.now().toString().slice(-6)}`,
+        id: `TSK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         ...taskForm,
         tienDo: normalizedProgress,
         gioDuKien: Number(taskForm.gioDuKien) || 0,
@@ -557,19 +563,33 @@ export const ProjectsTab: React.FC = () => {
     showToast('Đã xóa đầu việc WBS.');
   };
 
-  const handleNotifyTaskAssignees = async (task: ProjectTask) => {
+  const handleNotifyTaskAssignees = (task: ProjectTask) => {
     if (!selectedProject) return;
     const names = parseAssigneeNames(task.nguoiPhuTrach);
     const emails = resolveAssigneeEmails(names, employees, emailConfig.primaryRecipient);
     const recipientStr = emails.join(', ') || emailConfig.primaryRecipient;
-    await sendEmailNotification({
+    setPendingTaskEmail({ task, recipientStr });
+  };
+
+  const executeNotifyTaskAssignees = async () => {
+    if (!selectedProject || !pendingTaskEmail) return;
+    const { task, recipientStr } = pendingTaskEmail;
+    setPendingTaskEmail(null);
+    const result = await sendEmailNotification({
       type: 'GIAO_VIEC',
       subject: `[Dự Án ${selectedProject.maDuAn}] Giao việc ${task.maCongViec}: ${task.tieuDe}`,
       body: `Kính gửi ${task.nguoiPhuTrach || 'Nhóm dự án'},\n\nBạn được phân công đầu việc thuộc dự án "${selectedProject.tenDuAn}" (${selectedProject.maDuAn}):\n- Mã đầu việc: ${task.maCongViec}\n- Nội dung: ${task.tieuDe}\n- Giai đoạn: ${task.giaiDoan || '-'}\n- Thời gian: ${formatDateVN(task.ngayBatDau)} → ${formatDateVN(task.hanHoanThanh)}\n- Người giao: ${currentUser.tenNhanVien}\n\nVui lòng cập nhật tiến độ trên hệ thống FACILITY SYSTEM MANAGEMENT.`,
       recipient: recipientStr,
       relatedId: `${selectedProject.maDuAn}-${task.maCongViec}`,
+      interactiveFallback: true,
+      userConfirmed: true,
     });
-    showToast(`Đã gửi email thông báo đầu việc ${task.maCongViec} tới ${task.nguoiPhuTrach || recipientStr}.`);
+    showToast(
+      result.success
+        ? `Đã tự động gửi email thông báo đầu việc ${task.maCongViec} tới ${result.recipient}.`
+        : `Chưa gửi được email đầu việc ${task.maCongViec}: ${result.message}`,
+      result.success ? 'success' : 'warning'
+    );
   };
 
   // Milestones
@@ -577,7 +597,7 @@ export const ProjectsTab: React.FC = () => {
     e.preventDefault();
     if (!selectedProject || !newMilestone.tenMoc.trim()) return;
     const created: ProjectMilestone = {
-      id: `MS-${Date.now().toString().slice(-6)}`,
+      id: `MS-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       tenMoc: newMilestone.tenMoc.trim(),
       hanHoanThanh: newMilestone.hanHoanThanh,
       daDat: false,
@@ -621,7 +641,7 @@ export const ProjectsTab: React.FC = () => {
     e.preventDefault();
     if (!selectedProject || !newExpense.hangMuc.trim() || newExpense.soTienVND <= 0) return;
     const item: ProjectExpense = {
-      id: `EXP-${Date.now().toString().slice(-6)}`,
+      id: `EXP-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       ngay: newExpense.ngay,
       hangMuc: newExpense.hangMuc.trim(),
       nhaCungCap: newExpense.nhaCungCap.trim(),
@@ -670,7 +690,7 @@ export const ProjectsTab: React.FC = () => {
     e.preventDefault();
     if (!selectedProject || !newRisk.moTa.trim()) return;
     const risk: ProjectRisk = {
-      id: `RSK-${Date.now().toString().slice(-6)}`,
+      id: `RSK-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       moTa: newRisk.moTa.trim(),
       mucDo: newRisk.mucDo,
       giaiPhap: newRisk.giaiPhap.trim() || 'Đang lập phương án ứng phó',
@@ -2031,9 +2051,19 @@ export const ProjectsTab: React.FC = () => {
 
       {/* Feedback Banner */}
       {feedbackMsg && (
-        <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-200 text-xs font-semibold flex items-center justify-between gap-2">
+        <div
+          className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-2 ${
+            feedbackKind === 'warning'
+              ? 'bg-amber-500/15 border-amber-500/40 text-amber-200'
+              : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-200'
+          }`}
+        >
           <div className="flex items-center gap-2">
-            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            {feedbackKind === 'warning' ? (
+              <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
             <span>{feedbackMsg}</span>
           </div>
           <button type="button" onClick={() => setFeedbackMsg(null)} className="p-1">
@@ -3137,6 +3167,52 @@ export const ProjectsTab: React.FC = () => {
                 className="px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold"
               >
                 Xóa Dự Án
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingTaskEmail && selectedProject && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <h3 className="text-base font-bold text-slate-100">Xác Nhận Gửi Email Giao Đầu Việc</h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Gửi email thông báo đầu việc{' '}
+              <strong className="text-white">
+                {pendingTaskEmail.task.maCongViec} — {pendingTaskEmail.task.tieuDe}
+              </strong>{' '}
+              (Dự án {selectedProject.maDuAn}).
+            </p>
+            <div>
+              <label className="block text-[11px] font-semibold text-slate-300 mb-1">
+                Email người nhận (có thể nhập nhiều email cách nhau dấu phẩy)
+              </label>
+              <input
+                type="text"
+                value={pendingTaskEmail.recipientStr}
+                onChange={(e) =>
+                  setPendingTaskEmail({ ...pendingTaskEmail, recipientStr: e.target.value })
+                }
+                placeholder="email@gmail.com"
+                className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-xs focus:outline-none focus:border-cyan-500"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setPendingTaskEmail(null)}
+                className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                disabled={!pendingTaskEmail.recipientStr.trim()}
+                onClick={() => void executeNotifyTaskAssignees()}
+                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white text-xs font-bold"
+              >
+                Xác Nhận Gửi Email
               </button>
             </div>
           </div>

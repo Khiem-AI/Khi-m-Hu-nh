@@ -23,6 +23,9 @@ import {
   ToolItem,
   ToolBorrowLog,
   ToolCondition,
+  PendingEmailDispatch,
+  EmailSendResult,
+  AutoEmailServerStatus,
 } from '../types/cmms';
 import {
   INITIAL_EQUIPMENT,
@@ -59,7 +62,18 @@ import {
   getInspectionStatus,
   calculateNextInspectionDate,
   getInspectionDaysRemaining,
+  isPlaceholderEmail,
+  isValidEmailFormat,
 } from '../utils/cmmsLogic';
+import {
+  GmailAccountInfo,
+  clearGmailAccessToken,
+  getGmailAccessToken,
+  initGmailAuth,
+  sendViaGmailApi,
+  signInWithGmail,
+  signOutGmail,
+} from '../utils/gmailAuth';
 
 interface CMMSContextType {
   // Data
@@ -91,7 +105,10 @@ interface CMMSContextType {
   addMaintenancePlan: (plan: MaintenancePlan) => void;
   updateMaintenancePlan: (plan: MaintenancePlan) => void;
   rescheduleMaintenancePlan: (planId: string, newDate: string) => void;
-  completeMaintenance: (record: Omit<MaintenanceHistory, 'id'>) => void;
+  completeMaintenance: (
+    record: Omit<MaintenanceHistory, 'id'>,
+    options?: { userConfirmedEmail?: boolean }
+  ) => void;
   updateMaintenanceHistory: (record: MaintenanceHistory) => void;
   deleteMaintenanceHistory: (id: string) => void;
 
@@ -107,7 +124,10 @@ interface CMMSContextType {
     ketQua: InspectionHistoryEntry['ketQua'];
     ghiChu?: string;
   }) => void;
-  triggerInspectionDueAlerts: (isAuto?: boolean) => Promise<{ sentCount: number; dueCount: number }>;
+  triggerInspectionDueAlerts: (
+    isAuto?: boolean,
+    options?: { userConfirmed?: boolean }
+  ) => Promise<{ sentCount: number; dueCount: number; result?: EmailSendResult }>;
 
   // Tooling & Equipment Kit Actions
   addTool: (tool: Omit<ToolItem, 'id'>) => void;
@@ -125,8 +145,11 @@ interface CMMSContextType {
   }) => { success: boolean; message?: string };
 
   // Ticket Actions
-  addTicket: (ticket: Omit<Ticket, 'maTicket' | 'ngayTao'>) => void;
-  updateTicket: (ticket: Ticket) => void;
+  addTicket: (
+    ticket: Omit<Ticket, 'maTicket' | 'ngayTao'>,
+    options?: { userConfirmedEmail?: boolean }
+  ) => void;
+  updateTicket: (ticket: Ticket, options?: { userConfirmedEmail?: boolean }) => void;
   deleteTicket: (maTicket: string) => void;
 
   // Spare Parts Actions
@@ -172,15 +195,41 @@ interface CMMSContextType {
   // Email & Alert Service
   emailConfig: EmailConfig;
   emailLogs: EmailLog[];
+  autoEmailServerStatus: AutoEmailServerStatus;
+  refreshAutoEmailStatus: () => Promise<void>;
+  gmailUser: GmailAccountInfo | null;
+  isGmailConnected: boolean;
+  connectGmail: (forceConsent?: boolean) => Promise<{
+    success: boolean;
+    email?: string;
+    message: string;
+  }>;
+  disconnectGmail: () => Promise<void>;
+  pendingEmailDispatch: PendingEmailDispatch | null;
+  openEmailDispatchModal: (draft: PendingEmailDispatch) => void;
+  closeEmailDispatchModal: () => void;
+  markEmailDispatchStatus: (
+    logId: string,
+    status: EmailLog['status'],
+    updatedFields?: { to?: string; cc?: string; subject?: string; body?: string }
+  ) => void;
   updateEmailConfig: (cfg: Partial<EmailConfig>) => void;
   sendEmailNotification: (params: {
     type: EmailLog['type'];
     subject: string;
     body: string;
     recipient?: string;
+    cc?: string;
     relatedId?: string;
-  }) => Promise<boolean>;
-  triggerMaintenanceDueAlerts: () => Promise<{ sentCount: number; dueCount: number }>;
+    interactiveFallback?: boolean;
+    webhookUrlOverride?: string;
+    userConfirmed?: boolean;
+  }) => Promise<EmailSendResult>;
+  triggerMaintenanceDueAlerts: (options?: { userConfirmed?: boolean }) => Promise<{
+    sentCount: number;
+    dueCount: number;
+    result?: EmailSendResult;
+  }>;
   deleteEmailLog: (id: string) => void;
   clearEmailLogs: () => void;
 
@@ -209,7 +258,9 @@ interface CMMSContextType {
     assignerName: string;
     note?: string;
     sendEmail?: boolean;
-  }) => Promise<void>;
+    recipientEmailOverride?: string;
+    saveEmailToProfile?: boolean;
+  }) => Promise<EmailSendResult | null>;
   notifyCompletionReport: (params: {
     module: 'BAO_TRI' | 'TICKET';
     targetId: string;
@@ -218,6 +269,7 @@ interface CMMSContextType {
     assignerName?: string;
     result: string;
     details?: string;
+    userConfirmed?: boolean;
   }) => Promise<void>;
 
   // System Actions
@@ -230,6 +282,27 @@ interface CMMSContextType {
 const CMMSContext = createContext<CMMSContextType | undefined>(undefined);
 
 const CMMS_DATA_VERSION = 'v18_calendar_dnd_inspection_tools';
+
+let uniqueIdCounter = 0;
+
+function nextUniqueId(prefix: string): string {
+  uniqueIdCounter += 1;
+  return `${prefix}-${Date.now()}-${uniqueIdCounter}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function deduplicateById<T extends { id: string }>(items: T[], prefix: string): T[] {
+  const seen = new Set<string>();
+  return items.map((item) => {
+    const rawId = item.id || nextUniqueId(prefix);
+    if (!seen.has(rawId)) {
+      seen.add(rawId);
+      return item.id ? item : { ...item, id: rawId };
+    }
+    const fixedId = nextUniqueId(prefix);
+    seen.add(fixedId);
+    return { ...item, id: fixedId };
+  });
+}
 
 function loadStorage<T>(key: string, fallback: T): T {
   try {
@@ -302,7 +375,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return missing.length > 0 ? [...loaded, ...missing] : loaded;
   });
   const [meterReadings, setMeterReadings] = useState<MeterReading[]>(() => loadStorage('meterReadings', INITIAL_METER_READINGS));
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => loadStorage('auditLogs', INITIAL_AUDIT_LOGS));
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() =>
+    deduplicateById(loadStorage('auditLogs', INITIAL_AUDIT_LOGS), 'LOG')
+  );
   const [emailConfig, setEmailConfig] = useState<EmailConfig>(() => {
     const loaded = loadStorage('emailConfig', INITIAL_EMAIL_CONFIG);
     if (loaded.senderName === 'Hệ Thống Quản Lý Bảo Trì CMMS PRO') {
@@ -310,7 +385,94 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     return loaded;
   });
-  const [emailLogs, setEmailLogs] = useState<EmailLog[]>(() => loadStorage('emailLogs', INITIAL_EMAIL_LOGS));
+  const [emailLogs, setEmailLogs] = useState<EmailLog[]>(() =>
+    deduplicateById(loadStorage('emailLogs', INITIAL_EMAIL_LOGS), 'EML')
+  );
+  const [pendingEmailDispatch, setPendingEmailDispatch] = useState<PendingEmailDispatch | null>(null);
+  const [gmailUser, setGmailUser] = useState<GmailAccountInfo | null>(null);
+  const [isGmailConnected, setIsGmailConnected] = useState(false);
+  const [autoEmailServerStatus, setAutoEmailServerStatus] = useState<AutoEmailServerStatus>({
+    smtpConfigured: false,
+    resendConfigured: false,
+    envWebhookConfigured: false,
+    smtpUser: '',
+    activeChannels: [],
+    loaded: false,
+  });
+
+  const refreshAutoEmailStatus = async () => {
+    try {
+      const res = await fetch('/api/email-status');
+      if (res.ok) {
+        const data = (await res.json()) as Omit<AutoEmailServerStatus, 'loaded'>;
+        setAutoEmailServerStatus({ ...data, loaded: true });
+        return;
+      }
+    } catch {
+      // Static fallback or server starting
+    }
+    setAutoEmailServerStatus((prev) => ({ ...prev, loaded: true }));
+  };
+
+  useEffect(() => {
+    void refreshAutoEmailStatus();
+    const unsub = initGmailAuth(
+      (user, token) => {
+        setGmailUser({
+          email: user.email || '',
+          displayName: user.displayName || user.email || 'Google User',
+          photoURL: user.photoURL || undefined,
+        });
+        setIsGmailConnected(Boolean(token));
+      },
+      (user) => {
+        if (user) {
+          setGmailUser({
+            email: user.email || '',
+            displayName: user.displayName || user.email || 'Google User',
+            photoURL: user.photoURL || undefined,
+          });
+        } else {
+          setGmailUser(null);
+        }
+        setIsGmailConnected(false);
+      }
+    );
+    return () => unsub();
+  }, []);
+
+  const connectGmail = async (
+    forceConsent: boolean = false
+  ): Promise<{
+    success: boolean;
+    email?: string;
+    message: string;
+  }> => {
+    try {
+      const { user, accessToken } = await signInWithGmail(forceConsent);
+      const email = user.email || '';
+      setGmailUser({
+        email,
+        displayName: user.displayName || email || 'Google User',
+        photoURL: user.photoURL || undefined,
+      });
+      setIsGmailConnected(Boolean(accessToken));
+      return {
+        success: true,
+        email,
+        message: `Đã kết nối Gmail (${email}) sẵn sàng gửi email tự động!`,
+      };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Không thể kết nối Gmail.';
+      return { success: false, message: msg };
+    }
+  };
+
+  const disconnectGmail = async (): Promise<void> => {
+    await signOutGmail();
+    setGmailUser(null);
+    setIsGmailConnected(false);
+  };
   const [tariffConfig, setTariffConfig] = useState<EnergyTariffConfig>(() => loadStorage('tariffConfig', DEFAULT_ENERGY_TARIFF_CONFIG));
   const [documents, setDocuments] = useState<FacilityDocument[]>(() => loadStorage('documents', INITIAL_DOCUMENTS));
   const [projects, setProjects] = useState<FacilityProject[]>(() => loadStorage('projects', INITIAL_PROJECTS));
@@ -371,7 +533,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date();
     const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     const newLog: AuditLog = {
-      id: `LOG-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('LOG'),
       thoiGian: timeStr,
       nguoiThaoTac: currentUser.tenNhanVien,
       hanhDong,
@@ -387,7 +549,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setEquipment((prev) => [item, ...prev]);
     // Also create initial maintenance plan if not exists
     const newPlan: MaintenancePlan = {
-      id: `PLAN-${Date.now().toString().slice(-4)}`,
+      id: nextUniqueId('PLAN'),
       maThietBi: item.maThietBi,
       tenThietBi: item.tenThietBi,
       loaiBaoTri: 'Định kỳ',
@@ -472,8 +634,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // COMPLETE MAINTENANCE / REPAIR: Differentiate Planned Maintenance vs Repair
-  const completeMaintenance = (recordData: Omit<MaintenanceHistory, 'id'>) => {
-    const newId = `HIST-${Date.now().toString().slice(-6)}`;
+  const completeMaintenance = (
+    recordData: Omit<MaintenanceHistory, 'id'>,
+    options?: { userConfirmedEmail?: boolean }
+  ) => {
+    const newId = nextUniqueId('HIST');
     const workType = recordData.loaiCongViec || 'Bảo trì theo kế hoạch';
     const newRecord: MaintenanceHistory = {
       ...recordData,
@@ -496,7 +661,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let finalPlans = synced;
       if (!hasPlanForEq) {
         const autoNextPlan: MaintenancePlan = {
-          id: `PLAN-${Date.now().toString().slice(-5)}`,
+          id: nextUniqueId('PLAN'),
           maThietBi: recordData.maThietBi,
           tenThietBi: recordData.tenThietBi,
           loaiBaoTri: 'Định kỳ',
@@ -550,7 +715,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
     }
 
-    if (emailConfig.enabled) {
+    if (emailConfig.enabled && options?.userConfirmedEmail !== false) {
       void notifyCompletionReport({
         module: 'BAO_TRI',
         targetId: recordData.maThietBi,
@@ -559,6 +724,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         assignerName: recordData.nguoiGiaoViec || assignerName,
         result: recordData.ketQua,
         details: `[${workType}] ${recordData.ngayThucHien} • ${recordData.moTaCongViec}`,
+        userConfirmed: Boolean(options?.userConfirmedEmail),
       });
     }
   };
@@ -617,12 +783,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Ticket Actions
-  const addTicket = (ticketData: Omit<Ticket, 'maTicket' | 'ngayTao'>) => {
+  const addTicket = (
+    ticketData: Omit<Ticket, 'maTicket' | 'ngayTao'>,
+    options?: { userConfirmedEmail?: boolean }
+  ) => {
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const newTicket: Ticket = {
       ...ticketData,
-      maTicket: `TK-${Date.now().toString().slice(-6)}`,
+      maTicket: nextUniqueId('TK'),
       ngayTao: today,
     };
     setTickets((prev) => [newTicket, ...prev]);
@@ -633,8 +802,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       new Set([...assigneeEmails, emailConfig.primaryRecipient].filter((x): x is string => Boolean(x && x.trim())))
     ).join(', ');
 
-    // Tự động gửi thông báo Email khi có ticket mới
-    if (emailConfig.enabled && emailConfig.notifyOnNewTicket) {
+    // Tự động gửi thông báo Email khi có ticket mới (nếu bật hoặc người dùng chọn gửi)
+    if (
+      options?.userConfirmedEmail === true ||
+      (options?.userConfirmedEmail !== false && emailConfig.enabled && emailConfig.notifyOnNewTicket)
+    ) {
       const equipInfo = newTicket.maThietBi ? ` [${newTicket.maThietBi}]` : '';
       const subj = `[FACILITY SYSTEM MANAGEMENT - Ticket Mới] ${newTicket.tieuDe} (Ưu tiên: ${newTicket.mucDoUuTien})${equipInfo}`;
       const body = `Kính gửi Trưởng phòng Kỹ thuật & Kỹ sư Phụ trách,\n\nHệ thống FACILITY SYSTEM MANAGEMENT vừa ghi nhận phiếu yêu cầu sự cố / công việc mới tại nhà máy:\n- Mã Ticket: ${newTicket.maTicket}\n- Tiêu đề: ${newTicket.tieuDe}\n- Mức độ ưu tiên: ${newTicket.mucDoUuTien}\n- Thiết bị liên quan: ${newTicket.maThietBi || 'Chung'}\n- Người lập phiếu / Giao việc: ${newTicket.nguoiGiaoViec || newTicket.nguoiLap}\n- Người phụ trách: ${newTicket.nguoiPhuTrach}\n- Ngày tạo: ${today}\n- Mô tả chi tiết: ${newTicket.moTaChiTiet}\n\nVui lòng đăng nhập hệ thống FACILITY SYSTEM MANAGEMENT để điều phối và xử lý kịp thời.\n\nTrân trọng,\n${emailConfig.senderName}`;
@@ -645,10 +817,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body,
         recipient: recipientList || emailConfig.primaryRecipient,
         relatedId: newTicket.maTicket,
+        userConfirmed: Boolean(options?.userConfirmedEmail),
       });
     }
 
-    if (emailConfig.enabled && newTicket.trangThai === 'Hoàn thành') {
+    if (
+      (options?.userConfirmedEmail === true || (options?.userConfirmedEmail !== false && emailConfig.enabled)) &&
+      newTicket.trangThai === 'Hoàn thành'
+    ) {
       void notifyCompletionReport({
         module: 'TICKET',
         targetId: newTicket.maTicket,
@@ -657,16 +833,21 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         assignerName: newTicket.nguoiGiaoViec || newTicket.nguoiLap,
         result: newTicket.ketQua || 'Đã xử lý xong',
         details: newTicket.moTaChiTiet,
+        userConfirmed: Boolean(options?.userConfirmedEmail),
       });
     }
   };
 
-  const updateTicket = (ticket: Ticket) => {
+  const updateTicket = (ticket: Ticket, options?: { userConfirmedEmail?: boolean }) => {
     const prevTicket = tickets.find((t) => t.maTicket === ticket.maTicket);
     setTickets((prev) => prev.map((t) => (t.maTicket === ticket.maTicket ? ticket : t)));
     addAuditLog('Sửa', 'Tickets', ticket.maTicket, `Cập nhật trạng thái ticket: ${ticket.trangThai}`);
 
-    if (emailConfig.enabled && prevTicket && prevTicket.nguoiPhuTrach !== ticket.nguoiPhuTrach && ticket.nguoiPhuTrach) {
+    const canSend =
+      options?.userConfirmedEmail === true ||
+      (options?.userConfirmedEmail !== false && emailConfig.enabled);
+
+    if (canSend && prevTicket && prevTicket.nguoiPhuTrach !== ticket.nguoiPhuTrach && ticket.nguoiPhuTrach) {
       const targetEmails = resolveAssigneeEmails(
         ticket.nguoiPhuTrach,
         employees,
@@ -679,10 +860,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: `Kính gửi ${ticket.nguoiPhuTrach},\n\nBạn vừa được phân công phụ trách xử lý Ticket trên hệ thống FACILITY SYSTEM MANAGEMENT:\n- Mã Ticket: ${ticket.maTicket}\n- Tiêu đề: ${ticket.tieuDe}\n- Mức độ ưu tiên: ${ticket.mucDoUuTien}\n- Người giao việc: ${ticket.nguoiGiaoViec || currentUser.tenNhanVien}\n- Nội dung: ${ticket.moTaChiTiet}\n\nTrân trọng,\n${emailConfig.senderName}`,
         recipient: targetEmail,
         relatedId: ticket.maTicket,
+        userConfirmed: Boolean(options?.userConfirmedEmail),
       });
     }
 
-    if (emailConfig.enabled && prevTicket && prevTicket.trangThai !== 'Hoàn thành' && ticket.trangThai === 'Hoàn thành') {
+    if (canSend && prevTicket && prevTicket.trangThai !== 'Hoàn thành' && ticket.trangThai === 'Hoàn thành') {
       void notifyCompletionReport({
         module: 'TICKET',
         targetId: ticket.maTicket,
@@ -691,6 +873,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         assignerName: ticket.nguoiGiaoViec || ticket.nguoiLap,
         result: ticket.ketQua || 'Hoàn thành xử lý sự cố',
         details: ticket.moTaChiTiet,
+        userConfirmed: Boolean(options?.userConfirmedEmail),
       });
     }
   };
@@ -718,7 +901,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Stock In / Out Actions: Auto deduct / add to spare parts inventory!
   const createStockTransaction = (txData: Omit<StockTransaction, 'transId'>) => {
-    const newId = `TR-${Date.now().toString().slice(-6)}`;
+    const newId = nextUniqueId('TR');
     const newTx: StockTransaction = {
       ...txData,
       transId: newId,
@@ -747,7 +930,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addPower10DaysRecord = (record: Omit<Power10Days, 'id'>) => {
     const newRec: Power10Days = {
       ...record,
-      id: `POW-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('POW'),
     };
     setPower10Days((prev) => [newRec, ...prev]);
     addAuditLog('Chốt số', 'Điện 10 Ngày', newRec.chuKy, `Ghi nhận dữ liệu điện 10 ngày chu kỳ: ${newRec.chuKy}`);
@@ -774,7 +957,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const consumption = calculateMeterConsumption(readingData.chiSoCu, readingData.chiSoMoi);
     const newReading: MeterReading = {
       ...readingData,
-      id: `MET-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('MET'),
       tieuThu: consumption,
     };
     setMeterReadings((prev) => [newReading, ...prev]);
@@ -788,12 +971,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addBatchMeterReadings = (readingsData: Omit<MeterReading, 'id' | 'tieuThu'>[]) => {
     if (!readingsData.length) return;
-    const nowTs = Date.now().toString().slice(-6);
-    const newItems: MeterReading[] = readingsData.map((item, idx) => {
+    const newItems: MeterReading[] = readingsData.map((item) => {
       const consumption = calculateMeterConsumption(item.chiSoCu, item.chiSoMoi);
       return {
         ...item,
-        id: `MET-${nowTs}-${idx}`,
+        id: nextUniqueId('MET'),
         tieuThu: consumption,
       };
     });
@@ -821,7 +1003,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addCostRecord = (costData: Omit<CostRecord, 'idChiPhi'>) => {
     const newCost: CostRecord = {
       ...costData,
-      idChiPhi: `CP-${Date.now().toString().slice(-6)}`,
+      idChiPhi: nextUniqueId('CP'),
     };
     setCostRecords((prev) => [newCost, ...prev]);
     addAuditLog('Thêm', 'Quản lý chi phí', newCost.idChiPhi, `Ghi nhận chi phí: ${newCost.phanLoai} (${newCost.soTienVND.toLocaleString()} đ)`);
@@ -860,7 +1042,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addDocument = (docData: Omit<FacilityDocument, 'id'>) => {
     const newDoc: FacilityDocument = {
       ...docData,
-      id: `DOC-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('DOC'),
     };
     setDocuments((prev) => [newDoc, ...prev]);
     addAuditLog('Thêm', 'Tài liệu & SOP', newDoc.maTaiLieu, `Thêm tài liệu mới: ${newDoc.tieuDe}`);
@@ -881,7 +1063,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addProject = (projectData: Omit<FacilityProject, 'id'>) => {
     const newProject: FacilityProject = {
       ...projectData,
-      id: `PRJ-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('PRJ'),
     };
     setProjects((prev) => [newProject, ...prev]);
     addAuditLog('Thêm', 'Quản Lý Dự Án', newProject.maDuAn, `Tạo dự án mới: ${newProject.tenDuAn}`);
@@ -903,7 +1085,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const computedStatus = getInspectionStatus(itemData.ngayHetHan, itemData.nhacTruocNgay ?? 30, false);
     const newItem: SafetyInspectionItem = {
       ...itemData,
-      id: `INS-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('INS'),
       trangThai: computedStatus,
     };
     setSafetyInspections((prev) => [newItem, ...prev]);
@@ -960,7 +1142,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextStatus = getInspectionStatus(nextDue, target.nhacTruocNgay ?? 30, false);
 
     const historyEntry: InspectionHistoryEntry = {
-      id: `IH-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('IH'),
       ngayThucHien: params.ngayThucHien,
       donViThucHien: params.donViThucHien,
       soTemChungNhan: params.soTemChungNhan,
@@ -992,7 +1174,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addTool = (toolData: Omit<ToolItem, 'id'>) => {
     const newTool: ToolItem = {
       ...toolData,
-      id: `TL-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('TL'),
     };
     setTools((prev) => [newTool, ...prev]);
     addAuditLog(
@@ -1093,7 +1275,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const newLog: ToolBorrowLog = {
-      id: `TLG-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('TLG'),
       maDungCu: target.maDungCu,
       tenDungCu: target.tenDungCu,
       loaiGiaoDich: params.loaiGiaoDich,
@@ -1195,7 +1377,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date();
     const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     const logItem: AuditLog = {
-      id: `LOG-${Date.now().toString().slice(-6)}`,
+      id: nextUniqueId('LOG'),
       thoiGian: timeStr,
       nguoiThaoTac: found.tenNhanVien,
       hanhDong: 'Cập nhật',
@@ -1221,62 +1403,345 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     addAuditLog('Sửa', 'Cấu hình Email', 'EmailService', 'Cập nhật cài đặt dịch vụ thông báo email');
   };
 
+  const openEmailDispatchModal = (draft: PendingEmailDispatch) => {
+    setPendingEmailDispatch(draft);
+  };
+
+  const closeEmailDispatchModal = () => {
+    setPendingEmailDispatch(null);
+  };
+
+  const markEmailDispatchStatus = (
+    logId: string,
+    status: EmailLog['status'],
+    updatedFields?: { to?: string; cc?: string; subject?: string; body?: string }
+  ) => {
+    setEmailLogs((prev) =>
+      prev.map((log) =>
+        log.id === logId
+          ? {
+              ...log,
+              status,
+              recipient: updatedFields?.to !== undefined ? updatedFields.to : log.recipient,
+              cc: updatedFields?.cc !== undefined ? updatedFields.cc : log.cc,
+              subject: updatedFields?.subject !== undefined ? updatedFields.subject : log.subject,
+              fullContent: updatedFields?.body !== undefined ? updatedFields.body : log.fullContent,
+              bodySnippet:
+                updatedFields?.body !== undefined
+                  ? updatedFields.body.slice(0, 160) + (updatedFields.body.length > 160 ? '...' : '')
+                  : log.bodySnippet,
+              errorMessage:
+                status === 'Đã gửi' || status === 'Đã gửi (Webhook)' || status === 'Đã gửi (Gmail)'
+                  ? undefined
+                  : log.errorMessage,
+            }
+          : log
+      )
+    );
+  };
+
   const sendEmailNotification = async (params: {
     type: EmailLog['type'];
     subject: string;
     body: string;
     recipient?: string;
+    cc?: string;
     relatedId?: string;
-  }): Promise<boolean> => {
-    const targetRecipient = params.recipient || emailConfig.primaryRecipient;
+    interactiveFallback?: boolean;
+    webhookUrlOverride?: string;
+    userConfirmed?: boolean;
+  }): Promise<EmailSendResult> => {
+    const rawRecipient = (params.recipient || emailConfig.primaryRecipient || '').trim();
+    const rawCc = (params.cc !== undefined ? params.cc : emailConfig.ccRecipients || '').trim();
+
+    const parsedTo = Array.from(
+      new Set(
+        rawRecipient
+          .split(/[,;]+/)
+          .map((s) => s.trim())
+          .filter((s) => isValidEmailFormat(s))
+      )
+    );
+    const deliverableTo = parsedTo.filter((addr) => !isPlaceholderEmail(addr));
+    const deliverableCc = Array.from(
+      new Set(
+        rawCc
+          .split(/[,;]+/)
+          .map((s) => s.trim())
+          .filter((s) => isValidEmailFormat(s) && !isPlaceholderEmail(s) && !deliverableTo.includes(s))
+      )
+    );
+
+    const targetRecipient = deliverableTo.join(', ') || rawRecipient;
+    const targetCc = deliverableCc.join(', ');
     const now = new Date();
     const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const logId = nextUniqueId('EML');
+    const webhookUrl = (
+      params.webhookUrlOverride !== undefined
+        ? params.webhookUrlOverride
+        : emailConfig.webhookUrl || ''
+    ).trim();
 
-    // If Webhook configured, attempt trigger
-    if (emailConfig.webhookUrl && emailConfig.webhookUrl.trim().startsWith('http')) {
-      try {
-        await fetch(emailConfig.webhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+    let sentSuccess = false;
+    let sentChannel: 'gmail' | 'smtp' | 'resend' | 'webhook' | undefined;
+    let notConfigured = false;
+    let needsGmailAuth = false;
+    let errorMessage = '';
+
+    if (parsedTo.length === 0) {
+      errorMessage = 'Địa chỉ email người nhận đang trống hoặc sai định dạng.';
+    } else if (deliverableTo.length === 0) {
+      errorMessage = `Địa chỉ người nhận (${parsedTo.join(', ')}) đang là email mẫu (@factory.com). Vui lòng sửa thành Gmail / email thật trước khi gửi.`;
+    } else {
+      // 1. User-confirmed direct Gmail API dispatch (if signed in with Google)
+      const gmailToken = getGmailAccessToken();
+      if (params.userConfirmed && gmailToken) {
+        try {
+          await sendViaGmailApi({
             to: targetRecipient,
-            cc: emailConfig.ccRecipients,
+            cc: targetCc,
             subject: params.subject,
             body: params.body,
-            timestamp: timeStr,
-            sender: emailConfig.senderName,
-          }),
-        });
-      } catch (err) {
-        console.warn('Webhook email notification failed, logging locally:', err);
+            senderName: emailConfig.senderName,
+            fromEmail: gmailUser?.email,
+          });
+          sentSuccess = true;
+          sentChannel = 'gmail';
+        } catch (gmailErr) {
+          const gMsg = gmailErr instanceof Error ? gmailErr.message : '';
+          if (
+            gMsg === '__GMAIL_TOKEN_EXPIRED__' ||
+            gMsg === '__GMAIL_NOT_AUTHENTICATED__' ||
+            gMsg === '__GMAIL_INSUFFICIENT_SCOPE__'
+          ) {
+            clearGmailAccessToken();
+            setIsGmailConnected(false);
+            needsGmailAuth = true;
+            errorMessage =
+              gMsg === '__GMAIL_INSUFFICIENT_SCOPE__'
+                ? 'Tài khoản Google chưa được cấp quyền gửi Gmail (gmail.send). Hãy bấm "Sign in with Google" và tích chọn ô cấp quyền gửi email.'
+                : 'Phiên kết nối Gmail đã hết hạn. Vui lòng bấm "Sign in with Google" để kết nối lại Gmail.';
+          } else if (gMsg.startsWith('__GMAIL_API_DISABLED__:')) {
+            errorMessage =
+              'Gmail API chưa được bật trên Google Cloud Project của ứng dụng. Bạn vẫn có thể dán Webhook Google Apps Script (miễn phí 30s) hoặc bật Gmail API trong Cloud Console.';
+          } else {
+            errorMessage = `Lỗi Gmail API: ${gMsg || 'Không thể gửi qua Gmail'}`;
+          }
+        }
+      }
+
+      // 2. Fallback to backend dispatch (Webhook / Server SMTP / Resend) if Gmail API was not used or failed
+      if (!sentSuccess) {
+        try {
+          const apiRes = await fetch('/api/send-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              to: targetRecipient,
+              cc: targetCc,
+              subject: params.subject,
+              body: params.body,
+              senderName: emailConfig.senderName,
+              webhookUrl,
+              type: params.type,
+              relatedId: params.relatedId || '',
+              timestamp: timeStr,
+            }),
+          });
+
+          const contentType = apiRes.headers.get('content-type') || '';
+          if (apiRes.status === 404 || !contentType.includes('application/json')) {
+            throw new Error('__API_UNAVAILABLE__');
+          }
+
+          const data = (await apiRes.json()) as {
+            ok?: boolean;
+            channel?: 'smtp' | 'resend' | 'webhook';
+            notConfigured?: boolean;
+            message?: string;
+          };
+
+          if (apiRes.ok && data.ok) {
+            sentSuccess = true;
+            sentChannel = data.channel || 'smtp';
+          } else {
+            notConfigured = Boolean(data.notConfigured);
+            if (!errorMessage || !data.notConfigured) {
+              errorMessage = data.message || `Không thể gửi email (HTTP ${apiRes.status})`;
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : '';
+          if (msg === '__API_UNAVAILABLE__' && webhookUrl && /^https?:\/\//i.test(webhookUrl)) {
+            const lowerWebhook = webhookUrl.toLowerCase();
+            const isAppsScript = lowerWebhook.includes('script.google.com');
+            if (isAppsScript && /\/dev(\?|$)/i.test(webhookUrl)) {
+              errorMessage =
+                'Link Google Apps Script đang là link thử nghiệm (/dev). Hãy Deploy → Web App và copy link kết thúc bằng /exec.';
+            } else {
+              const payload = {
+                to: targetRecipient,
+                cc: targetCc,
+                subject: params.subject,
+                body: params.body,
+                timestamp: timeStr,
+                sender: emailConfig.senderName,
+                type: params.type,
+                relatedId: params.relatedId || '',
+              };
+              try {
+                const directRes = await fetch(webhookUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': isAppsScript ? 'text/plain;charset=utf-8' : 'application/json',
+                  },
+                  body: JSON.stringify(payload),
+                });
+                const directText = await directRes.text().catch(() => '');
+                if (!directRes.ok) {
+                  throw new Error(`Webhook HTTP ${directRes.status}`);
+                }
+                if (/<!doctype|<html|accounts\.google\.com|ServiceLogin|Script function not found/i.test(directText)) {
+                  throw new Error(
+                    'Webhook Apps Script trả về HTML/lỗi (chưa chọn quyền "Anyone / Bất kỳ ai" khi Deploy hoặc thiếu doPost).'
+                  );
+                }
+                if (isAppsScript) {
+                  let parsed: { ok?: boolean; error?: string } | null = null;
+                  try {
+                    parsed = directText ? (JSON.parse(directText) as { ok?: boolean; error?: string }) : null;
+                  } catch {
+                    throw new Error(
+                      'Webhook Apps Script không trả về JSON { "ok": true }. Hãy Deploy lại phiên bản mới hoặc xóa Webhook để gửi qua Gmail.'
+                    );
+                  }
+                  if (!parsed || parsed.ok !== true) {
+                    throw new Error(parsed?.error || 'Webhook Apps Script không xác nhận đã gửi mail.');
+                  }
+                } else if (directText) {
+                  try {
+                    const parsed = JSON.parse(directText) as { ok?: boolean; error?: string };
+                    if (parsed && parsed.ok === false) {
+                      throw new Error(parsed.error || 'Webhook trả về lỗi xử lý');
+                    }
+                  } catch (jsonErr) {
+                    if (
+                      jsonErr instanceof Error &&
+                      !jsonErr.message.includes('JSON') &&
+                      !jsonErr.message.includes('Unexpected token')
+                    ) {
+                      throw jsonErr;
+                    }
+                  }
+                }
+                sentSuccess = true;
+                sentChannel = 'webhook';
+              } catch (directErr) {
+                errorMessage =
+                  directErr instanceof Error
+                    ? directErr.message
+                    : 'Không thể xác nhận Webhook gửi email (lỗi CORS/kết nối). Hãy bấm "Sign in with Google" để gửi trực tiếp qua Gmail.';
+              }
+            }
+          } else if (msg === '__API_UNAVAILABLE__') {
+            notConfigured = true;
+            if (!errorMessage) {
+              errorMessage =
+                'Bạn chưa kết nối Gmail (Sign in with Google) hoặc chưa dán Webhook gửi mail tự động.';
+            }
+          } else if (!errorMessage) {
+            errorMessage = msg || 'Lỗi kết nối máy chủ gửi email.';
+          }
+        }
       }
     }
 
-    // If mailto method selected, open mail client
-    if (emailConfig.autoDispatchMethod === 'mailto') {
-      try {
-        const mailtoUrl = `mailto:${encodeURIComponent(targetRecipient)}?subject=${encodeURIComponent(params.subject)}&body=${encodeURIComponent(params.body)}`;
-        window.open(mailtoUrl, '_blank');
-      } catch (e) {
-        console.error('Failed to open mail client', e);
+    if (sentSuccess) {
+      const logStatus: EmailLog['status'] =
+        sentChannel === 'gmail'
+          ? 'Đã gửi (Gmail)'
+          : sentChannel === 'webhook'
+          ? 'Đã gửi (Webhook)'
+          : 'Đã gửi';
+      const sentLog: EmailLog = {
+        id: logId,
+        timestamp: timeStr,
+        type: params.type,
+        recipient: targetRecipient,
+        cc: targetCc,
+        subject: params.subject,
+        bodySnippet: params.body.slice(0, 160) + (params.body.length > 160 ? '...' : ''),
+        fullContent: params.body,
+        status: logStatus,
+        relatedId: params.relatedId,
+      };
+      setEmailLogs((prev) => [sentLog, ...prev]);
+      addAuditLog(
+        'Thêm',
+        'Thông báo Email',
+        logId,
+        `Đã tự động gửi email (${sentChannel || 'auto'}) tới ${targetRecipient}: ${params.subject}`
+      );
+      let channelLabel = '';
+      if (sentChannel === 'gmail') {
+        channelLabel = gmailUser?.email ? ` qua Gmail (${gmailUser.email})` : ' qua Gmail';
+      } else if (sentChannel === 'webhook') {
+        let host = 'Webhook';
+        try {
+          if (webhookUrl) host = new URL(webhookUrl).hostname;
+        } catch {
+          // ignore
+        }
+        channelLabel = ` qua Webhook (${host})`;
+      } else if (sentChannel === 'smtp') {
+        channelLabel = ' qua SMTP';
+      } else if (sentChannel === 'resend') {
+        channelLabel = ' qua Resend';
       }
+
+      return {
+        success: true,
+        method: sentChannel === 'webhook' ? 'webhook' : 'auto',
+        channel: sentChannel,
+        recipient: targetRecipient,
+        logId,
+        message: `Đã gửi email${channelLabel} tới ${targetRecipient}`,
+      };
     }
 
-    const newLog: EmailLog = {
-      id: `EML-${Date.now().toString().slice(-6)}`,
+    // 3. Honest failure / unconfigured log
+    const failedLog: EmailLog = {
+      id: logId,
       timestamp: timeStr,
       type: params.type,
       recipient: targetRecipient,
+      cc: targetCc,
       subject: params.subject,
       bodySnippet: params.body.slice(0, 160) + (params.body.length > 160 ? '...' : ''),
       fullContent: params.body,
-      status: 'Đã gửi',
+      status: 'Thất bại',
       relatedId: params.relatedId,
+      errorMessage,
     };
 
-    setEmailLogs((prev) => [newLog, ...prev]);
-    addAuditLog('Thêm', 'Thông báo Email', newLog.id, `Gửi email thông báo: ${params.subject} tới ${targetRecipient}`);
-    return true;
+    setEmailLogs((prev) => [failedLog, ...prev]);
+    addAuditLog(
+      'Thêm',
+      'Thông báo Email',
+      logId,
+      `Gửi email tự động tới ${targetRecipient} chưa thành công: ${errorMessage}`
+    );
+
+    return {
+      success: false,
+      method: 'failed',
+      notConfigured,
+      needsGmailAuth,
+      recipient: targetRecipient,
+      logId,
+      message: errorMessage,
+    };
   };
 
   const assignWorkAndNotify = async (params: {
@@ -1288,7 +1753,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     assignerName: string;
     note?: string;
     sendEmail?: boolean;
-  }): Promise<void> => {
+    recipientEmailOverride?: string;
+    saveEmailToProfile?: boolean;
+  }): Promise<EmailSendResult | null> => {
     const parsedList =
       params.assigneeNames && params.assigneeNames.length > 0
         ? Array.from(new Set(params.assigneeNames.map((n) => n.trim()).filter(Boolean)))
@@ -1299,7 +1766,27 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       employees,
       emailConfig.primaryRecipient
     );
-    const targetEmail = resolvedEmails.join(', ') || emailConfig.primaryRecipient;
+    const overrideEmail = (params.recipientEmailOverride || '').trim();
+    const targetEmail = overrideEmail || resolvedEmails.join(', ') || emailConfig.primaryRecipient;
+
+    // Optionally persist updated real email to single assignee's employee profile
+    if (overrideEmail && params.saveEmailToProfile && parsedList.length === 1 && !overrideEmail.includes(',')) {
+      const targetNameLower = parsedList[0].trim().toLowerCase();
+      setEmployees((prev) =>
+        prev.map((emp) =>
+          emp.tenNhanVien.trim().toLowerCase() === targetNameLower ||
+          emp.maNhanVien.trim().toLowerCase() === targetNameLower
+            ? { ...emp, email: overrideEmail }
+            : emp
+        )
+      );
+      if (
+        currentUser.tenNhanVien.trim().toLowerCase() === targetNameLower ||
+        currentUser.maNhanVien.trim().toLowerCase() === targetNameLower
+      ) {
+        setCurrentUserState((prev) => ({ ...prev, email: overrideEmail }));
+      }
+    }
 
     if (params.module === 'THIET_BI') {
       setEquipment((prev) =>
@@ -1309,7 +1796,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...eq,
                 nguoiPhuTrach: formattedAssignee,
                 nguoiGiaoViec: params.assignerName,
-                email: resolvedEmails.length > 0 ? resolvedEmails.join(', ') : eq.email,
+                email: targetEmail || eq.email,
               }
             : eq
         )
@@ -1357,14 +1844,18 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const subj = `[FACILITY SYSTEM MANAGEMENT - Giao Việc ${moduleLabel}] ${params.targetName} (${params.targetId})`;
       const body = `Kính gửi ${formattedAssignee},\n\nBạn vừa được giao nhiệm vụ trên hệ thống FACILITY SYSTEM MANAGEMENT:\n- Phân hệ: ${moduleLabel}\n- Đối tượng / Mã: ${params.targetName} (${params.targetId})\n- Người giao việc: ${params.assignerName}\n- Người phụ trách thực hiện (${parsedList.length || 1} người): ${formattedAssignee}\n${params.note ? `- Nội dung chỉ đạo: ${params.note}\n` : ''}\nSau khi hoàn tất, vui lòng cập nhật kết quả và ảnh trước/sau trên FACILITY SYSTEM MANAGEMENT để hệ thống tự động gửi báo cáo về Admin và Kỹ sư thiết bị.\n\nTrân trọng,\n${emailConfig.senderName}`;
 
-      await sendEmailNotification({
+      return await sendEmailNotification({
         type: 'GIAO_VIEC',
         subject: subj,
         body,
         recipient: targetEmail,
         relatedId: params.targetId,
+        interactiveFallback: true,
+        userConfirmed: true,
       });
     }
+
+    return null;
   };
 
   const notifyCompletionReport = async (params: {
@@ -1375,6 +1866,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     assignerName?: string;
     result: string;
     details?: string;
+    userConfirmed?: boolean;
   }): Promise<void> => {
     const adminEmails = employees
       .filter(
@@ -1413,10 +1905,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body,
       recipient: recipientStr,
       relatedId: params.targetId,
+      userConfirmed: Boolean(params.userConfirmed),
     });
   };
 
-  const triggerMaintenanceDueAlerts = async (): Promise<{ sentCount: number; dueCount: number }> => {
+  const triggerMaintenanceDueAlerts = async (options?: {
+    userConfirmed?: boolean;
+  }): Promise<{
+    sentCount: number;
+    dueCount: number;
+    result?: EmailSendResult;
+  }> => {
     const duePlans = maintenancePlans.filter(
       (p) => p.trangThai === 'Quá hạn' || p.trangThai === 'Tới hạn' || p.trangThai === 'Sắp tới'
     );
@@ -1445,20 +1944,23 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     body += `\nĐề nghị các kỹ sư phụ trách rà soát tồn kho phụ tùng thay thế và triển khai công việc đúng lịch trình.\n\nTrân trọng,\n${emailConfig.senderName}`;
 
-    await sendEmailNotification({
+    const result = await sendEmailNotification({
       type: overdueCount > 0 ? 'BAO_TRI_QUA_HAN' : 'BAO_TRI_DEN_HAN',
       subject: subj,
       body,
       recipient: emailConfig.primaryRecipient,
       relatedId: 'BATCH-DUE-ALERT',
+      interactiveFallback: true,
+      userConfirmed: Boolean(options?.userConfirmed),
     });
 
-    return { sentCount: 1, dueCount: duePlans.length };
+    return { sentCount: 1, dueCount: duePlans.length, result };
   };
 
   const triggerInspectionDueAlerts = async (
-    isAuto: boolean = false
-  ): Promise<{ sentCount: number; dueCount: number }> => {
+    isAuto: boolean = false,
+    options?: { userConfirmed?: boolean }
+  ): Promise<{ sentCount: number; dueCount: number; result?: EmailSendResult }> => {
     const dueItems = safetyInspections.filter((item) => {
       const status = getInspectionStatus(
         item.ngayHetHan,
@@ -1501,15 +2003,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     body += `\nĐề nghị bộ phận kỹ thuật liên hệ đơn vị kiểm định/hiệu chuẩn để thực hiện đúng quy định an toàn và ISO.\n\nTrân trọng,\n${emailConfig.senderName}`;
 
-    await sendEmailNotification({
+    const result = await sendEmailNotification({
       type: 'KIEM_DINH_DEN_HAN',
       subject: subj,
       body,
       recipient: recipientEmails || emailConfig.primaryRecipient,
       relatedId: isAuto ? 'AUTO-INSPECTION-REMINDER' : 'MANUAL-INSPECTION-REMINDER',
+      interactiveFallback: !isAuto,
+      userConfirmed: Boolean(options?.userConfirmed),
     });
 
-    return { sentCount: 1, dueCount: dueItems.length };
+    return { sentCount: 1, dueCount: dueItems.length, result };
   };
 
   // Automatic daily inspection & calibration reminder check when authenticated
@@ -1665,6 +2169,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         currentUser,
         emailConfig,
         emailLogs,
+        autoEmailServerStatus,
+        refreshAutoEmailStatus,
+        gmailUser,
+        isGmailConnected,
+        connectGmail,
+        disconnectGmail,
+        pendingEmailDispatch,
+        openEmailDispatchModal,
+        closeEmailDispatchModal,
+        markEmailDispatchStatus,
         updateEmailConfig,
         sendEmailNotification,
         triggerMaintenanceDueAlerts,

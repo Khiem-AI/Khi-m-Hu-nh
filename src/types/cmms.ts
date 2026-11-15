@@ -225,8 +225,8 @@ export interface EmailConfig {
   primaryRecipient: string; // mặc định: khiemhuynhggs@gmail.com
   ccRecipients: string; // các email kỹ thuật phân cách bởi dấu phẩy
   senderName: string;
-  webhookUrl?: string; // Optional webhook endpoint (Resend, Brevo, SendGrid, Zapier, etc.)
-  autoDispatchMethod: 'direct_service' | 'mailto';
+  webhookUrl?: string; // Optional webhook endpoint (Google Apps Script, Make, Zapier, Resend proxy, etc.)
+  autoDispatchMethod: 'gmail_compose' | 'mailto' | 'direct_service';
 }
 
 export interface EmailLog {
@@ -241,11 +241,44 @@ export interface EmailLog {
     | 'BAO_CAO_HOAN_THANH'
     | 'THU_NGHIEM';
   recipient: string;
+  cc?: string;
   subject: string;
   bodySnippet: string;
   fullContent?: string;
-  status: 'Đã gửi' | 'Thất bại' | 'Đã tạo bản nháp';
+  status: 'Đã gửi' | 'Đã gửi (Gmail)' | 'Đã gửi (Webhook)' | 'Chờ người dùng gửi' | 'Thất bại' | 'Đã tạo bản nháp';
   relatedId?: string; // Mã ticket hoặc mã thiết bị
+  errorMessage?: string;
+}
+
+export interface PendingEmailDispatch {
+  logId: string;
+  type: EmailLog['type'];
+  to: string;
+  cc: string;
+  subject: string;
+  body: string;
+  relatedId?: string;
+  webhookError?: string;
+}
+
+export interface AutoEmailServerStatus {
+  smtpConfigured: boolean;
+  resendConfigured: boolean;
+  envWebhookConfigured: boolean;
+  smtpUser: string;
+  activeChannels: string[];
+  loaded: boolean;
+}
+
+export interface EmailSendResult {
+  success: boolean;
+  method: 'auto' | 'webhook' | 'interactive' | 'draft' | 'failed';
+  channel?: 'gmail' | 'smtp' | 'resend' | 'webhook';
+  notConfigured?: boolean;
+  needsGmailAuth?: boolean;
+  recipient: string;
+  logId: string;
+  message: string;
 }
 
 export interface AppViewOption {

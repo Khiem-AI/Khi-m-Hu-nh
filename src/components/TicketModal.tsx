@@ -4,6 +4,7 @@ import { Ticket, TicketPriority, TicketStatus } from '../types/cmms';
 import { parseAssigneeNames } from '../utils/cmmsLogic';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
+import { GoogleSignInButton } from './common/GoogleSignInButton';
 import { X, Tag, AlertTriangle, CheckCircle, Mail } from 'lucide-react';
 
 interface TicketModalProps {
@@ -19,7 +20,18 @@ export const TicketModal: React.FC<TicketModalProps> = ({
   ticketToEdit,
   defaultEquipmentCode,
 }) => {
-  const { equipment, currentUser, addTicket, updateTicket, emailConfig, employees } = useCMMS();
+  const {
+    equipment,
+    currentUser,
+    addTicket,
+    updateTicket,
+    emailConfig,
+    employees,
+    isGmailConnected,
+    gmailUser,
+    connectGmail,
+    autoEmailServerStatus,
+  } = useCMMS();
 
   const defaultEngineer =
     employees.find((e) => e.chucVu === 'Kỹ sư thiết bị')?.tenNhanVien || currentUser.tenNhanVien;
@@ -40,6 +52,8 @@ export const TicketModal: React.FC<TicketModalProps> = ({
   const [ngayHoanThanh, setNgayHoanThanh] = useState(ticketToEdit?.ngayHoanThanh || '');
   const [anhTruocXuLy, setAnhTruocXuLy] = useState(ticketToEdit?.anhTruocXuLy || '');
   const [anhSauXuLy, setAnhSauXuLy] = useState(ticketToEdit?.anhSauXuLy || '');
+  const [sendEmail, setSendEmail] = useState(Boolean(emailConfig.enabled && emailConfig.notifyOnNewTicket));
+  const [isConnectingGmail, setIsConnectingGmail] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -71,12 +85,25 @@ export const TicketModal: React.FC<TicketModalProps> = ({
       setAnhTruocXuLy('');
       setAnhSauXuLy('');
     }
+    setSendEmail(
+      ticketToEdit
+        ? false
+        : Boolean(emailConfig.enabled && emailConfig.notifyOnNewTicket)
+    );
     setError('');
-  }, [isOpen, ticketToEdit, defaultEquipmentCode, currentUser, defaultEngineer, employees]);
+  }, [isOpen, ticketToEdit, defaultEquipmentCode, currentUser, defaultEngineer, employees, emailConfig.enabled, emailConfig.notifyOnNewTicket]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const isAutoSendReady = Boolean(
+    isGmailConnected ||
+      emailConfig.webhookUrl?.trim() ||
+      autoEmailServerStatus.smtpConfigured ||
+      autoEmailServerStatus.resendConfigured ||
+      autoEmailServerStatus.envWebhookConfigured
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!tieuDe.trim()) {
       setError('Vui lòng nhập tiêu đề yêu cầu ticket');
@@ -87,37 +114,54 @@ export const TicketModal: React.FC<TicketModalProps> = ({
       return;
     }
 
+    if (sendEmail && !isAutoSendReady) {
+      setIsConnectingGmail(true);
+      setError('');
+      const authRes = await connectGmail(true);
+      setIsConnectingGmail(false);
+      if (!authRes.success) {
+        setError(authRes.message);
+        return;
+      }
+    }
+
     if (ticketToEdit) {
-      updateTicket({
-        ...ticketToEdit,
-        tieuDe,
-        moTaChiTiet,
-        trangThai,
-        mucDoUuTien,
-        nguoiPhuTrach,
-        nguoiGiaoViec,
-        nguoiLap,
-        maThietBi,
-        ketQua,
-        ngayHoanThanh: trangThai === 'Hoàn thành' && !ngayHoanThanh ? '2026-11-10' : ngayHoanThanh,
-        anhTruocXuLy,
-        anhSauXuLy,
-      });
+      updateTicket(
+        {
+          ...ticketToEdit,
+          tieuDe,
+          moTaChiTiet,
+          trangThai,
+          mucDoUuTien,
+          nguoiPhuTrach,
+          nguoiGiaoViec,
+          nguoiLap,
+          maThietBi,
+          ketQua,
+          ngayHoanThanh: trangThai === 'Hoàn thành' && !ngayHoanThanh ? '2026-11-10' : ngayHoanThanh,
+          anhTruocXuLy,
+          anhSauXuLy,
+        },
+        { userConfirmedEmail: sendEmail }
+      );
     } else {
-      addTicket({
-        tieuDe,
-        moTaChiTiet,
-        trangThai,
-        mucDoUuTien,
-        nguoiPhuTrach,
-        nguoiGiaoViec,
-        nguoiLap,
-        maThietBi,
-        ketQua,
-        ngayHoanThanh: trangThai === 'Hoàn thành' ? '2026-11-10' : '',
-        anhTruocXuLy,
-        anhSauXuLy,
-      });
+      addTicket(
+        {
+          tieuDe,
+          moTaChiTiet,
+          trangThai,
+          mucDoUuTien,
+          nguoiPhuTrach,
+          nguoiGiaoViec,
+          nguoiLap,
+          maThietBi,
+          ketQua,
+          ngayHoanThanh: trangThai === 'Hoàn thành' ? '2026-11-10' : '',
+          anhTruocXuLy,
+          anhSauXuLy,
+        },
+        { userConfirmedEmail: sendEmail }
+      );
     }
 
     onClose();
@@ -309,6 +353,56 @@ export const TicketModal: React.FC<TicketModalProps> = ({
             </div>
           </div>
 
+          <div className="rounded-xl bg-cyan-950/30 border border-cyan-500/30 p-3 space-y-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={sendEmail}
+                  onChange={(e) => setSendEmail(e.target.checked)}
+                  className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500"
+                />
+                <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 shrink-0" />
+                  Tự động gửi email thông báo khi lưu Ticket
+                </span>
+              </label>
+
+              {sendEmail && (
+                <span className={`text-[10px] font-bold ${isGmailConnected ? 'text-emerald-400' : 'text-amber-300'}`}>
+                  {isGmailConnected && gmailUser?.email
+                    ? `Gmail (${gmailUser.email})`
+                    : emailConfig.webhookUrl?.trim()
+                    ? 'Đang dự phòng qua Webhook (chưa kết nối Gmail)'
+                    : isAutoSendReady
+                    ? 'Sẵn sàng gửi tự động'
+                    : 'Chưa kết nối Gmail'}
+                </span>
+              )}
+            </div>
+
+            {sendEmail && !isGmailConnected && (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
+                <span>
+                  {emailConfig.webhookUrl?.trim()
+                    ? 'Chưa đăng nhập Gmail nên đang dùng Webhook cũ. Bấm Sign in with Google để gửi trực tiếp qua Gmail thật.'
+                    : 'Kết nối Gmail để tự động gửi email thông báo ngay khi bấm lưu Ticket.'}
+                </span>
+                <GoogleSignInButton
+                  compact
+                  disabled={isConnectingGmail}
+                  label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
+                  onClick={async () => {
+                    setIsConnectingGmail(true);
+                    const res = await connectGmail(true);
+                    setIsConnectingGmail(false);
+                    if (!res.success) setError(res.message);
+                  }}
+                />
+              </div>
+            )}
+          </div>
+
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
             <button
               type="button"
@@ -319,10 +413,15 @@ export const TicketModal: React.FC<TicketModalProps> = ({
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm shadow-lg shadow-amber-900/40 transition flex items-center gap-2"
+              disabled={isConnectingGmail}
+              className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-medium text-sm shadow-lg shadow-amber-900/40 transition flex items-center gap-2 disabled:opacity-50"
             >
               <CheckCircle className="w-4 h-4" />
-              {ticketToEdit ? 'Cập Nhật Ticket' : 'Tạo Ticket Mới'}
+              {isConnectingGmail
+                ? 'Đang kết nối Gmail...'
+                : ticketToEdit
+                ? 'Cập Nhật Ticket'
+                : 'Tạo Ticket Mới'}
             </button>
           </div>
         </form>

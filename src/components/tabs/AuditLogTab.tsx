@@ -119,8 +119,8 @@ export const AuditLogTab: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
-              {filteredLogs.map((log) => (
-                <tr key={log.id} className="hover:bg-slate-800/40 transition">
+              {filteredLogs.map((log, index) => (
+                <tr key={`${log.id}-${index}`} className="hover:bg-slate-800/40 transition">
                   <td className="py-3.5 px-4 font-mono text-slate-400 whitespace-nowrap">
                     {log.thoiGian}
                   </td>

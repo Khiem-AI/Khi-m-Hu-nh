@@ -35,6 +35,7 @@ import { SparePartModal } from './components/SparePartModal';
 import { CostModal } from './components/CostModal';
 import { LoginPage } from './components/LoginPage';
 import { BackupDataModal } from './components/BackupDataModal';
+import { EmailDispatchModal } from './components/common/EmailDispatchModal';
 
 import { Equipment, MaintenanceWorkType, Ticket, SparePart, CostRecord } from './types/cmms';
 
@@ -118,6 +119,17 @@ function CMMSApp() {
       setActiveTab(allowedViews[0]);
     }
   };
+
+  useEffect(() => {
+    const handleCustomNavigate = (event: Event) => {
+      const targetTab = (event as CustomEvent<string>).detail;
+      if (typeof targetTab === 'string') {
+        handleNavigateTab(targetTab);
+      }
+    };
+    window.addEventListener('fsm:navigate-tab', handleCustomNavigate);
+    return () => window.removeEventListener('fsm:navigate-tab', handleCustomNavigate);
+  }, [allowedViews]);
 
   // Handlers
   const handleOpenQR = (eq: Equipment) => {
@@ -377,6 +389,9 @@ function CMMSApp() {
           onClose={() => setIsBackupModalOpen(false)}
         />
       )}
+
+      {/* 11. Global Interactive Email Dispatch Modal (Gmail Web / Mailto / Copy) */}
+      <EmailDispatchModal />
     </div>
   );
 }

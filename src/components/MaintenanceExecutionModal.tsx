@@ -4,7 +4,8 @@ import { useCMMS } from '../context/CMMSContext';
 import { calculateNextMaintenanceDate, formatDateVN, getHistoryWorkType, parseAssigneeNames } from '../utils/cmmsLogic';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
-import { X, Wrench, Hammer, Clock, CheckCircle2, AlertCircle, Calendar, DollarSign, Layers } from 'lucide-react';
+import { GoogleSignInButton } from './common/GoogleSignInButton';
+import { X, Wrench, Hammer, Clock, CheckCircle2, AlertCircle, Calendar, DollarSign, Layers, Mail } from 'lucide-react';
 
 interface MaintenanceExecutionModalProps {
   isOpen?: boolean;
@@ -30,6 +31,10 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
     currentUser,
     employees,
     emailConfig,
+    isGmailConnected,
+    gmailUser,
+    connectGmail,
+    autoEmailServerStatus,
   } = useCMMS();
 
   const isEditMode = Boolean(initialRecord && initialRecord.id);
@@ -69,11 +74,14 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
     initialRecord?.nguoiLapBaoCao || currentUser.tenNhanVien || 'Khiêm Huỳnh'
   );
   const [chiPhiUocTinh, setChiPhiUocTinh] = useState<number>(initialRecord?.chiPhiUocTinh ?? 0);
+  const [sendCompletionEmail, setSendCompletionEmail] = useState<boolean>(Boolean(emailConfig.enabled));
+  const [isConnectingGmail, setIsConnectingGmail] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!shouldOpen) return;
     setError('');
+    setSendCompletionEmail(Boolean(emailConfig.enabled));
     if (initialRecord) {
       setSelectedCode(initialRecord.maThietBi);
       setLoaiCongViec(getHistoryWorkType(initialRecord));
@@ -112,7 +120,15 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
 
   const calculatedNextDate = calculateNextMaintenanceDate(ngayThucHien, activeEquipment.tanSuat);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const isAutoSendReady = Boolean(
+    isGmailConnected ||
+      emailConfig.webhookUrl?.trim() ||
+      autoEmailServerStatus.smtpConfigured ||
+      autoEmailServerStatus.resendConfigured ||
+      autoEmailServerStatus.envWebhookConfigured
+  );
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (parseAssigneeNames(nguoiThucHien).length === 0) {
       setError('Vui lòng chọn ít nhất 1 người thực hiện');
@@ -121,6 +137,17 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
     if (!moTaCongViec.trim()) {
       setError('Vui lòng nhập mô tả chi tiết nội dung công việc đã thực hiện');
       return;
+    }
+
+    if (!isEditMode && sendCompletionEmail && !isAutoSendReady) {
+      setIsConnectingGmail(true);
+      setError('');
+      const authRes = await connectGmail(true);
+      setIsConnectingGmail(false);
+      if (!authRes.success) {
+        setError(authRes.message);
+        return;
+      }
     }
 
     if (isEditMode && initialRecord) {
@@ -141,21 +168,24 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
         chiPhiUocTinh: Number(chiPhiUocTinh) || 0,
       });
     } else {
-      completeMaintenance({
-        maThietBi: activeEquipment.maThietBi,
-        tenThietBi: activeEquipment.tenThietBi,
-        loaiCongViec,
-        ngayThucHien,
-        nguoiThucHien,
-        nguoiGiaoViec,
-        moTaCongViec,
-        thoiGianDungMay: Number(thoiGianDungMay) || 0,
-        ketQua,
-        anhTruocXuLy,
-        hinhAnh,
-        nguoiLapBaoCao,
-        chiPhiUocTinh: Number(chiPhiUocTinh) || 0,
-      });
+      completeMaintenance(
+        {
+          maThietBi: activeEquipment.maThietBi,
+          tenThietBi: activeEquipment.tenThietBi,
+          loaiCongViec,
+          ngayThucHien,
+          nguoiThucHien,
+          nguoiGiaoViec,
+          moTaCongViec,
+          thoiGianDungMay: Number(thoiGianDungMay) || 0,
+          ketQua,
+          anhTruocXuLy,
+          hinhAnh,
+          nguoiLapBaoCao,
+          chiPhiUocTinh: Number(chiPhiUocTinh) || 0,
+        },
+        { userConfirmedEmail: sendCompletionEmail }
+      );
     }
 
     if (onSuccess) onSuccess();
@@ -479,6 +509,58 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
             </div>
           )}
 
+          {!isEditMode && (
+            <div className="rounded-xl bg-cyan-950/30 border border-cyan-500/30 p-3 space-y-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300">
+                  <input
+                    type="checkbox"
+                    checked={sendCompletionEmail}
+                    onChange={(e) => setSendCompletionEmail(e.target.checked)}
+                    className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500"
+                  />
+                  <span className="font-bold text-cyan-300 flex items-center gap-1.5">
+                    <Mail className="w-3.5 h-3.5 shrink-0" />
+                    Tự động gửi email báo cáo hoàn thành về Quản lý
+                  </span>
+                </label>
+
+                {sendCompletionEmail && (
+                  <span className={`text-[10px] font-bold ${isGmailConnected ? 'text-emerald-400' : 'text-amber-300'}`}>
+                    {isGmailConnected && gmailUser?.email
+                      ? `Gmail (${gmailUser.email})`
+                      : emailConfig.webhookUrl?.trim()
+                      ? 'Đang dự phòng qua Webhook (chưa kết nối Gmail)'
+                      : isAutoSendReady
+                      ? 'Sẵn sàng gửi tự động'
+                      : 'Chưa kết nối Gmail'}
+                  </span>
+                )}
+              </div>
+
+              {sendCompletionEmail && !isGmailConnected && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
+                  <span>
+                    {emailConfig.webhookUrl?.trim()
+                      ? 'Chưa đăng nhập Gmail nên đang dùng Webhook cũ. Bấm Sign in with Google để gửi trực tiếp qua Gmail thật.'
+                      : 'Kết nối Gmail để tự động gửi báo cáo hoàn thành ngay khi lưu biên bản.'}
+                  </span>
+                  <GoogleSignInButton
+                    compact
+                    disabled={isConnectingGmail}
+                    label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
+                    onClick={async () => {
+                      setIsConnectingGmail(true);
+                      const res = await connectGmail(true);
+                      setIsConnectingGmail(false);
+                      if (!res.success) setError(res.message);
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
             <button
               type="button"
@@ -489,10 +571,15 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
             </button>
             <button
               type="submit"
-              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm shadow-lg shadow-emerald-900/40 transition flex items-center gap-2"
+              disabled={isConnectingGmail}
+              className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-sm shadow-lg shadow-emerald-900/40 transition flex items-center gap-2 disabled:opacity-50"
             >
               <CheckCircle2 className="w-4 h-4" />
-              {isEditMode ? 'Lưu Thay Đổi' : 'Lưu & Gửi Báo Cáo Hoàn Thành'}
+              {isConnectingGmail
+                ? 'Đang kết nối Gmail...'
+                : isEditMode
+                ? 'Lưu Thay Đổi'
+                : 'Lưu & Gửi Báo Cáo Hoàn Thành'}
             </button>
           </div>
         </form>

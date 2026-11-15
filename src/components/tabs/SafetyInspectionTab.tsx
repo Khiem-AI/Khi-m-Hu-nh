@@ -67,7 +67,9 @@ export const SafetyInspectionTab: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'success' | 'warning'>('success');
   const [isSendingAlert, setIsSendingAlert] = useState(false);
+  const [confirmSendAlert, setConfirmSendAlert] = useState(false);
 
   // Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -100,9 +102,10 @@ export const SafetyInspectionTab: React.FC = () => {
   const [renewResult, setRenewResult] = useState<InspectionHistoryEntry['ketQua']>('Đạt');
   const [renewNote, setRenewNote] = useState('');
 
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, kind: 'success' | 'warning' = 'success') => {
+    setToastType(kind);
     setToastMsg(msg);
-    setTimeout(() => setToastMsg(null), 4500);
+    setTimeout(() => setToastMsg(null), 5000);
   };
 
   // Enrich with real-time status & days remaining
@@ -276,17 +279,34 @@ export const SafetyInspectionTab: React.FC = () => {
     setRenewItem(null);
   };
 
-  const handleSendAlertNow = async () => {
+  const executeSendAlertNow = async () => {
+    setConfirmSendAlert(false);
     setIsSendingAlert(true);
-    const res = await triggerInspectionDueAlerts(false);
+    const res = await triggerInspectionDueAlerts(false, { userConfirmed: true });
     setIsSendingAlert(false);
     if (res.dueCount > 0) {
-      showToast(
-        `Đã gửi email nhắc lịch kiểm định cho ${res.dueCount} thiết bị đến hạn / quá hạn!`
-      );
+      if (res.result?.success) {
+        showToast(
+          `Đã tự động gửi email nhắc lịch kiểm định cho ${res.dueCount} thiết bị đến hạn / quá hạn!`,
+          'success'
+        );
+      } else {
+        showToast(
+          res.result?.message || 'Chưa kết nối Gmail hoặc Webhook gửi email tự động.',
+          'warning'
+        );
+      }
     } else {
-      showToast('Hiện tại không có thiết bị nào quá hạn hoặc sắp đến hạn kiểm định.');
+      showToast('Hiện tại không có thiết bị nào quá hạn hoặc sắp đến hạn kiểm định.', 'success');
     }
+  };
+
+  const handleSendAlertNow = () => {
+    if (stats.reminders.length === 0) {
+      showToast('Hiện tại không có thiết bị nào quá hạn hoặc sắp đến hạn kiểm định.', 'success');
+      return;
+    }
+    setConfirmSendAlert(true);
   };
 
   const handleExportCSV = () => {
@@ -371,8 +391,18 @@ export const SafetyInspectionTab: React.FC = () => {
   return (
     <div className="space-y-6">
       {toastMsg && (
-        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-emerald-950/95 border border-emerald-500/40 text-emerald-200 shadow-2xl text-xs font-semibold">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl border shadow-2xl text-xs font-semibold max-w-md ${
+            toastType === 'warning'
+              ? 'bg-amber-950/95 border-amber-500/40 text-amber-100'
+              : 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200'
+          }`}
+        >
+          {toastType === 'warning' ? (
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+          ) : (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          )}
           <span>{toastMsg}</span>
         </div>
       )}
@@ -1221,6 +1251,40 @@ export const SafetyInspectionTab: React.FC = () => {
                 className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold"
               >
                 Xóa Hồ Sơ
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* MODAL 5: Confirm Send Inspection Alert Email */}
+      {confirmSendAlert && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center gap-3 text-amber-400">
+              <div className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30">
+                <Mail className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-slate-100">Xác Nhận Gửi Email Nhắc Kiểm Định</h3>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Hệ thống sẽ gửi email nhắc lịch cho{' '}
+              <strong className="text-amber-300">{stats.reminders.length} hồ sơ kiểm định</strong>{' '}
+              đang quá hạn hoặc sắp đến hạn tới người phụ trách và quản lý.
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmSendAlert(false)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => void executeSendAlertNow()}
+                className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold"
+              >
+                Xác Nhận Gửi Email
               </button>
             </div>
           </div>

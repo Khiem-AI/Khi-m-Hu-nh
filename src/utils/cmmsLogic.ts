@@ -315,6 +315,26 @@ export function formatAssigneeNames(names: string[]): string {
   return Array.from(new Set(names.map((n) => n.trim()).filter(Boolean))).join(', ');
 }
 
+const PLACEHOLDER_EMAIL_DOMAINS = ['@factory.com', '@example.com', '@test.com', '@demo.com'];
+
+/**
+ * Checks whether an email address looks valid in basic syntax.
+ */
+export function isValidEmailFormat(email?: string | null): boolean {
+  if (!email) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+/**
+ * Checks whether an email is a non-deliverable demo/placeholder address (e.g. @factory.com).
+ */
+export function isPlaceholderEmail(email?: string | null): boolean {
+  if (!email || !email.trim()) return true;
+  const lower = email.trim().toLowerCase();
+  if (!isValidEmailFormat(lower)) return true;
+  return PLACEHOLDER_EMAIL_DOMAINS.some((domain) => lower.endsWith(domain));
+}
+
 /**
  * Resolves all email addresses for one or multiple assignees.
  */
@@ -329,8 +349,11 @@ export function resolveAssigneeEmails(
 
   const emails: string[] = [];
   names.forEach((name) => {
+    const normalized = name.trim().toLowerCase();
     const match = employees.find(
-      (e) => e.tenNhanVien.trim().toLowerCase() === name.toLowerCase()
+      (e) =>
+        e.tenNhanVien.trim().toLowerCase() === normalized ||
+        e.maNhanVien.trim().toLowerCase() === normalized
     );
     if (match?.email && match.email.trim()) {
       emails.push(match.email.trim());
@@ -342,6 +365,118 @@ export function resolveAssigneeEmails(
   }
 
   return Array.from(new Set(emails));
+}
+
+/**
+ * Returns detailed email resolution metadata including missing or placeholder (@factory.com) addresses.
+ */
+export function resolveAssigneeEmailDetails(
+  rawOrNames: string | string[],
+  employees: Employee[],
+  fallbackEmail?: string
+): {
+  emails: string[];
+  resolvedPairs: { name: string; email: string; isPlaceholder: boolean; employeeCode?: string }[];
+  missingEmployees: string[];
+  placeholderEmployees: { name: string; email: string; employeeCode?: string }[];
+  usedFallback: boolean;
+} {
+  const names = Array.isArray(rawOrNames)
+    ? Array.from(new Set(rawOrNames.map((n) => n.trim()).filter(Boolean)))
+    : parseAssigneeNames(rawOrNames);
+
+  const emails: string[] = [];
+  const resolvedPairs: { name: string; email: string; isPlaceholder: boolean; employeeCode?: string }[] = [];
+  const missingEmployees: string[] = [];
+  const placeholderEmployees: { name: string; email: string; employeeCode?: string }[] = [];
+
+  names.forEach((name) => {
+    const normalized = name.trim().toLowerCase();
+    const match = employees.find(
+      (e) =>
+        e.tenNhanVien.trim().toLowerCase() === normalized ||
+        e.maNhanVien.trim().toLowerCase() === normalized
+    );
+    const email = match?.email?.trim() || '';
+    if (email) {
+      emails.push(email);
+      const placeholder = isPlaceholderEmail(email);
+      resolvedPairs.push({
+        name: match?.tenNhanVien || name,
+        email,
+        isPlaceholder: placeholder,
+        employeeCode: match?.maNhanVien,
+      });
+      if (placeholder) {
+        placeholderEmployees.push({
+          name: match?.tenNhanVien || name,
+          email,
+          employeeCode: match?.maNhanVien,
+        });
+      }
+    } else {
+      missingEmployees.push(match?.tenNhanVien || name);
+    }
+  });
+
+  let usedFallback = false;
+  if (emails.length === 0 && fallbackEmail && fallbackEmail.trim()) {
+    emails.push(fallbackEmail.trim());
+    usedFallback = true;
+  }
+
+  return {
+    emails: Array.from(new Set(emails)),
+    resolvedPairs,
+    missingEmployees,
+    placeholderEmployees,
+    usedFallback,
+  };
+}
+
+/**
+ * Builds a pre-filled Gmail Web compose URL (safe in iframes via direct <a target="_blank"> click).
+ */
+export function buildGmailComposeUrl(params: {
+  to: string;
+  cc?: string;
+  subject: string;
+  body: string;
+}): string {
+  const query = new URLSearchParams({
+    view: 'cm',
+    fs: '1',
+    to: params.to.trim(),
+    su: params.subject,
+    body: params.body,
+  });
+  if (params.cc && params.cc.trim()) {
+    query.set('cc', params.cc.trim());
+  }
+  return `https://mail.google.com/mail/?${query.toString()}`;
+}
+
+/**
+ * Builds a standard mailto: URI for native desktop/mobile email clients.
+ */
+export function buildMailtoUrl(params: {
+  to: string;
+  cc?: string;
+  subject: string;
+  body: string;
+}): string {
+  const cleanTo = params.to
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .join(',');
+  const queryParts: string[] = [];
+  if (params.cc && params.cc.trim()) {
+    queryParts.push(`cc=${encodeURIComponent(params.cc.trim())}`);
+  }
+  queryParts.push(`subject=${encodeURIComponent(params.subject)}`);
+  queryParts.push(`body=${encodeURIComponent(params.body)}`);
+  return `mailto:${encodeURIComponent(cleanTo).replace(/%2C/g, ',')}?${queryParts.join('&')}`;
 }
 
 /**
