@@ -106,7 +106,8 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
 
   const adminAuthorized = isAdminLevel(currentUser);
   const isAutoSendReady = Boolean(
-    isGmailConnected ||
+    emailConfig.notificationMode === 'web_only' ||
+      isGmailConnected ||
       emailConfig.webhookUrl?.trim() ||
       autoEmailServerStatus.smtpConfigured ||
       autoEmailServerStatus.resendConfigured ||
@@ -484,14 +485,16 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
                     </label>
                     <span
                       className={`text-[10px] font-bold ${
-                        isGmailConnected
+                        emailConfig.notificationMode === 'web_only' || isGmailConnected
                           ? 'text-emerald-400'
                           : isAutoSendReady
                           ? 'text-amber-300'
                           : 'text-amber-400'
                       }`}
                     >
-                      {isGmailConnected && gmailUser?.email
+                      {emailConfig.notificationMode === 'web_only'
+                        ? 'Thông báo Web (Miễn phí 0đ)'
+                        : isGmailConnected && gmailUser?.email
                         ? `Gmail (${gmailUser.email}) • Gửi trực tiếp`
                         : emailConfig.webhookUrl?.trim()
                         ? 'Đang dự phòng qua Webhook (chưa kết nối Gmail)'

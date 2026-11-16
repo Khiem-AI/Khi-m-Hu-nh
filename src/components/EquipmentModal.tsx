@@ -104,7 +104,8 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   if (!isOpen) return null;
 
   const isAutoSendReady = Boolean(
-    isGmailConnected ||
+    emailConfig.notificationMode === 'web_only' ||
+      isGmailConnected ||
       emailConfig.webhookUrl?.trim() ||
       autoEmailServerStatus.smtpConfigured ||
       autoEmailServerStatus.resendConfigured ||

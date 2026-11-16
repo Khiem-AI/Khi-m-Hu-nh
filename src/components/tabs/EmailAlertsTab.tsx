@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
-import { EmailLog } from '../../types/cmms';
+import { EmailLog, NotificationDeliveryMode } from '../../types/cmms';
 import { isAdminLevel } from '../../utils/cmmsLogic';
+import { buildProfessionalEmailHtml } from '../../utils/emailTemplates';
 import { BOOTSTRAPPED_ADMIN_EMAIL } from '../../utils/firestoreSync';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import { GoogleSignInButton } from '../common/GoogleSignInButton';
@@ -24,6 +25,8 @@ import {
   ChevronUp,
   Clock,
   XCircle,
+  Globe,
+  MonitorSmartphone,
 } from 'lucide-react';
 
 const APPS_SCRIPT_SNIPPET = `function doGet() {
@@ -55,6 +58,9 @@ function doPost(e) {
       body: body,
       name: data.sender || "FACILITY SYSTEM MANAGEMENT"
     };
+    if (data.htmlBody && String(data.htmlBody).trim()) {
+      mailOptions.htmlBody = String(data.htmlBody);
+    }
     if (data.cc && String(data.cc).trim()) {
       mailOptions.cc = String(data.cc).trim();
     }
@@ -87,10 +93,23 @@ export const EmailAlertsTab: React.FC = () => {
     clearEmailLogs,
     maintenancePlans,
     currentUser,
+    webNotifications,
+    browserNotificationPermission,
+    requestBrowserNotificationPermission,
+    triggerWebNotification,
   } = useCMMS();
 
   // Local form state for settings
   const [enabled, setEnabled] = useState(emailConfig.enabled);
+  const [notificationMode, setNotificationMode] = useState<NotificationDeliveryMode>(
+    emailConfig.notificationMode || 'both'
+  );
+  const [enableBrowserNotifications, setEnableBrowserNotifications] = useState(
+    emailConfig.enableBrowserNotifications ?? true
+  );
+  const [enableInAppToast, setEnableInAppToast] = useState(
+    emailConfig.enableInAppToast ?? true
+  );
   const [notifyOnNewTicket, setNotifyOnNewTicket] = useState(emailConfig.notifyOnNewTicket);
   const [notifyOnMaintenanceDue, setNotifyOnMaintenanceDue] = useState(emailConfig.notifyOnMaintenanceDue);
   const [notifyOnOverdue, setNotifyOnOverdue] = useState(emailConfig.notifyOnOverdue);
@@ -105,6 +124,9 @@ export const EmailAlertsTab: React.FC = () => {
 
   useEffect(() => {
     setEnabled(emailConfig.enabled);
+    setNotificationMode(emailConfig.notificationMode || 'both');
+    setEnableBrowserNotifications(emailConfig.enableBrowserNotifications ?? true);
+    setEnableInAppToast(emailConfig.enableInAppToast ?? true);
     setNotifyOnNewTicket(emailConfig.notifyOnNewTicket);
     setNotifyOnMaintenanceDue(emailConfig.notifyOnMaintenanceDue);
     setNotifyOnOverdue(emailConfig.notifyOnOverdue);
@@ -118,8 +140,11 @@ export const EmailAlertsTab: React.FC = () => {
 
   // UI state
   const [isSaved, setIsSaved] = useState(false);
-  const [activePreview, setActivePreview] = useState<'ticket' | 'maintenance'>('ticket');
+  const [activePreview, setActivePreview] = useState<
+    'ticket' | 'maintenance' | 'assignment' | 'completion' | 'inspection'
+  >('ticket');
   const [selectedLogForDetail, setSelectedLogForDetail] = useState<EmailLog | null>(null);
+  const [detailViewMode, setDetailViewMode] = useState<'html' | 'text'>('html');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [showAppsScriptGuide, setShowAppsScriptGuide] = useState(
@@ -148,7 +173,9 @@ export const EmailAlertsTab: React.FC = () => {
       (emailConfig.webhookUrl?.trim() && !/\/dev(\?|$)/i.test(emailConfig.webhookUrl))
   );
 
-  const isAutoSendReady = Boolean(isGmailConnected || hasSharedServerChannel);
+  const isAutoSendReady = Boolean(
+    notificationMode === 'web_only' || isGmailConnected || hasSharedServerChannel
+  );
 
   const showToast = (msg: string, kind: 'success' | 'warning' = 'success') => {
     setToastType(kind);
@@ -171,10 +198,59 @@ export const EmailAlertsTab: React.FC = () => {
     setTimeout(() => setCopiedScript(false), 2500);
   };
 
+  const handleSelectNotificationMode = (mode: NotificationDeliveryMode) => {
+    setNotificationMode(mode);
+    updateEmailConfig({ notificationMode: mode });
+    const modeName =
+      mode === 'web_only'
+        ? 'Chỉ Thông Báo Web (Miễn phí 0đ)'
+        : mode === 'both'
+        ? 'Kết Hợp Web + Email'
+        : 'Chỉ Gửi Email';
+    showToast(`Đã chuyển phương thức sang: ${modeName}`, 'success');
+  };
+
+  const handleRequestBrowserPermission = async () => {
+    const result = await requestBrowserNotificationPermission();
+    if (result === 'granted') {
+      setEnableBrowserNotifications(true);
+      updateEmailConfig({ enableBrowserNotifications: true });
+      triggerWebNotification({
+        type: 'THU_NGHIEM',
+        title: '[FSM] Đã bật thông báo trình duyệt thành công',
+        message: 'Mọi sự cố khẩn cấp, giao việc hoặc nhắc hạn bảo trì sẽ hiển thị ngay trên màn hình (0đ).',
+        relatedId: 'WEB-READY',
+        targetTab: 'email_alerts',
+      });
+      showToast('Đã cấp quyền thông báo trình duyệt (miễn phí 100%)!', 'success');
+    } else if (result === 'denied') {
+      showToast(
+        'Trình duyệt đang chặn quyền Thông báo. Bạn hãy bấm vào biểu tượng ổ khóa trên thanh địa chỉ web để Cho phép (Allow) Notifications.',
+        'warning'
+      );
+    } else if (result === 'unsupported') {
+      showToast('Trình duyệt hiện tại chưa hỗ trợ Desktop Notification API.', 'warning');
+    }
+  };
+
+  const handleSendTestWebNotification = () => {
+    triggerWebNotification({
+      type: 'TICKET_MOI',
+      title: '[FSM Web Test] Cảnh báo thử nghiệm thời gian thực (0đ)',
+      message: 'Hệ thống thông báo Web hoạt động bình thường trên trình duyệt & chuông Header.',
+      relatedId: 'WEB-TEST',
+      targetTab: 'email_alerts',
+    });
+    showToast('Đã phát thông báo Web thử nghiệm ở góc màn hình & Chuông Header!', 'success');
+  };
+
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
     updateEmailConfig({
       enabled,
+      notificationMode,
+      enableBrowserNotifications,
+      enableInAppToast,
       notifyOnNewTicket,
       notifyOnMaintenanceDue,
       notifyOnOverdue,
@@ -187,7 +263,7 @@ export const EmailAlertsTab: React.FC = () => {
     });
     void refreshAutoEmailStatus();
     setIsSaved(true);
-    showToast('Đã lưu cấu hình dịch vụ gửi email thông báo thành công!', 'success');
+    showToast('Đã lưu cấu hình thông báo Web & Email thành công!', 'success');
     setTimeout(() => setIsSaved(false), 2500);
   };
 
@@ -233,7 +309,9 @@ export const EmailAlertsTab: React.FC = () => {
     if (res.sentCount > 0) {
       if (res.result?.success) {
         showToast(
-          `Đã tự động gửi email cảnh báo ${res.dueCount} thiết bị đến hạn tới ${primaryRecipient}!`,
+          res.result.channel === 'web'
+            ? `Đã phát thông báo Web (0đ) cảnh báo ${res.dueCount} thiết bị đến hạn!`
+            : `Đã tự động gửi cảnh báo ${res.dueCount} thiết bị đến hạn tới ${primaryRecipient}!`,
           'success'
         );
       } else {
@@ -287,6 +365,15 @@ export const EmailAlertsTab: React.FC = () => {
         {/* Quick actions */}
         <div className="flex flex-wrap items-center gap-2.5">
           <button
+            type="button"
+            onClick={handleSendTestWebNotification}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/40 text-xs sm:text-sm font-semibold shadow-sm transition"
+          >
+            <Globe className="w-4 h-4 text-emerald-400" />
+            <span>Thử Thông Báo Web (0đ)</span>
+          </button>
+
+          <button
             onClick={() => {
               if (duePlansCount === 0) {
                 showToast('Hiện tại không có thiết bị nào quá hạn hoặc tới hạn bảo trì.', 'success');
@@ -298,7 +385,7 @@ export const EmailAlertsTab: React.FC = () => {
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 text-xs sm:text-sm font-semibold shadow-sm transition"
           >
             <BellRing className="w-4 h-4 text-amber-400" />
-            <span>Quét & Gửi Email Đến Hạn ({duePlansCount})</span>
+            <span>Quét &amp; Báo Hạn ({duePlansCount})</span>
           </button>
 
           <button
@@ -307,7 +394,7 @@ export const EmailAlertsTab: React.FC = () => {
             className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs sm:text-sm font-semibold shadow-lg shadow-cyan-900/30 transition"
           >
             <Send className="w-4 h-4" />
-            <span>Gửi Thử Email</span>
+            <span>{notificationMode === 'web_only' ? 'Thử Phát Tin Web' : 'Gửi Thử Email'}</span>
           </button>
         </div>
       </div>
@@ -485,6 +572,143 @@ export const EmailAlertsTab: React.FC = () => {
           </div>
 
           <form onSubmit={handleSaveSettings} className="space-y-4">
+            {/* Notification Channel Selector (Web Free 0đ vs Email) */}
+            <div className="p-4 rounded-xl bg-slate-950/75 border border-cyan-500/30 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-cyan-400" />
+                  <span className="text-xs font-bold text-white uppercase tracking-wider">
+                    Chọn Phương Thức Nhận Thông Báo
+                  </span>
+                </div>
+                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                  Thông báo Web: 100% Miễn phí (0đ)
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleSelectNotificationMode('web_only')}
+                  className={`p-3 rounded-xl border text-left transition ${
+                    notificationMode === 'web_only'
+                      ? 'bg-emerald-600/20 border-emerald-400 text-white ring-1 ring-emerald-400/50'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-emerald-300">Chỉ Web (0đ)</span>
+                    <Globe className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                    Hiện Chuông + Toast + Popup trình duyệt tức thời, không cần Gmail/SMTP.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectNotificationMode('both')}
+                  className={`p-3 rounded-xl border text-left transition ${
+                    notificationMode === 'both'
+                      ? 'bg-cyan-600/20 border-cyan-400 text-white ring-1 ring-cyan-400/50'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-cyan-300">Web + Email</span>
+                    <Sparkles className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                    Báo tức thời trên Web (0đ) và đồng thời gửi email mẫu chuẩn HTML.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectNotificationMode('email_only')}
+                  className={`p-3 rounded-xl border text-left transition ${
+                    notificationMode === 'email_only'
+                      ? 'bg-indigo-600/20 border-indigo-400 text-white ring-1 ring-indigo-400/50'
+                      : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-1">
+                    <span className="text-xs font-bold text-indigo-300">Chỉ Gửi Email</span>
+                    <Mail className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1 leading-snug">
+                    Chỉ gửi email thông báo theo thiết lập Gmail OAuth / Webhook / SMTP.
+                  </p>
+                </button>
+              </div>
+
+              {notificationMode !== 'email_only' && (
+                <div className="pt-2.5 border-t border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1.5 text-xs text-slate-300">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enableInAppToast}
+                        onChange={(e) => {
+                          setEnableInAppToast(e.target.checked);
+                          updateEmailConfig({ enableInAppToast: e.target.checked });
+                        }}
+                        className="w-4 h-4 rounded text-cyan-600 bg-slate-900 border-slate-700 focus:ring-cyan-500"
+                      />
+                      <span>Hiện thẻ thông báo nổi góc màn hình + Chuông Header ({webNotifications.length} tin)</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={enableBrowserNotifications}
+                        onChange={(e) => {
+                          setEnableBrowserNotifications(e.target.checked);
+                          updateEmailConfig({ enableBrowserNotifications: e.target.checked });
+                        }}
+                        className="w-4 h-4 rounded text-cyan-600 bg-slate-900 border-slate-700 focus:ring-cyan-500"
+                      />
+                      <span>
+                        Bật Popup Desktop / Chrome khi thu nhỏ tab{' '}
+                        <strong
+                          className={
+                            browserNotificationPermission === 'granted'
+                              ? 'text-emerald-400'
+                              : browserNotificationPermission === 'denied'
+                              ? 'text-rose-400'
+                              : 'text-amber-300'
+                          }
+                        >
+                          (
+                          {browserNotificationPermission === 'granted'
+                            ? 'Đã cho phép'
+                            : browserNotificationPermission === 'denied'
+                            ? 'Đang bị chặn'
+                            : browserNotificationPermission === 'unsupported'
+                            ? 'Không hỗ trợ'
+                            : 'Chưa cấp quyền'}
+                          )
+                        </strong>
+                      </span>
+                    </label>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    {browserNotificationPermission !== 'granted' &&
+                      browserNotificationPermission !== 'unsupported' && (
+                        <button
+                          type="button"
+                          onClick={() => void handleRequestBrowserPermission()}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold transition"
+                        >
+                          <MonitorSmartphone className="w-3.5 h-3.5" />
+                          <span>Cấp Quyền Popup Trình Duyệt</span>
+                        </button>
+                      )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Notification Triggers */}
             <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
               <span className="text-xs font-bold text-slate-300 uppercase tracking-wider block">
@@ -733,115 +957,111 @@ export const EmailAlertsTab: React.FC = () => {
 
         {/* Live Email Template Preview (5 cols) */}
         <div className="lg:col-span-5 rounded-2xl bg-slate-900 border border-slate-800 p-5 space-y-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div className="space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2 text-white font-bold text-sm">
                 <Sparkles className="w-4 h-4 text-cyan-400" />
-                <span>Xem Trước Mẫu Email Gửi Đi</span>
+                <span>Xem Trước Mẫu Email Chuẩn HTML</span>
               </div>
 
               {/* Template Switcher */}
-              <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800">
-                <button
-                  onClick={() => setActivePreview('ticket')}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
-                    activePreview === 'ticket'
-                      ? 'bg-cyan-600 text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Ticket Mới
-                </button>
-                <button
-                  onClick={() => setActivePreview('maintenance')}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition ${
-                    activePreview === 'maintenance'
-                      ? 'bg-cyan-600 text-white'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Bảo Trì Đến Hạn
-                </button>
+              <div className="flex flex-wrap items-center gap-1 p-1 rounded-lg bg-slate-950 border border-slate-800">
+                {(
+                  [
+                    { id: 'ticket', label: 'Ticket Mới' },
+                    { id: 'maintenance', label: 'Bảo Trì' },
+                    { id: 'assignment', label: 'Giao Việc' },
+                    { id: 'completion', label: 'Hoàn Thành' },
+                    { id: 'inspection', label: 'Kiểm Định' },
+                  ] as const
+                ).map((tpl) => (
+                  <button
+                    key={tpl.id}
+                    type="button"
+                    onClick={() => setActivePreview(tpl.id)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-bold transition ${
+                      activePreview === tpl.id
+                        ? 'bg-cyan-600 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {tpl.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Email Container Mockup */}
-            <div className="mt-4 rounded-xl border border-slate-700 bg-white text-slate-900 p-4 shadow-xl text-xs space-y-3 font-sans">
-              {/* Email Header */}
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-cyan-600 text-white flex items-center justify-center font-extrabold text-[11px]">
-                    F
-                  </div>
-                  <div>
-                    <span className="font-extrabold text-slate-900 block leading-tight">
-                      {senderName}
+            {(() => {
+              const previewSample =
+                activePreview === 'ticket'
+                  ? {
+                      type: 'TICKET_MOI' as const,
+                      relatedId: 'TK-2026-001',
+                      subject:
+                        '[FACILITY SYSTEM MANAGEMENT - Ticket Mới] Xử lý rung ồn máy nén khí GA90-2 (Ưu tiên: Khẩn cấp) [CMP-GA90-02]',
+                      body: `Kính gửi Trưởng phòng Kỹ thuật & Kỹ sư Phụ trách,\n\nHệ thống FACILITY SYSTEM MANAGEMENT vừa ghi nhận phiếu yêu cầu sự cố mới tại nhà máy:\n- Mã Ticket: TK-2026-001\n- Thiết bị liên quan: CMP-GA90-02 (Máy nén khí GA90-2)\n- Mức độ ưu tiên: Khẩn cấp\n- Người lập phiếu / Giao việc: Đoàn Quang Hùng\n- Người phụ trách: Trương Quang Sơn\n- Ngày tạo: 2026-11-10\n- Mô tả chi tiết: Máy có tiếng ồn kim loại lạ ở cụm sinh hàn dầu, nhiệt độ khí xả chạm ngưỡng 105°C. Đã dừng máy để bảo vệ cụm trục vít.\n\nVui lòng đăng nhập hệ thống để điều phối và xử lý kịp thời.\n\nTrân trọng,\n${senderName}`,
+                    }
+                  : activePreview === 'maintenance'
+                  ? {
+                      type: 'BAO_TRI_QUA_HAN' as const,
+                      relatedId: 'BATCH-DUE-ALERT',
+                      subject: `[FSM Kế Hoạch] Cảnh báo ${duePlansCount || 4} thiết bị đến hạn bảo trì định kỳ`,
+                      body: `Kính gửi Đội ngũ Kỹ thuật & Quản lý Bảo trì Nhà máy,\n\nHệ thống vừa quét kế hoạch bảo dưỡng định kỳ và phát hiện danh sách thiết bị cần triển khai ngay:\n\n1. [QUÁ HẠN] Quạt thông gió nhà điện 1 (HVAC-OAFELC1)\n   - Tần suất: Monthly | Ngày đến hạn: 2026-10-23 | Người phụ trách: Trương Quang Sơn\n2. [TỚI HẠN] Chiller 01 (HVAC-CH-01)\n   - Tần suất: Quarterly | Ngày đến hạn: 2026-11-10 | Người phụ trách: Nguyễn Văn An\n3. [SẮP TỚI] PAU 01 (HVAC-PAU-01)\n   - Tần suất: Monthly | Ngày đến hạn: 2026-11-19 | Người phụ trách: Đoàn Quang Hùng\n\nĐề nghị các kỹ sư phụ trách rà soát tồn kho phụ tùng thay thế và triển khai đúng lịch trình.\n\nTrân trọng,\n${senderName}`,
+                    }
+                  : activePreview === 'assignment'
+                  ? {
+                      type: 'GIAO_VIEC' as const,
+                      relatedId: 'HVAC-CH-01',
+                      subject: `[FACILITY SYSTEM MANAGEMENT - Giao Việc Kế hoạch bảo trì] Chiller Giải Nhiệt Nước 01 (HVAC-CH-01)`,
+                      body: `Kính gửi Trương Quang Sơn,\n\nBạn vừa được giao nhiệm vụ trên hệ thống FACILITY SYSTEM MANAGEMENT:\n- Phân hệ: Kế hoạch bảo trì\n- Đối tượng / Mã: Chiller Giải Nhiệt Nước 01 (HVAC-CH-01)\n- Người giao việc: Huỳnh Quốc Khiêm\n- Người phụ trách thực hiện: Trương Quang Sơn\n- Nội dung chỉ đạo: Vệ sinh giàn ngưng, kiểm tra áp suất gas & dòng điện máy nén trước ca chiều.\n\nSau khi hoàn tất, vui lòng cập nhật kết quả và ảnh trước/sau trên hệ thống.\n\nTrân trọng,\n${senderName}`,
+                    }
+                  : activePreview === 'completion'
+                  ? {
+                      type: 'BAO_CAO_HOAN_THANH' as const,
+                      relatedId: 'TK-2026-001',
+                      subject: `[FACILITY SYSTEM MANAGEMENT - Báo Cáo Hoàn Thành] Xử Lý Ticket Sự Cố: Máy nén khí GA90-2 (TK-2026-001)`,
+                      body: `Kính gửi Admin & Kỹ sư thiết bị (Huỳnh Quốc Khiêm),\n\nNhân sự phụ trách vừa báo cáo hoàn thành công việc trên hệ thống:\n- Phân hệ: Xử Lý Ticket Sự Cố\n- Mã / Đối tượng: Máy nén khí GA90-2 (TK-2026-001)\n- Người thực hiện báo cáo: Trương Quang Sơn\n- Người giao việc: Huỳnh Quốc Khiêm\n- Kết quả: Hoàn thành\n- Chi tiết công việc: Đã thay lọc tách dầu, vệ sinh két giải nhiệt và chạy thử không tải 30 phút đạt thông số chuẩn.\n\nVui lòng kiểm tra hình ảnh trước/sau xử lý và nghiệm thu trên hệ thống.\n\nTrân trọng,\n${senderName}`,
+                    }
+                  : {
+                      type: 'KIEM_DINH_DEN_HAN' as const,
+                      relatedId: 'KD-2026-03',
+                      subject: `[FSM Kiểm Định & Hiệu Chuẩn] Nhắc lịch tự động: 2 thiết bị sắp đến hạn kiểm định an toàn`,
+                      body: `Kính gửi Đội ngũ An Toàn, Kỹ Thuật & Quản Lý Nhà Máy,\n\nHệ thống tự động rà soát hồ sơ kiểm định an toàn & hiệu chuẩn đo lường:\n\n1. [Còn 12 ngày] Bình tích áp khí nén 3000L (KD-2026-03)\n   - Phân loại: Kiểm định an toàn | Hạn: 2026-11-22 | Phụ trách: Trương Quang Sơn | Đơn vị: Trung tâm Kiểm định II\n2. [TỚI HẠN] Đồng hồ đo chênh áp phòng sạch (HC-2026-07)\n   - Phân loại: Hiệu chuẩn đo lường | Hạn: 2026-11-10 | Phụ trách: Đoàn Quang Hùng | Đơn vị: Quatest 3\n\nĐề nghị liên hệ đơn vị kiểm định để thực hiện đúng quy định an toàn và ISO.\n\nTrân trọng,\n${senderName}`,
+                    };
+
+              const previewHtml = buildProfessionalEmailHtml({
+                type: previewSample.type,
+                subject: previewSample.subject,
+                body: previewSample.body,
+                senderName,
+                relatedId: previewSample.relatedId,
+              });
+
+              return (
+                <div className="space-y-2">
+                  <div className="px-3 py-2 rounded-xl bg-slate-950/70 border border-slate-800 text-[11px] text-slate-300 flex items-center justify-between gap-2">
+                    <span className="truncate">
+                      Gửi tới: <strong className="text-cyan-300">{primaryRecipient || BOOTSTRAPPED_ADMIN_EMAIL}</strong>
                     </span>
-                    <span className="text-[10px] text-slate-500">
-                      Gửi tới: <strong className="text-slate-700">{primaryRecipient}</strong>
+                    <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                      HTML Table · 640px
                     </span>
                   </div>
+                  <iframe
+                    srcDoc={previewHtml}
+                    sandbox=""
+                    title="Xem trước mẫu email chuyên nghiệp"
+                    className="w-full h-[460px] rounded-xl border border-slate-700 bg-slate-100 shadow-inner"
+                  />
                 </div>
-                <span className="text-[10px] font-mono text-slate-400">
-                  {new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-
-              {/* Subject */}
-              <div className="p-2 rounded bg-slate-100 font-bold text-slate-800 text-[11px]">
-                {activePreview === 'ticket'
-                  ? '[FACILITY SYSTEM MANAGEMENT - Ticket Mới] Xử lý rung ồn máy nén khí GA90-2 (Ưu tiên: Khẩn cấp) [CMP-GA90-02]'
-                  : `[FSM Kế Hoạch] Cảnh báo ${duePlansCount} thiết bị đến hạn bảo trì định kỳ trong tuần`}
-              </div>
-
-              {/* Body Content */}
-              {activePreview === 'ticket' ? (
-                <div className="space-y-2 text-slate-700 leading-relaxed text-[11px]">
-                  <p>Kính gửi <strong>Trưởng phòng Kỹ thuật & Kỹ sư Phụ trách</strong>,</p>
-                  <p>Hệ thống FACILITY SYSTEM MANAGEMENT vừa ghi nhận phiếu yêu cầu sự cố / công việc phát sinh tại nhà máy:</p>
-                  <div className="bg-rose-50 border border-rose-200 rounded p-2.5 space-y-1 text-rose-950">
-                    <div><strong>Mã Ticket:</strong> TCK-2026-001</div>
-                    <div><strong>Thiết bị:</strong> CMP-GA90-02 (Máy nén khí GA90-2)</div>
-                    <div><strong>Mức độ:</strong> <span className="font-bold text-rose-700">Khẩn cấp</span></div>
-                    <div><strong>Người lập:</strong> Đoàn Quang Hùng</div>
-                    <div><strong>Người phụ trách:</strong> Trương Quang Sơn</div>
-                    <div><strong>Mô tả:</strong> Máy có tiếng ồn kim loại lạ ở cụm sinh hàn dầu, nhiệt độ khí xả chạm ngưỡng 105°C. Đã dừng máy để bảo vệ cụm trục vít.</div>
-                  </div>
-                  <p className="text-slate-500 italic text-[10px]">
-                    Vui lòng đăng nhập FACILITY SYSTEM MANAGEMENT để cập nhật tiến độ xử lý và xuất phụ tùng thay thế.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2 text-slate-700 leading-relaxed text-[11px]">
-                  <p>Kính gửi <strong>Đội ngũ Kỹ thuật & Quản lý Bảo trì Nhà máy</strong>,</p>
-                  <p>Hệ thống FACILITY SYSTEM MANAGEMENT vừa quét kế hoạch bảo dưỡng định kỳ và phát hiện danh sách thiết bị đến hạn:</p>
-                  <div className="bg-amber-50 border border-amber-200 rounded p-2 space-y-1.5 text-amber-950">
-                    <div className="font-bold text-amber-900 border-b border-amber-200 pb-1">
-                      Danh sách thiết bị cần bảo dưỡng:
-                    </div>
-                    <div>1. <strong>[QUÁ HẠN]</strong> Quạt thông gió nhà điện 1 (HVAC-OAFELC1) - Hạn: 2026-10-23</div>
-                    <div>2. <strong>[TỚI HẠN]</strong> Chiller 01 (HVAC-CH-01) - Hạn: 2026-11-10</div>
-                    <div>3. <strong>[SẮP TỚI]</strong> PAU 01 (HVAC-PAU-01) - Hạn: 2026-11-19</div>
-                    <div>4. <strong>[SẮP TỚI]</strong> PAU 02 (HVAC-PAU-02) - Hạn: 2026-11-19</div>
-                  </div>
-                  <p className="text-slate-500 italic text-[10px]">
-                    Đề nghị các kỹ sư chuẩn bị vật tư lọc túi, dầu bôi trơn và triển khai bảo trì đúng chuẩn.
-                  </p>
-                </div>
-              )}
-
-              {/* Email Footer */}
-              <div className="border-t border-slate-200 pt-2 text-[10px] text-slate-400 flex justify-between">
-                <span>FACILITY SYSTEM MANAGEMENT - Factory Operations & Maintenance</span>
-                <span>Thông báo tự động</span>
-              </div>
-            </div>
+              );
+            })()}
           </div>
 
           <div className="text-[11px] text-slate-400 bg-slate-950/40 p-3 rounded-xl border border-slate-800 flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>
-              Mẫu email chuẩn HTML phản hồi tương thích với Gmail, Outlook và các ứng dụng duyệt mail trên di động.
+              Mẫu email chuẩn doanh nghiệp (Navy #0f172a + bảng thông số 2 cột + badge màu phân loại) tương thích Gmail, Outlook và Mobile Mail.
             </span>
           </div>
         </div>
@@ -960,9 +1180,15 @@ export const EmailAlertsTab: React.FC = () => {
                     <td className="py-3 px-3">
                       {log.status === 'Đã gửi' ||
                       log.status === 'Đã gửi (Gmail)' ||
-                      log.status === 'Đã gửi (Webhook)' ? (
+                      log.status === 'Đã gửi (Webhook)' ||
+                      log.status === 'Đã gửi Web + Email' ? (
                         <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold text-emerald-400 bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-800/60">
                           <CheckCircle2 className="w-3 h-3" />
+                          {log.status}
+                        </span>
+                      ) : log.status === 'Thông báo Web' ? (
+                        <span className="inline-flex items-center gap-1 whitespace-nowrap text-[11px] font-bold text-cyan-300 bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-700/60">
+                          <Globe className="w-3 h-3" />
                           {log.status}
                         </span>
                       ) : log.status === 'Thất bại' ? (
@@ -1038,18 +1264,44 @@ export const EmailAlertsTab: React.FC = () => {
       {/* Full Email Content Modal */}
       {selectedLogForDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in">
-          <div className="w-full max-w-xl rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4">
+          <div className="w-full max-w-2xl rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <div className="flex items-center gap-2">
                 <Mail className="w-5 h-5 text-cyan-400" />
-                <h3 className="text-base font-bold text-white">Toàn Văn Email Thông Báo</h3>
+                <h3 className="text-base font-bold text-white">Chi Tiết Thông Báo</h3>
               </div>
-              <button
-                onClick={() => setSelectedLogForDetail(null)}
-                className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center p-0.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setDetailViewMode('html')}
+                    className={`px-2.5 py-1 rounded-md font-bold transition ${
+                      detailViewMode === 'html'
+                        ? 'bg-cyan-600 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Mẫu HTML
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailViewMode('text')}
+                    className={`px-2.5 py-1 rounded-md font-bold transition ${
+                      detailViewMode === 'text'
+                        ? 'bg-cyan-600 text-white'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Văn bản
+                  </button>
+                </div>
+                <button
+                  onClick={() => setSelectedLogForDetail(null)}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             <div className="space-y-2 text-xs">
@@ -1069,7 +1321,7 @@ export const EmailAlertsTab: React.FC = () => {
               </div>
 
               <div>
-                <span className="text-slate-400 block font-semibold mb-1">Tiêu đề email:</span>
+                <span className="text-slate-400 block font-semibold mb-1">Tiêu đề:</span>
                 <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-bold">
                   {selectedLogForDetail.subject}
                 </div>
@@ -1077,9 +1329,25 @@ export const EmailAlertsTab: React.FC = () => {
 
               <div>
                 <span className="text-slate-400 block font-semibold mb-1">Nội dung chi tiết:</span>
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
-                  {selectedLogForDetail.fullContent || selectedLogForDetail.bodySnippet}
-                </div>
+                {detailViewMode === 'html' ? (
+                  <iframe
+                    srcDoc={buildProfessionalEmailHtml({
+                      type: selectedLogForDetail.type,
+                      subject: selectedLogForDetail.subject,
+                      body: selectedLogForDetail.fullContent || selectedLogForDetail.bodySnippet,
+                      senderName,
+                      relatedId: selectedLogForDetail.relatedId,
+                      timestamp: selectedLogForDetail.timestamp,
+                    })}
+                    sandbox=""
+                    title="Nội dung HTML thông báo"
+                    className="w-full h-80 rounded-xl border border-slate-700 bg-slate-100"
+                  />
+                ) : (
+                  <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 font-mono text-[11px] whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">
+                    {selectedLogForDetail.fullContent || selectedLogForDetail.bodySnippet}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1104,13 +1372,28 @@ export const EmailAlertsTab: React.FC = () => {
                 <Send className="w-5 h-5" />
               </div>
               <h3 className="text-base font-bold text-white">
-                {confirmSendAction === 'test'
+                {notificationMode === 'web_only'
+                  ? confirmSendAction === 'test'
+                    ? 'Xác Nhận Phát Thông Báo Web Thử Nghiệm'
+                    : 'Xác Nhận Phát Cảnh Báo Bảo Trì Qua Web'
+                  : confirmSendAction === 'test'
                   ? 'Xác Nhận Gửi Email Thử Nghiệm'
                   : 'Xác Nhận Gửi Email Cảnh Báo Bảo Trì'}
               </h3>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              {confirmSendAction === 'test' ? (
+              {notificationMode === 'web_only' ? (
+                confirmSendAction === 'test' ? (
+                  <>
+                    Hệ thống sẽ phát 1 thông báo Web tức thời (miễn phí 0đ) lên Chuông Header, Toast góc màn hình và Popup trình duyệt (nếu đã bật).
+                  </>
+                ) : (
+                  <>
+                    Hệ thống sẽ phát thông báo Web (miễn phí 0đ) cảnh báo danh sách{' '}
+                    <strong className="text-amber-300">{duePlansCount} thiết bị</strong> đến hạn/quá hạn bảo trì.
+                  </>
+                )
+              ) : confirmSendAction === 'test' ? (
                 <>
                   Hệ thống sẽ gửi 1 email thử nghiệm tới{' '}
                   <strong className="text-cyan-300">{primaryRecipient}</strong>
@@ -1146,7 +1429,7 @@ export const EmailAlertsTab: React.FC = () => {
                 }
                 className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition shadow"
               >
-                Xác Nhận Gửi Email
+                {notificationMode === 'web_only' ? 'Phát Thông Báo Web' : 'Xác Nhận Gửi Email'}
               </button>
             </div>
           </div>

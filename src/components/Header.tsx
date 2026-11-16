@@ -33,6 +33,8 @@ import {
   UserCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  BellRing,
+  CheckCheck,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -74,6 +76,12 @@ export const Header: React.FC<HeaderProps> = ({
     connectCloudWithGoogle,
     disconnectCloud,
     forceSyncLocalToCloud,
+    webNotifications,
+    browserNotificationPermission,
+    requestBrowserNotificationPermission,
+    markWebNotificationRead,
+    markAllWebNotificationsRead,
+    clearWebNotifications,
   } = useCMMS();
 
   const [showUserDropdown, setShowUserDropdown] = useState(false);
@@ -122,6 +130,8 @@ export const Header: React.FC<HeaderProps> = ({
 
   const totalAlerts =
     overduePlans.length + dueInspections.length + lowStockParts.length + urgentTickets.length;
+  const unreadWebCount = webNotifications.filter((n) => !n.read).length;
+  const totalBellCount = totalAlerts + unreadWebCount;
 
   const handleLoginFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -502,111 +512,216 @@ export const Header: React.FC<HeaderProps> = ({
               className="relative h-9 w-9 flex items-center justify-center rounded-xl text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition"
             >
               <Bell className="w-4 h-4 sm:w-5 sm:h-5" />
-              {totalAlerts > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white shadow">
-                  {totalAlerts}
+              {totalBellCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] px-1 items-center justify-center rounded-full bg-rose-600 text-[10px] font-bold text-white shadow tabular-nums">
+                  {totalBellCount}
                 </span>
               )}
             </button>
 
             {showNotifications && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95">
-                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2 mb-3">
-                  <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">Cảnh Báo Vận Hành ({totalAlerts})</span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Thời gian thực</span>
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                  <div>
+                    <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block">
+                      Trung Tâm Thông Báo ({totalBellCount})
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Web Miễn Phí (0đ) &amp; Cảnh báo vận hành
+                    </span>
+                  </div>
+                  {browserNotificationPermission === 'default' && (
+                    <button
+                      type="button"
+                      onClick={() => void requestBrowserNotificationPermission()}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white text-[11px] font-bold transition shrink-0"
+                    >
+                      <BellRing className="w-3 h-3" />
+                      <span>Bật Popup</span>
+                    </button>
+                  )}
+                  {browserNotificationPermission === 'granted' && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 text-[10px] font-bold shrink-0">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Popup Bật
+                    </span>
+                  )}
                 </div>
 
-                <div className="space-y-2 max-h-72 overflow-y-auto pr-1 text-xs">
-                  {overduePlans.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => {
-                        onNavigateTab('maintenance');
-                        setShowNotifications(false);
-                      }}
-                      className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 hover:bg-rose-500/20 cursor-pointer flex items-start gap-2.5 transition"
-                    >
-                      <Clock className="w-4 h-4 shrink-0 mt-0.5 text-rose-400" />
-                      <div>
-                        <strong className="block text-slate-100">{p.tenThietBi} ({p.maThietBi})</strong>
-                        <span>Quá hạn bảo trì ({p.ngayBaoTriTiepTheo})</span>
+                {/* Web Notifications Feed */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-cyan-700 dark:text-cyan-400 uppercase tracking-wider">
+                      Thông Báo Web ({unreadWebCount} mới)
+                    </span>
+                    {webNotifications.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        {unreadWebCount > 0 && (
+                          <button
+                            type="button"
+                            onClick={markAllWebNotificationsRead}
+                            className="inline-flex items-center gap-1 text-slate-600 dark:text-slate-300 hover:text-cyan-600 dark:hover:text-cyan-400 font-semibold"
+                          >
+                            <CheckCheck className="w-3 h-3" />
+                            <span>Đọc hết</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={clearWebNotifications}
+                          className="text-slate-400 hover:text-rose-500 font-semibold"
+                        >
+                          Xóa
+                        </button>
                       </div>
-                    </div>
-                  ))}
+                    )}
+                  </div>
 
-                  {dueInspections.map(({ item, status, daysRemaining }) => (
-                    <div
-                      key={item.id}
-                      onClick={() => {
-                        onNavigateTab('inspection_calibration');
-                        setShowNotifications(false);
-                      }}
-                      className={`p-2.5 rounded-xl cursor-pointer flex items-start gap-2.5 transition border ${
-                        status === 'Quá hạn'
-                          ? 'bg-rose-500/10 border-rose-500/30 text-rose-300 hover:bg-rose-500/20'
-                          : 'bg-orange-500/10 border-orange-500/30 text-orange-300 hover:bg-orange-500/20'
-                      }`}
-                    >
-                      <BadgeCheck
-                        className={`w-4 h-4 shrink-0 mt-0.5 ${
-                          status === 'Quá hạn' ? 'text-rose-400' : 'text-orange-400'
-                        }`}
-                      />
-                      <div>
-                        <strong className="block text-slate-100">
-                          {item.tenThietBi} ({item.maThietBi || item.maHoSo})
-                        </strong>
-                        <span>
-                          {item.phanLoai} —{' '}
-                          {daysRemaining < 0
-                            ? `Quá hạn ${Math.abs(daysRemaining)} ngày (${item.ngayHetHan})`
-                            : daysRemaining === 0
-                            ? `Đến hạn hôm nay (${item.ngayHetHan})`
-                            : `Còn ${daysRemaining} ngày đến hạn (${item.ngayHetHan})`}
-                        </span>
-                      </div>
+                  {webNotifications.length > 0 ? (
+                    <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1 text-xs">
+                      {webNotifications.slice(0, 12).map((wn) => (
+                        <div
+                          key={wn.id}
+                          onClick={() => {
+                            markWebNotificationRead(wn.id);
+                            if (wn.targetTab) onNavigateTab(wn.targetTab);
+                            setShowNotifications(false);
+                          }}
+                          className={`p-2.5 rounded-xl border cursor-pointer transition flex items-start gap-2 ${
+                            wn.read
+                              ? 'bg-slate-50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400'
+                              : 'bg-cyan-50 dark:bg-cyan-950/40 border-cyan-200 dark:border-cyan-500/40 text-slate-800 dark:text-slate-100'
+                          }`}
+                        >
+                          <span
+                            className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
+                              wn.read ? 'bg-slate-300 dark:bg-slate-700' : 'bg-cyan-500'
+                            }`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <strong className="block text-slate-900 dark:text-slate-100 line-clamp-1">
+                              {wn.title}
+                            </strong>
+                            {wn.message && (
+                              <span className="block text-[11px] text-slate-600 dark:text-slate-300 line-clamp-2 mt-0.5">
+                                {wn.message}
+                              </span>
+                            )}
+                            <span className="block text-[10px] font-mono text-slate-400 dark:text-slate-500 mt-1">
+                              {wn.timestamp}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-
-                  {lowStockParts.map((sp) => (
-                    <div
-                      key={sp.maVatTu}
-                      onClick={() => {
-                        onNavigateTab('spare_parts');
-                        setShowNotifications(false);
-                      }}
-                      className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 hover:bg-amber-500/20 cursor-pointer flex items-start gap-2.5 transition"
-                    >
-                      <Package className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
-                      <div>
-                        <strong className="block text-slate-100">{sp.tenVatTu} ({sp.maVatTu})</strong>
-                        <span>Tồn thực tế ({sp.tonThucTe}) ≤ Mức tối thiểu ({sp.tonToiThieu})</span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {urgentTickets.map((t) => (
-                    <div
-                      key={t.maTicket}
-                      onClick={() => {
-                        onNavigateTab('tickets');
-                        setShowNotifications(false);
-                      }}
-                      className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/30 text-purple-300 hover:bg-purple-500/20 cursor-pointer flex items-start gap-2.5 transition"
-                    >
-                      <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-purple-400" />
-                      <div>
-                        <strong className="block text-slate-100">{t.tieuDe}</strong>
-                        <span>Sự cố khẩn cấp: {t.maTicket}</span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {totalAlerts === 0 && (
-                    <div className="text-center py-6 text-slate-500">
-                      Tất cả thiết bị và kho phụ tùng đều ở trạng thái an toàn!
+                  ) : (
+                    <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 text-center">
+                      Chưa có thông báo sự kiện Web mới. Khi có Ticket, Giao việc hoặc Báo cáo hoàn thành, tin sẽ hiện tại đây.
                     </div>
                   )}
+                </div>
+
+                {/* Operational Alerts Feed */}
+                <div className="space-y-1.5 pt-2 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                      Cảnh Báo Vận Hành ({totalAlerts})
+                    </span>
+                    <span className="text-slate-500 dark:text-slate-400">Thời gian thực</span>
+                  </div>
+
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1 text-xs">
+                    {overduePlans.map((p) => (
+                      <div
+                        key={p.id}
+                        onClick={() => {
+                          onNavigateTab('maintenance');
+                          setShowNotifications(false);
+                        }}
+                        className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/20 cursor-pointer flex items-start gap-2.5 transition"
+                      >
+                        <Clock className="w-4 h-4 shrink-0 mt-0.5 text-rose-600 dark:text-rose-400" />
+                        <div>
+                          <strong className="block text-slate-900 dark:text-slate-100">{p.tenThietBi} ({p.maThietBi})</strong>
+                          <span>Quá hạn bảo trì ({p.ngayBaoTriTiepTheo})</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {dueInspections.map(({ item, status, daysRemaining }) => (
+                      <div
+                        key={item.id}
+                        onClick={() => {
+                          onNavigateTab('inspection_calibration');
+                          setShowNotifications(false);
+                        }}
+                        className={`p-2.5 rounded-xl cursor-pointer flex items-start gap-2.5 transition border ${
+                          status === 'Quá hạn'
+                            ? 'bg-rose-50 dark:bg-rose-500/10 border-rose-200 dark:border-rose-500/30 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-500/20'
+                            : 'bg-orange-50 dark:bg-orange-500/10 border-orange-200 dark:border-orange-500/30 text-orange-700 dark:text-orange-300 hover:bg-orange-100 dark:hover:bg-orange-500/20'
+                        }`}
+                      >
+                        <BadgeCheck
+                          className={`w-4 h-4 shrink-0 mt-0.5 ${
+                            status === 'Quá hạn' ? 'text-rose-600 dark:text-rose-400' : 'text-orange-600 dark:text-orange-400'
+                          }`}
+                        />
+                        <div>
+                          <strong className="block text-slate-900 dark:text-slate-100">
+                            {item.tenThietBi} ({item.maThietBi || item.maHoSo})
+                          </strong>
+                          <span>
+                            {item.phanLoai} —{' '}
+                            {daysRemaining < 0
+                              ? `Quá hạn ${Math.abs(daysRemaining)} ngày (${item.ngayHetHan})`
+                              : daysRemaining === 0
+                              ? `Đến hạn hôm nay (${item.ngayHetHan})`
+                              : `Còn ${daysRemaining} ngày đến hạn (${item.ngayHetHan})`}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {lowStockParts.map((sp) => (
+                      <div
+                        key={sp.maVatTu}
+                        onClick={() => {
+                          onNavigateTab('spare_parts');
+                          setShowNotifications(false);
+                        }}
+                        className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-500/20 cursor-pointer flex items-start gap-2.5 transition"
+                      >
+                        <Package className="w-4 h-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+                        <div>
+                          <strong className="block text-slate-900 dark:text-slate-100">{sp.tenVatTu} ({sp.maVatTu})</strong>
+                          <span>Tồn thực tế ({sp.tonThucTe}) ≤ Mức tối thiểu ({sp.tonToiThieu})</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {urgentTickets.map((t) => (
+                      <div
+                        key={t.maTicket}
+                        onClick={() => {
+                          onNavigateTab('tickets');
+                          setShowNotifications(false);
+                        }}
+                        className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-500/10 border border-purple-200 dark:border-purple-500/30 text-purple-800 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-500/20 cursor-pointer flex items-start gap-2.5 transition"
+                      >
+                        <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-purple-600 dark:text-purple-400" />
+                        <div>
+                          <strong className="block text-slate-900 dark:text-slate-100">{t.tieuDe}</strong>
+                          <span>Sự cố khẩn cấp: {t.maTicket}</span>
+                        </div>
+                      </div>
+                    ))}
+
+                    {totalAlerts === 0 && (
+                      <div className="text-center py-4 text-slate-500 dark:text-slate-400">
+                        Tất cả thiết bị và kho phụ tùng đều ở trạng thái an toàn!
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

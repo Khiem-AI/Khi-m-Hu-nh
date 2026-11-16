@@ -234,9 +234,14 @@ export interface AuditLog {
   chiTietNoiDung: string;
 }
 
-// Email Notifications & Alerts Service
+// Email & Web Notifications Service
+export type NotificationDeliveryMode = 'both' | 'web_only' | 'email_only';
+
 export interface EmailConfig {
   enabled: boolean;
+  notificationMode?: NotificationDeliveryMode;
+  enableBrowserNotifications?: boolean;
+  enableInAppToast?: boolean;
   notifyOnNewTicket: boolean;
   notifyOnMaintenanceDue: boolean;
   notifyOnOverdue: boolean;
@@ -246,6 +251,17 @@ export interface EmailConfig {
   senderName: string;
   webhookUrl?: string; // Optional webhook endpoint (Google Apps Script, Make, Zapier, Resend proxy, etc.)
   autoDispatchMethod: 'gmail_compose' | 'mailto' | 'direct_service';
+}
+
+export interface WebNotificationItem {
+  id: string;
+  timestamp: string;
+  type: EmailLog['type'];
+  title: string;
+  message: string;
+  relatedId?: string;
+  targetTab?: string;
+  read: boolean;
 }
 
 export interface EmailLog {
@@ -264,7 +280,15 @@ export interface EmailLog {
   subject: string;
   bodySnippet: string;
   fullContent?: string;
-  status: 'Đã gửi' | 'Đã gửi (Gmail)' | 'Đã gửi (Webhook)' | 'Chờ người dùng gửi' | 'Thất bại' | 'Đã tạo bản nháp';
+  status:
+    | 'Đã gửi'
+    | 'Đã gửi (Gmail)'
+    | 'Đã gửi (Webhook)'
+    | 'Thông báo Web'
+    | 'Đã gửi Web + Email'
+    | 'Chờ người dùng gửi'
+    | 'Thất bại'
+    | 'Đã tạo bản nháp';
   relatedId?: string; // Mã ticket hoặc mã thiết bị
   errorMessage?: string;
 }
@@ -292,7 +316,8 @@ export interface AutoEmailServerStatus {
 export interface EmailSendResult {
   success: boolean;
   method: 'auto' | 'webhook' | 'interactive' | 'draft' | 'failed';
-  channel?: 'gmail' | 'smtp' | 'resend' | 'webhook';
+  channel?: 'web' | 'gmail' | 'smtp' | 'resend' | 'webhook';
+  webNotified?: boolean;
   notConfigured?: boolean;
   needsGmailAuth?: boolean;
   recipient: string;

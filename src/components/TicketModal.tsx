@@ -98,7 +98,8 @@ export const TicketModal: React.FC<TicketModalProps> = ({
 
   const adminAuthorized = isAdminLevel(currentUser);
   const isAutoSendReady = Boolean(
-    isGmailConnected ||
+    emailConfig.notificationMode === 'web_only' ||
+      isGmailConnected ||
       emailConfig.webhookUrl?.trim() ||
       autoEmailServerStatus.smtpConfigured ||
       autoEmailServerStatus.resendConfigured ||
@@ -371,8 +372,10 @@ export const TicketModal: React.FC<TicketModalProps> = ({
               </label>
 
               {sendEmail && (
-                <span className={`text-[10px] font-bold ${isGmailConnected ? 'text-emerald-400' : 'text-amber-300'}`}>
-                  {isGmailConnected && gmailUser?.email
+                <span className={`text-[10px] font-bold ${emailConfig.notificationMode === 'web_only' || isGmailConnected ? 'text-emerald-400' : 'text-amber-300'}`}>
+                  {emailConfig.notificationMode === 'web_only'
+                    ? 'Thông báo Web (Miễn phí 0đ)'
+                    : isGmailConnected && gmailUser?.email
                     ? `Gmail (${gmailUser.email})`
                     : emailConfig.webhookUrl?.trim()
                     ? 'Đang dự phòng qua Webhook (chưa kết nối Gmail)'

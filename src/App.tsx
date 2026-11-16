@@ -37,6 +37,7 @@ import { CostModal } from './components/CostModal';
 import { LoginPage } from './components/LoginPage';
 import { BackupDataModal } from './components/BackupDataModal';
 import { EmailDispatchModal } from './components/common/EmailDispatchModal';
+import { WebNotificationToast } from './components/common/WebNotificationToast';
 
 import { Equipment, MaintenanceWorkType, Ticket, SparePart, CostRecord } from './types/cmms';
 
@@ -446,6 +447,9 @@ function CMMSApp() {
 
       {/* 11. Global Interactive Email Dispatch Modal (Gmail Web / Mailto / Copy) */}
       <EmailDispatchModal />
+
+      {/* 12. Real-time Free Web Notification Toast */}
+      <WebNotificationToast onNavigateTab={handleNavigateTab} />
     </div>
   );
 }

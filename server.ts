@@ -60,6 +60,7 @@ async function dispatchViaWebhook(
     cc: string;
     subject: string;
     body: string;
+    htmlBody?: string;
     sender: string;
     timestamp: string;
     type?: string;
@@ -163,6 +164,7 @@ async function dispatchViaResend(params: {
   ccList: string[];
   subject: string;
   body: string;
+  html?: string;
   senderName: string;
 }) {
   const apiKey = (process.env.RESEND_API_KEY || '').trim();
@@ -179,6 +181,7 @@ async function dispatchViaResend(params: {
       cc: params.ccList.length > 0 ? params.ccList : undefined,
       subject: params.subject,
       text: params.body,
+      html: params.html || undefined,
     }),
   });
 
@@ -194,6 +197,7 @@ async function dispatchViaSmtp(params: {
   ccList: string[];
   subject: string;
   body: string;
+  html?: string;
   senderName: string;
 }) {
   const host = (process.env.SMTP_HOST || 'smtp.gmail.com').trim();
@@ -224,6 +228,7 @@ async function dispatchViaSmtp(params: {
     cc: params.ccList.length > 0 ? params.ccList.join(', ') : undefined,
     subject: params.subject,
     text: params.body,
+    html: params.html || undefined,
   });
 
   return info.messageId || 'smtp-ok';
@@ -243,6 +248,7 @@ async function startServer() {
       cc?: string;
       subject?: string;
       body?: string;
+      html?: string;
       senderName?: string;
       webhookUrl?: string;
       type?: string;
@@ -257,6 +263,7 @@ async function startServer() {
     );
     const subject = (bodyData.subject || '').trim();
     const body = (bodyData.body || '').trim();
+    const html = typeof bodyData.html === 'string' && bodyData.html.trim() ? bodyData.html : undefined;
     const senderName = (bodyData.senderName || 'FACILITY SYSTEM MANAGEMENT').trim();
     const requestWebhook = (bodyData.webhookUrl || '').trim();
     const envWebhook = (process.env.EMAIL_WEBHOOK_URL || '').trim();
@@ -300,6 +307,7 @@ async function startServer() {
           cc: ccList.join(', '),
           subject,
           body,
+          htmlBody: html,
           sender: senderName,
           timestamp: bodyData.timestamp || new Date().toISOString(),
           type: bodyData.type,
@@ -334,6 +342,7 @@ async function startServer() {
           ccList,
           subject,
           body,
+          html,
           senderName,
         });
         res.json({
@@ -368,6 +377,7 @@ async function startServer() {
           ccList,
           subject,
           body,
+          html,
           senderName,
         });
         res.json({

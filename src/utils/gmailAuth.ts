@@ -182,6 +182,7 @@ export async function sendViaGmailApi(params: {
   cc?: string;
   subject: string;
   body: string;
+  html?: string;
   senderName?: string;
   fromEmail?: string;
 }): Promise<{ id: string }> {
@@ -191,7 +192,7 @@ export async function sendViaGmailApi(params: {
   }
 
   const encodedSubject = encodeRfc2047Utf8(params.subject);
-  const encodedBody = chunkString(utf8ToBase64(params.body), 76).join('\r\n');
+  const encodedTextBody = chunkString(utf8ToBase64(params.body), 76).join('\r\n');
 
   const headers: string[] = [];
   if (params.fromEmail && params.fromEmail.trim()) {
@@ -208,10 +209,33 @@ export async function sendViaGmailApi(params: {
   }
   headers.push(`Subject: ${encodedSubject}`);
   headers.push('MIME-Version: 1.0');
-  headers.push('Content-Type: text/plain; charset="UTF-8"');
-  headers.push('Content-Transfer-Encoding: base64');
 
-  const rawMime = `${headers.join('\r\n')}\r\n\r\n${encodedBody}`;
+  let rawMime = '';
+  if (params.html && params.html.trim()) {
+    const boundary = `fsm_alt_${Date.now().toString(36)}`;
+    const encodedHtmlBody = chunkString(utf8ToBase64(params.html), 76).join('\r\n');
+    headers.push(`Content-Type: multipart/alternative; boundary="${boundary}"`);
+    rawMime = [
+      headers.join('\r\n'),
+      '',
+      `--${boundary}`,
+      'Content-Type: text/plain; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      encodedTextBody,
+      `--${boundary}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      encodedHtmlBody,
+      `--${boundary}--`,
+    ].join('\r\n');
+  } else {
+    headers.push('Content-Type: text/plain; charset="UTF-8"');
+    headers.push('Content-Transfer-Encoding: base64');
+    rawMime = `${headers.join('\r\n')}\r\n\r\n${encodedTextBody}`;
+  }
+
   const raw = utf8ToBase64Url(rawMime);
 
   const res = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {

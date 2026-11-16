@@ -73,7 +73,8 @@ export const EmailDispatchModal: React.FC = () => {
   const hasPlaceholderTo = toAddresses.length === 0 || deliverableToAddresses.length === 0;
 
   const isAutoSendReady = Boolean(
-    isGmailConnected ||
+    emailConfig.notificationMode === 'web_only' ||
+      isGmailConnected ||
       emailConfig.webhookUrl?.trim() ||
       autoEmailServerStatus.smtpConfigured ||
       autoEmailServerStatus.resendConfigured ||

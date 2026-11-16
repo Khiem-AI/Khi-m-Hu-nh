@@ -10137,6 +10137,9 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
 // Email Notification Settings
 export const INITIAL_EMAIL_CONFIG: EmailConfig = {
   "enabled": true,
+  "notificationMode": "both",
+  "enableBrowserNotifications": true,
+  "enableInAppToast": true,
   "notifyOnNewTicket": true,
   "notifyOnMaintenanceDue": true,
   "notifyOnOverdue": true,

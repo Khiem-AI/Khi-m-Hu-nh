@@ -28,7 +28,9 @@ import {
   PendingEmailDispatch,
   EmailSendResult,
   AutoEmailServerStatus,
+  WebNotificationItem,
 } from '../types/cmms';
+import { buildProfessionalEmailHtml } from '../utils/emailTemplates';
 import {
   INITIAL_EQUIPMENT,
   INITIAL_MAINTENANCE_PLANS,
@@ -287,6 +289,23 @@ interface CMMSContextType {
   deleteEmailLog: (id: string) => void;
   clearEmailLogs: () => void;
 
+  // Free Web Notification Service (0đ)
+  webNotifications: WebNotificationItem[];
+  activeWebToast: WebNotificationItem | null;
+  browserNotificationPermission: NotificationPermission | 'unsupported';
+  requestBrowserNotificationPermission: () => Promise<NotificationPermission | 'unsupported'>;
+  triggerWebNotification: (params: {
+    type: EmailLog['type'];
+    title: string;
+    message: string;
+    relatedId?: string;
+    targetTab?: string;
+  }) => WebNotificationItem;
+  markWebNotificationRead: (id: string) => void;
+  markAllWebNotificationsRead: () => void;
+  clearWebNotifications: () => void;
+  dismissActiveWebToast: () => void;
+
   // Theme & Appearance
   theme: 'dark' | 'light';
   toggleTheme: () => void;
@@ -467,14 +486,30 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
   const [emailConfig, setEmailConfig] = useState<EmailConfig>(() => {
     const loaded = loadStorage('emailConfig', INITIAL_EMAIL_CONFIG);
-    if (loaded.senderName === 'Hệ Thống Quản Lý Bảo Trì CMMS PRO') {
-      return { ...loaded, senderName: 'Hệ Thống Quản Lý FACILITY SYSTEM MANAGEMENT' };
+    const merged: EmailConfig = {
+      ...INITIAL_EMAIL_CONFIG,
+      ...loaded,
+    };
+    if (merged.senderName === 'Hệ Thống Quản Lý Bảo Trì CMMS PRO') {
+      merged.senderName = 'Hệ Thống Quản Lý FACILITY SYSTEM MANAGEMENT';
     }
-    return loaded;
+    return merged;
   });
   const [emailLogs, setEmailLogs] = useState<EmailLog[]>(() =>
     deduplicateById(loadStorage('emailLogs', INITIAL_EMAIL_LOGS), 'EML')
   );
+  const [webNotifications, setWebNotifications] = useState<WebNotificationItem[]>(() =>
+    deduplicateById(loadStorage('webNotifications', [] as WebNotificationItem[]), 'WNF')
+  );
+  const [activeWebToast, setActiveWebToast] = useState<WebNotificationItem | null>(null);
+  const [browserNotificationPermission, setBrowserNotificationPermission] = useState<
+    NotificationPermission | 'unsupported'
+  >(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      return 'unsupported';
+    }
+    return window.Notification.permission;
+  });
   const [pendingEmailDispatch, setPendingEmailDispatch] = useState<PendingEmailDispatch | null>(null);
   const [gmailUser, setGmailUser] = useState<GmailAccountInfo | null>(null);
   const [isGmailConnected, setIsGmailConnected] = useState(false);
@@ -938,7 +973,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (s.key === 'workspace_meta') {
                 workspaceReadyRef.current = true;
               } else if (s.key === 'email_config' && s.payload) {
-                setEmailConfig((prev) => ({ ...prev, ...(s.payload as Partial<EmailConfig>) }));
+                setEmailConfig((prev) => ({
+                  ...INITIAL_EMAIL_CONFIG,
+                  ...prev,
+                  ...(s.payload as Partial<EmailConfig>),
+                }));
               } else if (s.key === 'tariff_config' && s.payload) {
                 setTariffConfig((prev) => ({ ...prev, ...(s.payload as Partial<EnergyTariffConfig>) }));
               }
@@ -1326,6 +1365,24 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveStorage('safetyInspections', safetyInspections), [safetyInspections]);
   useEffect(() => saveStorage('tools', tools), [tools]);
   useEffect(() => saveStorage('toolLogs', toolLogs), [toolLogs]);
+  useEffect(() => saveStorage('webNotifications', webNotifications), [webNotifications]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
+    const syncPermission = () => {
+      setBrowserNotificationPermission(window.Notification.permission);
+    };
+    window.addEventListener('focus', syncPermission);
+    return () => window.removeEventListener('focus', syncPermission);
+  }, []);
+
+  useEffect(() => {
+    if (!activeWebToast) return;
+    const timer = window.setTimeout(() => {
+      setActiveWebToast((prev) => (prev?.id === activeWebToast.id ? null : prev));
+    }, 8000);
+    return () => window.clearTimeout(timer);
+  }, [activeWebToast]);
 
   const addAuditLog = (
     hanhDong: AuditLog['hanhDong'],
@@ -2399,6 +2456,107 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
+  const resolveTargetTabForNotificationType = (
+    type: EmailLog['type'],
+    relatedId?: string
+  ): string => {
+    if (type === 'TICKET_MOI') return 'tickets';
+    if (type === 'BAO_TRI_DEN_HAN' || type === 'BAO_TRI_QUA_HAN') return 'maintenance';
+    if (type === 'KIEM_DINH_DEN_HAN') return 'inspection_calibration';
+    if (type === 'GIAO_VIEC' || type === 'BAO_CAO_HOAN_THANH') {
+      if (relatedId && relatedId.toUpperCase().startsWith('TK')) return 'tickets';
+      return 'my_tasks';
+    }
+    return 'email_alerts';
+  };
+
+  const requestBrowserNotificationPermission = async (): Promise<
+    NotificationPermission | 'unsupported'
+  > => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      setBrowserNotificationPermission('unsupported');
+      return 'unsupported';
+    }
+    try {
+      const permission = await window.Notification.requestPermission();
+      setBrowserNotificationPermission(permission);
+      return permission;
+    } catch {
+      const current = window.Notification.permission;
+      setBrowserNotificationPermission(current);
+      return current;
+    }
+  };
+
+  const triggerWebNotification = (params: {
+    type: EmailLog['type'];
+    title: string;
+    message: string;
+    relatedId?: string;
+    targetTab?: string;
+  }): WebNotificationItem => {
+    const now = new Date();
+    const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
+    const item: WebNotificationItem = {
+      id: nextUniqueId('WNF'),
+      timestamp: timeStr,
+      type: params.type,
+      title: params.title,
+      message: params.message,
+      relatedId: params.relatedId,
+      targetTab:
+        params.targetTab || resolveTargetTabForNotificationType(params.type, params.relatedId),
+      read: false,
+    };
+
+    setWebNotifications((prev) => [item, ...prev].slice(0, 60));
+
+    if (emailConfig.enableInAppToast !== false) {
+      setActiveWebToast(item);
+    }
+
+    if (
+      emailConfig.enableBrowserNotifications !== false &&
+      typeof window !== 'undefined' &&
+      'Notification' in window &&
+      window.Notification.permission === 'granted'
+    ) {
+      try {
+        const browserNote = new window.Notification(params.title, {
+          body: params.message.slice(0, 200),
+          tag: item.id,
+        });
+        browserNote.onclick = () => {
+          window.focus();
+          if (item.targetTab) {
+            window.dispatchEvent(new CustomEvent('fsm:navigate-tab', { detail: item.targetTab }));
+          }
+          browserNote.close();
+        };
+      } catch {
+        // Ignore browser notification restrictions on certain mobile environments
+      }
+    }
+
+    return item;
+  };
+
+  const markWebNotificationRead = (id: string) => {
+    setWebNotifications((prev) => prev.map((n) => (n.id === id ? { ...n, read: true } : n)));
+  };
+
+  const markAllWebNotificationsRead = () => {
+    setWebNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
+  const clearWebNotifications = () => {
+    setWebNotifications([]);
+  };
+
+  const dismissActiveWebToast = () => {
+    setActiveWebToast(null);
+  };
+
   const sendEmailNotification = async (params: {
     type: EmailLog['type'];
     subject: string;
@@ -2442,6 +2600,64 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         : emailConfig.webhookUrl || ''
     ).trim();
 
+    const deliveryMode = emailConfig.notificationMode || 'both';
+    const shouldNotifyWeb = deliveryMode === 'web_only' || deliveryMode === 'both';
+
+    // Trigger instant 0đ Web Notification when enabled
+    let webNotified = false;
+    if (shouldNotifyWeb) {
+      const compactSummary = params.body
+        .replace(/^Kính gửi[^\n]*\n+/i, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      triggerWebNotification({
+        type: params.type,
+        title: params.subject,
+        message: compactSummary.slice(0, 180) + (compactSummary.length > 180 ? '...' : ''),
+        relatedId: params.relatedId,
+        targetTab: resolveTargetTabForNotificationType(params.type, params.relatedId),
+      });
+      webNotified = true;
+    }
+
+    // If user chose Web Only mode (100% free), log and return immediately without requiring email credentials
+    if (deliveryMode === 'web_only') {
+      const webOnlyLog: EmailLog = {
+        id: logId,
+        timestamp: timeStr,
+        type: params.type,
+        recipient: targetRecipient ? `${targetRecipient} (Web)` : 'Thông báo Web (Miễn phí 0đ)',
+        cc: targetCc,
+        subject: params.subject,
+        bodySnippet: params.body.slice(0, 160) + (params.body.length > 160 ? '...' : ''),
+        fullContent: params.body,
+        status: 'Thông báo Web',
+        relatedId: params.relatedId,
+      };
+      setEmailLogs((prev) => [webOnlyLog, ...prev]);
+      syncDoc('email_logs', webOnlyLog.id, sanitizeEmailLog(webOnlyLog));
+      addAuditLog('Thêm', 'Thông báo Web', logId, `Đã phát thông báo Web miễn phí: ${params.subject}`);
+
+      return {
+        success: true,
+        method: 'auto',
+        channel: 'web',
+        webNotified: true,
+        recipient: 'Thông báo Web (Miễn phí 0đ)',
+        logId,
+        message: 'Đã phát thông báo Web tức thời (miễn phí 100%, không cần SMTP/Email)!',
+      };
+    }
+
+    const htmlBody = buildProfessionalEmailHtml({
+      type: params.type,
+      subject: params.subject,
+      body: params.body,
+      senderName: emailConfig.senderName,
+      relatedId: params.relatedId,
+      timestamp: timeStr,
+    });
+
     let sentSuccess = false;
     let sentChannel: 'gmail' | 'smtp' | 'resend' | 'webhook' | undefined;
     let notConfigured = false;
@@ -2462,6 +2678,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
             cc: targetCc,
             subject: params.subject,
             body: params.body,
+            html: htmlBody,
             senderName: emailConfig.senderName,
             fromEmail: gmailUser?.email,
           });
@@ -2501,6 +2718,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
               cc: targetCc,
               subject: params.subject,
               body: params.body,
+              html: htmlBody,
               senderName: emailConfig.senderName,
               webhookUrl,
               type: params.type,
@@ -2544,6 +2762,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 cc: targetCc,
                 subject: params.subject,
                 body: params.body,
+                htmlBody,
                 timestamp: timeStr,
                 sender: emailConfig.senderName,
                 type: params.type,
@@ -2617,12 +2836,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (sentSuccess) {
-      const logStatus: EmailLog['status'] =
-        sentChannel === 'gmail'
-          ? 'Đã gửi (Gmail)'
-          : sentChannel === 'webhook'
-          ? 'Đã gửi (Webhook)'
-          : 'Đã gửi';
+      const logStatus: EmailLog['status'] = shouldNotifyWeb
+        ? 'Đã gửi Web + Email'
+        : sentChannel === 'gmail'
+        ? 'Đã gửi (Gmail)'
+        : sentChannel === 'webhook'
+        ? 'Đã gửi (Webhook)'
+        : 'Đã gửi';
       const sentLog: EmailLog = {
         id: logId,
         timestamp: timeStr,
@@ -2641,7 +2861,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         'Thêm',
         'Thông báo Email',
         logId,
-        `Đã tự động gửi email (${sentChannel || 'auto'}) tới ${targetRecipient}: ${params.subject}`
+        `Đã tự động gửi ${shouldNotifyWeb ? 'Web + ' : ''}email (${sentChannel || 'auto'}) tới ${targetRecipient}: ${params.subject}`
       );
       let channelLabel = '';
       if (sentChannel === 'gmail') {
@@ -2664,13 +2884,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         success: true,
         method: sentChannel === 'webhook' ? 'webhook' : 'auto',
         channel: sentChannel,
+        webNotified,
         recipient: targetRecipient,
         logId,
-        message: `Đã gửi email${channelLabel} tới ${targetRecipient}`,
+        message: `${shouldNotifyWeb ? 'Đã phát thông báo Web (0đ) & ' : 'Đã '}gửi email${channelLabel} tới ${targetRecipient}`,
       };
     }
 
     // 3. Honest failure / unconfigured log
+    const finalErrorMsg = webNotified
+      ? `Đã phát thông báo Web (0đ), nhưng Email chưa gửi được: ${errorMessage}`
+      : errorMessage;
     const failedLog: EmailLog = {
       id: logId,
       timestamp: timeStr,
@@ -2682,7 +2906,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       fullContent: params.body,
       status: 'Thất bại',
       relatedId: params.relatedId,
-      errorMessage,
+      errorMessage: finalErrorMsg,
     };
 
     setEmailLogs((prev) => [failedLog, ...prev]);
@@ -2697,11 +2921,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return {
       success: false,
       method: 'failed',
+      webNotified,
       notConfigured,
       needsGmailAuth,
       recipient: targetRecipient,
       logId,
-      message: errorMessage,
+      message: finalErrorMsg,
     };
   };
 
@@ -3234,6 +3459,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         triggerInspectionDueAlerts,
         deleteEmailLog,
         clearEmailLogs,
+        webNotifications,
+        activeWebToast,
+        browserNotificationPermission,
+        requestBrowserNotificationPermission,
+        triggerWebNotification,
+        markWebNotificationRead,
+        markAllWebNotificationsRead,
+        clearWebNotifications,
+        dismissActiveWebToast,
         addEquipment,
         updateEquipment,
         deleteEquipment,
