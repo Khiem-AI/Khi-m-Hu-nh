@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useCMMS } from '../context/CMMSContext';
 import { canAccessBackup } from '../utils/cmmsLogic';
 import { exportCombinedMaintenanceWorkbook } from '../utils/excelExport';
+import { generateInitialDataTsSource } from '../utils/codeExport';
 import {
   X,
   Database,
@@ -17,6 +18,7 @@ import {
   HardDrive,
   Cloud,
   FileSpreadsheet,
+  FileCode2,
   Copy,
   Check,
 } from 'lucide-react';
@@ -202,6 +204,46 @@ export const BackupDataModal: React.FC<BackupDataModalProps> = ({
     setSnapshots((prev) => [newSnapshot, ...prev.slice(0, 4)]);
 
     addAuditLog('Cập nhật', 'Sao Lưu Dữ Liệu', 'Toàn bộ hệ thống', `Xuất file backup về máy tính (${sizeKb} KB)`);
+  };
+
+  // 1-Click Export live Cloud/App state directly as src/data/initialData.ts
+  const handleDownloadInitialDataTs = () => {
+    const tsSource = generateInitialDataTsSource({
+      equipment,
+      maintenancePlans,
+      maintenanceHistory,
+      tickets,
+      spareParts,
+      stockTransactions,
+      power10Days,
+      costRecords,
+      waterMonthly,
+      employees,
+      meterReadings,
+      auditLogs,
+      emailConfig,
+      emailLogs,
+      documents,
+      projects,
+      safetyInspections,
+      tools,
+      toolLogs,
+    });
+    const blob = new Blob([tsSource], { type: 'text/typescript;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'initialData.ts';
+    link.click();
+    URL.revokeObjectURL(url);
+
+    const sizeKb = Math.round(tsSource.length / 1024);
+    addAuditLog(
+      'Cập nhật',
+      'Đồng Bộ Code',
+      'initialData.ts',
+      `Xuất file TypeScript initialData.ts từ dữ liệu Cloud (${sizeKb} KB)`
+    );
   };
 
   // Export specific module to CSV
@@ -418,6 +460,29 @@ export const BackupDataModal: React.FC<BackupDataModalProps> = ({
                     </strong>
                   </div>
                 </div>
+              </div>
+
+              {/* Export Code initialData.ts */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-700/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <FileCode2 className="w-4 h-4 text-cyan-600 dark:text-cyan-400 shrink-0" />
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      Đồng Bộ Dữ Liệu App Đã Publish Về Code (initialData.ts)
+                    </h4>
+                  </div>
+                  <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                    Tải xuống toàn bộ dữ liệu thực tế hiện tại dưới dạng file mã nguồn TypeScript chuẩn (<code className="font-mono text-cyan-700 dark:text-cyan-300">initialData.ts</code>) để cập nhật dữ liệu gốc trước khi phát triển tính năng mới.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadInitialDataTs}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-slate-900 dark:bg-cyan-600 hover:bg-slate-800 dark:hover:bg-cyan-500 text-white font-bold text-xs shadow-sm transition shrink-0"
+                >
+                  <FileCode2 className="w-4 h-4" />
+                  Tải initialData.ts
+                </button>
               </div>
 
               {/* Export Specific Module to Excel / CSV */}

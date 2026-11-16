@@ -32,7 +32,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-12-04",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=HVAC-CH-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1BClKVnAj1bd9yvWVJMuYSamLlPSCt-nj&sz=w1000"
@@ -77,7 +77,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-19",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-PAU-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1HqQykWFWyenc-K8QFbz808Wi1BhnHOnX&sz=w1000"
@@ -92,7 +92,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-19",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-PAU-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=18JG7VAEceht7nGsXdvXJhKJzVloYZnFJ&sz=w1000"
@@ -107,7 +107,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1zXpWhHlX4rKdjIPSeUl7TQ9OE4pqHHwf&sz=w1000"
@@ -122,7 +122,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1wnltoRI9AbF88X7NOepsq-Dyle3aBhts&sz=w1000"
@@ -137,7 +137,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-19",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-03",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1fID3KITYvtfRNygk-eYl4nS_h8UVS4wG&sz=w1000"
@@ -152,7 +152,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-19",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-04",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1dQ9Ql71THummyn8xD8zgTX8Obw1ei5rG&sz=w1000"
@@ -167,7 +167,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-05",
     "hinhAnh": "https://drive.google.com/thumbnail?id=18MtVUhQWpoPWwEdKWbox9aZoqC_Oefho&sz=w1000"
@@ -182,7 +182,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-06",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1FkM6YTXT5rYLEvFaQUZG0JP0euncpPsp&sz=w1000"
@@ -197,7 +197,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-31",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-WAH-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1UdJdffFsagM3ULIfKCl6BIGEWEDCCPZ7&sz=w1000"
@@ -212,7 +212,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-31",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-WAH-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1tw4hfRaWL_E4bcN6wRknk-YsLwRPVP36&sz=w1000"
@@ -227,7 +227,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-IQC",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -242,7 +242,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-FIN",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -257,7 +257,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-20",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-CT",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1JKINS3upC9A_Ai22f6TOaX0vvSbrtor8&sz=w1000"
@@ -272,7 +272,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-BED",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -287,7 +287,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CT-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -302,7 +302,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-29",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CT-02",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -317,7 +317,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CLWP-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1dG8cTl71rql1og-awoHRahfd4akiCl_l&sz=w1000"
@@ -332,7 +332,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CLWP-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1FGtQPa_-OpeImauPwnj9XHPHHoi1w9If&sz=w1000"
@@ -347,7 +347,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CLWP-03",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1ClGiPKjDPHayW4t-W29BYVPRtXyQ4lfw&sz=w1000"
@@ -362,7 +362,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CHWP-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=11vGKRf1Ru7zy6ncCWLcDtJBFhOmHva0O&sz=w1000"
@@ -377,7 +377,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CHWP-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1GrrP4Wcbi1qoPHKr05SlC6ENz8yLGtdD&sz=w1000"
@@ -392,7 +392,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-CHWP-03",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1vF9kgv2MQiSpMgfOpMg7K3xXJqycjrQN&sz=w1000"
@@ -407,7 +407,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-FCU-FAC",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -512,7 +512,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EPL-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -527,7 +527,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EPL-02",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -542,7 +542,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EWA-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -557,7 +557,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-EWA-02",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -572,7 +572,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-ECT-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -587,7 +587,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-ECT-02",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -677,7 +677,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA90-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=14-nlmxcsATcUYB1kCQW6ecpJw9guAyik&sz=w1000"
@@ -692,7 +692,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Đang sửa chữa",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-12-02",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA90-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1F6D-TYiTewws-oQ_v1t6-pJWpPHTPwr3&sz=w1000"
@@ -707,7 +707,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-12-02",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA75-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=17npHMfMCe4OaDO-S_tx43EsCDxZfz2ph&sz=w1000"
@@ -722,7 +722,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-12-02",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-GA75-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1-zmxv-PoMikHoCoR7DG_da31tZH4cm2o&sz=w1000"
@@ -737,7 +737,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-21",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-NPG-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1IJTeRLLn5XFVLb7jnZo22ZaA45Lli6WO&sz=w1000"
@@ -752,7 +752,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-21",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-NPG-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1AhWm0FCLVVe7y6KqvZi2JIB-Ivv9Zv8g&sz=w1000"
@@ -767,7 +767,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-AD300-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1Zlv5ktCSS_jc5r7mhgD_o5m5VEYyrJfn&sz=w1000"
@@ -782,7 +782,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-AD300-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1-C7rhVXKBzh-Qd1reOBZd0NfcXAQr5AU&sz=w1000"
@@ -797,7 +797,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-AIR-T",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1DMBFhg5gWPrABcoHOMpJF2XVP3hE_7zE&sz=w1000"
@@ -812,7 +812,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-FD220-01",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1vZRXQk9EhcX5rqBE8ZsbXppdLoywwJt0&sz=w1000"
@@ -827,7 +827,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-FD220-02",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1-DJ_JQZWTPu4Ni55pM-kPDvEwanDuI0X&sz=w1000"
@@ -842,7 +842,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=CMP-VACUM",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1D_3t6QDnGZ-uUPF5elRZXr1TYdz5befr&sz=w1000"
@@ -857,7 +857,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DI",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -872,7 +872,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DK",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -887,7 +887,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-27",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-WW",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1127,7 +1127,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-09",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=FFA-FA",
     "hinhAnh": "https://drive.google.com/thumbnail?id=1WMqj-YnjqklnhokI2Tsa2QGJozx_8Yqf&sz=w1000"
@@ -1727,7 +1727,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-23",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=HVAC-OAFELC1",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1742,7 +1742,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-10-23",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=HVAC-OAFELC2",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1757,7 +1757,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-PWC-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1772,7 +1772,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-PWC-02",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1787,7 +1787,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-PWC-03",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1802,7 +1802,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-OWC-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1817,7 +1817,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-OWC-02",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1832,7 +1832,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-OWC-03",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1847,7 +1847,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-OWC-04",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1862,7 +1862,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-OWC-05",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1877,7 +1877,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-MEET-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1892,7 +1892,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-MEET-03",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1907,7 +1907,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-MEET-04",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1922,7 +1922,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-MEET-05",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1937,7 +1937,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=INF-MEET-06",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1952,7 +1952,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DBV-01",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1967,7 +1967,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=WAT-DBV-02",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1982,7 +1982,7 @@ export const INITIAL_EQUIPMENT: Equipment[] = [
     "trangThai": "Hoạt động",
     "tanSuat": "Monthly",
     "hanBaoTriTiepTheo": "2026-11-14",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "email": "khiemhuynhggs@gmail.com",
     "qrCode": "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=HVAC-AHU-ENGINEERING",
     "hinhAnh": "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80"
@@ -1998,7 +1998,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-11-04",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-12-04",
     "trangThai": "Đúng hạn"
   },
@@ -2031,7 +2031,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-20",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-19",
     "trangThai": "Đúng hạn"
   },
@@ -2042,7 +2042,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-20",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-19",
     "trangThai": "Đúng hạn"
   },
@@ -2053,7 +2053,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2064,7 +2064,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2075,7 +2075,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-20",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-19",
     "trangThai": "Đúng hạn"
   },
@@ -2086,7 +2086,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-20",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-19",
     "trangThai": "Đúng hạn"
   },
@@ -2097,7 +2097,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2108,7 +2108,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2119,7 +2119,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-01",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-31",
     "trangThai": "Quá hạn"
   },
@@ -2130,7 +2130,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-01",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-31",
     "trangThai": "Quá hạn"
   },
@@ -2141,7 +2141,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2152,7 +2152,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2163,7 +2163,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-21",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-20",
     "trangThai": "Đúng hạn"
   },
@@ -2174,7 +2174,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2185,7 +2185,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-28",
     "trangThai": "Quá hạn"
   },
@@ -2196,7 +2196,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-29",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-29",
     "trangThai": "Quá hạn"
   },
@@ -2207,7 +2207,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2218,7 +2218,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2229,7 +2229,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2240,7 +2240,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2251,7 +2251,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2262,7 +2262,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2273,7 +2273,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2350,7 +2350,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2361,7 +2361,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2372,7 +2372,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-24",
     "trangThai": "Quá hạn"
   },
@@ -2383,7 +2383,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-24",
     "trangThai": "Quá hạn"
   },
@@ -2394,7 +2394,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-24",
     "trangThai": "Quá hạn"
   },
@@ -2405,7 +2405,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-24",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-24",
     "trangThai": "Quá hạn"
   },
@@ -2471,7 +2471,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2482,7 +2482,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-11-02",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-12-02",
     "trangThai": "Đúng hạn"
   },
@@ -2493,7 +2493,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-11-02",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-12-02",
     "trangThai": "Đúng hạn"
   },
@@ -2504,7 +2504,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-11-02",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-12-02",
     "trangThai": "Đúng hạn"
   },
@@ -2515,7 +2515,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-21",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-21",
     "trangThai": "Quá hạn"
   },
@@ -2526,7 +2526,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-21",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-21",
     "trangThai": "Quá hạn"
   },
@@ -2537,7 +2537,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2548,7 +2548,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2559,7 +2559,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2570,7 +2570,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2581,7 +2581,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2592,7 +2592,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -2603,7 +2603,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2614,7 +2614,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2625,7 +2625,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-28",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-27",
     "trangThai": "Đúng hạn"
   },
@@ -2801,7 +2801,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-10",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-09",
     "trangThai": "Quá hạn"
   },
@@ -3241,7 +3241,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-23",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-23",
     "trangThai": "Quá hạn"
   },
@@ -3252,7 +3252,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-09-23",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-10-23",
     "trangThai": "Quá hạn"
   },
@@ -3263,7 +3263,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3274,7 +3274,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3285,7 +3285,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3296,7 +3296,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3307,7 +3307,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3318,7 +3318,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3329,7 +3329,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3340,7 +3340,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3351,7 +3351,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3362,7 +3362,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3373,7 +3373,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3384,7 +3384,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3395,7 +3395,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3406,7 +3406,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3417,7 +3417,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   },
@@ -3428,7 +3428,7 @@ export const INITIAL_MAINTENANCE_PLANS: MaintenancePlan[] = [
     "loaiBaoTri": "Định kỳ",
     "tanSuat": "Monthly",
     "ngayBaoTriGanNhat": "2026-10-15",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayBaoTriTiepTheo": "2026-11-14",
     "trangThai": "Sắp tới"
   }
@@ -5256,7 +5256,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-09-14",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Huỳnh Thiện Khiêm",
@@ -5271,7 +5271,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-09-15",
     "moTaChiTiet": "Tính toán, layout lại kho No AC, sử dụng xe Reach truck",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Huỳnh Thiện Khiêm",
@@ -5286,7 +5286,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Hoàn thành",
     "ngayTao": "2026-09-16",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "2026-09-24",
     "ketQua": "",
     "nguoiLap": "Huỳnh Thiện Khiêm",
@@ -5301,7 +5301,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-09-18",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Huỳnh Thiện Khiêm",
@@ -5316,7 +5316,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-09-21",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Huỳnh Thiện Khiêm",
@@ -5406,7 +5406,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Hoàn thành",
     "ngayTao": "2026-10-08",
     "moTaChiTiet": "2 dãy kệ kho WH AC mới setup chưa có nối dây ESD",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "2026-10-08",
     "ketQua": "",
     "nguoiLap": "Đoàn Quang Hùng",
@@ -5421,7 +5421,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-10-08",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Đoàn Quang Hùng",
@@ -5481,7 +5481,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Hoàn thành",
     "ngayTao": "2026-10-20",
     "moTaChiTiet": "Máy mới về cần kéo dây",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "2026-11-05",
     "ketQua": "",
     "nguoiLap": "Đoàn Quang Hùng",
@@ -5526,7 +5526,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-11-05",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Đoàn Quang Hùng",
@@ -5541,7 +5541,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-11-05",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Đoàn Quang Hùng",
@@ -5556,7 +5556,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     "trangThai": "Chờ xử lý",
     "ngayTao": "2026-11-05",
     "moTaChiTiet": "",
-    "nguoiPhuTrach": "Khiêm Huỳnh",
+    "nguoiPhuTrach": "Khiem Huynh",
     "ngayHoanThanh": "",
     "ketQua": "",
     "nguoiLap": "Đoàn Quang Hùng",
@@ -6348,7 +6348,7 @@ export const INITIAL_STOCK_TRANSACTIONS: StockTransaction[] = [
     "maVatTu": "SP-INV-FUSE-30A",
     "thietBiSuDung": "ELC-DB-Solar-01",
     "soLuong": 5,
-    "nguoiThucHien": "Khiêm Huỳnh",
+    "nguoiThucHien": "Khiem Huynh",
     "ghiChu": "Thay cầu chì chuỗi string 4 và 7 bị quá dòng sau cơn giông"
   }
 ];
@@ -9751,14 +9751,14 @@ export const INITIAL_WATER_MONTHLY: WaterMonthly[] = [
 export const INITIAL_EMPLOYEES: Employee[] = [
   {
     "maNhanVien": "ID1460",
-    "tenNhanVien": "Khiêm Huỳnh",
+    "tenNhanVien": "Khiem Huynh",
     "date": "2026-11-10",
     "chucVu": "Admin",
     "ngayVao": "2020-03-15",
     "soDienThoai": "0908 123 456",
     "email": "khiemhuynhggs@gmail.com",
     "username": "ID1460",
-    "password": "1460@cmms",
+    "password": "201188@cmms",
     "quyenHan": [
       "ALL",
       "SYSTEM_ADMIN",
@@ -9775,16 +9775,16 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "APPROVE_MAINTENANCE"
     ],
     "anhDaiDien": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80",
-    "ngaySinh": "1992-06-18",
+    "ngaySinh": "1988-11-20",
     "gioiTinh": "Nam",
     "queQuan": "Bến Tre",
-    "diaChiThuongTru": "TP. Thủ Đức, TP. Hồ Chí Minh",
+    "diaChiThuongTru": "Tân Khánh, TP. Hồ Chí Minh",
     "trinhDoHocVan": "Kỹ sư Cơ điện tử",
     "tinhTrangHonNhan": "Đã kết hôn",
     "phongBan": "Ban Quản Lý Kỹ Thuật & O&M",
     "chuyenMon": "Quản lý vận hành CMMS · Hệ thống Điện & HVAC",
     "loaiHopDong": "Quản lý",
-    "caLamViec": "Hành chính (08:00 - 17:00)",
+    "caLamViec": "Hành chính (07:30 - 16:10)",
     "ngayNghiPhepNam": 14,
     "ngayNghiPhepDaDung": 3
   },
@@ -9795,7 +9795,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "chucVu": "Kỹ sư thiết bị",
     "ngayVao": "2021-05-10",
     "soDienThoai": "0912 345 678",
-    "email": "doanquanghung@factory.com",
+    "email": "quanghung250795@gmail.com",
     "username": "ID1486",
     "password": "1486@cmms",
     "quyenHan": [
@@ -9810,11 +9810,11 @@ export const INITIAL_EMPLOYEES: Employee[] = [
       "EXPORT_DATA"
     ],
     "anhDaiDien": "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80",
-    "ngaySinh": "1994-09-22",
+    "ngaySinh": "1992-09-22",
     "gioiTinh": "Nam",
     "queQuan": "Thanh Hóa",
     "diaChiThuongTru": "Dĩ An, Bình Dương",
-    "trinhDoHocVan": "Đại học Bách Khoa - Kỹ thuật Nhiệt lạnh",
+    "trinhDoHocVan": "Kỹ sư điện",
     "tinhTrangHonNhan": "Đã kết hôn",
     "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
     "chuyenMon": "Chiller · HVAC · Năng lượng Solar",
@@ -9830,7 +9830,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "chucVu": "Kỹ thuật viên",
     "ngayVao": "2021-08-01",
     "soDienThoai": "0987 654 321",
-    "email": "truongquangson@factory.com",
+    "email": "truongquangson.anhson@gmail.com",
     "username": "ID1665",
     "password": "1665@cmms",
     "quyenHan": [
@@ -9844,14 +9844,14 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "anhDaiDien": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80",
     "ngaySinh": "1996-03-12",
     "gioiTinh": "Nam",
-    "queQuan": "Nghệ An",
+    "queQuan": "Thanh Hóa",
     "diaChiThuongTru": "Thuận An, Bình Dương",
     "trinhDoHocVan": "Cao đẳng Điện công nghiệp",
     "tinhTrangHonNhan": "Độc thân",
     "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
     "chuyenMon": "Điện hạ thế · Tủ MSB · Máy nén khí",
     "loaiHopDong": "Chính thức",
-    "caLamViec": "Ca 1 (06:00 - 14:00)",
+    "caLamViec": "Ca 1 (07:30 - 16:10)",
     "ngayNghiPhepNam": 13,
     "ngayNghiPhepDaDung": 5
   },
@@ -9862,7 +9862,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "chucVu": "Kỹ thuật viên",
     "ngayVao": "2022-02-15",
     "soDienThoai": "0976 543 210",
-    "email": "levanthang@factory.com",
+    "email": "lethang3792@gmail.com",
     "username": "ID1690",
     "password": "1690@cmms",
     "quyenHan": [
@@ -9877,8 +9877,8 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "ngaySinh": "1995-11-04",
     "gioiTinh": "Nam",
     "queQuan": "Đồng Nai",
-    "diaChiThuongTru": "Biên Hòa, Đồng Nai",
-    "trinhDoHocVan": "Cao đẳng Cơ khí chế tạo",
+    "diaChiThuongTru": "Thuận An, TP. Hồ Chí Minh",
+    "trinhDoHocVan": "Điện lạnh",
     "tinhTrangHonNhan": "Đã kết hôn",
     "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
     "chuyenMon": "Hệ thống Bơm · Xử lý nước DI & Nước thải",
@@ -9894,7 +9894,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "chucVu": "Kỹ thuật viên",
     "ngayVao": "2022-04-20",
     "soDienThoai": "0965 432 109",
-    "email": "dohuuthinh@factory.com",
+    "email": "dohuuthinh1994@gmail.com",
     "username": "ID1798",
     "password": "1798@cmms",
     "quyenHan": [
@@ -9908,14 +9908,14 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "anhDaiDien": "https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?auto=format&fit=crop&w=200&q=80",
     "ngaySinh": "1997-08-19",
     "gioiTinh": "Nam",
-    "queQuan": "Thái Bình",
-    "diaChiThuongTru": "Quận 9, TP. Thủ Đức",
-    "trinhDoHocVan": "Trung cấp Điện - Điện tử",
+    "queQuan": "Quảng Ngãi",
+    "diaChiThuongTru": "Bến Cát, TP. Hồ Chí Minh",
+    "trinhDoHocVan": "Điện - Điện tử",
     "tinhTrangHonNhan": "Độc thân",
     "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
     "chuyenMon": "Điều hòa không khí · Bảo trì AHU",
     "loaiHopDong": "Chính thức",
-    "caLamViec": "Hành chính (08:00 - 17:00)",
+    "caLamViec": "Hành chính (07:30 - 16:10)",
     "ngayNghiPhepNam": 12,
     "ngayNghiPhepDaDung": 3
   },
@@ -9926,7 +9926,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "chucVu": "Kỹ thuật viên",
     "ngayVao": "2022-07-10",
     "soDienThoai": "0943 210 987",
-    "email": "nguyenxuantuyen@factory.com",
+    "email": "tuyengiadinh86@gmail.com",
     "username": "ID1679",
     "password": "1679@cmms",
     "quyenHan": [
@@ -9940,8 +9940,8 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "anhDaiDien": "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?auto=format&fit=crop&w=200&q=80",
     "ngaySinh": "1996-12-02",
     "gioiTinh": "Nam",
-    "queQuan": "Nam Định",
-    "diaChiThuongTru": "Dĩ An, Bình Dương",
+    "queQuan": "Nghệ An",
+    "diaChiThuongTru": "Bến Cát, TP. Hồ Chí Minh",
     "trinhDoHocVan": "Cao đẳng Tự động hóa",
     "tinhTrangHonNhan": "Độc thân",
     "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
@@ -9958,7 +9958,7 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "chucVu": "Kỹ thuật viên",
     "ngayVao": "2023-01-05",
     "soDienThoai": "0932 109 876",
-    "email": "nguyenquangtoan@factory.com",
+    "email": "nguyenquangtoan.110692@gmail.com",
     "username": "ID1570",
     "password": "1570@cmms",
     "quyenHan": [
@@ -9973,8 +9973,8 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "ngaySinh": "1998-04-27",
     "gioiTinh": "Nam",
     "queQuan": "Quảng Nam",
-    "diaChiThuongTru": "Thuận An, Bình Dương",
-    "trinhDoHocVan": "Cao đẳng Kỹ thuật Điện",
+    "diaChiThuongTru": "An Phú, TP Hồ Chí Minh",
+    "trinhDoHocVan": "Kỹ thuật Điện",
     "tinhTrangHonNhan": "Độc thân",
     "phongBan": "Kỹ Thuật & Bảo Trì (O&M)",
     "chuyenMon": "Bảo trì cơ khí · Hệ thống chiếu sáng",
@@ -10010,8 +10010,8 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "ngaySinh": "1990-01-15",
     "gioiTinh": "Nam",
     "queQuan": "TP. Hồ Chí Minh",
-    "diaChiThuongTru": "Quận 7, TP. Hồ Chí Minh",
-    "trinhDoHocVan": "Thạc sĩ Quản trị Kỹ thuật",
+    "diaChiThuongTru": "Gò Vấp, TP. Hồ Chí Minh",
+    "trinhDoHocVan": "Quản trị Kỹ thuật",
     "tinhTrangHonNhan": "Đã kết hôn",
     "phongBan": "Ban Giám Đốc Vận Hành",
     "chuyenMon": "Quản lý dự án · Ngân sách · An toàn nhà máy",
@@ -10034,7 +10034,7 @@ export const INITIAL_METER_READINGS: MeterReading[] = [
     "chiSoMoi": 145120,
     "tieuThu": 2770,
     "donVi": "kWh",
-    "nguoiGhi": "Khiêm Huỳnh"
+    "nguoiGhi": "Khiem Huynh"
   },
   {
     "id": "MET-002",
@@ -10046,7 +10046,7 @@ export const INITIAL_METER_READINGS: MeterReading[] = [
     "chiSoMoi": 141080,
     "tieuThu": 2680,
     "donVi": "kWh",
-    "nguoiGhi": "Khiêm Huỳnh"
+    "nguoiGhi": "Khiem Huynh"
   },
   {
     "id": "MET-003",
@@ -10058,7 +10058,7 @@ export const INITIAL_METER_READINGS: MeterReading[] = [
     "chiSoMoi": 85850,
     "tieuThu": 1640,
     "donVi": "kWh",
-    "nguoiGhi": "Khiêm Huỳnh"
+    "nguoiGhi": "Khiem Huynh"
   },
   {
     "id": "MET-004",
@@ -10070,7 +10070,7 @@ export const INITIAL_METER_READINGS: MeterReading[] = [
     "chiSoMoi": 28565,
     "tieuThu": 155,
     "donVi": "m3",
-    "nguoiGhi": "Khiêm Huỳnh"
+    "nguoiGhi": "Khiem Huynh"
   },
   {
     "id": "MET-005",
@@ -10082,7 +10082,7 @@ export const INITIAL_METER_READINGS: MeterReading[] = [
     "chiSoMoi": 19648,
     "tieuThu": 128,
     "donVi": "m3",
-    "nguoiGhi": "Khiêm Huỳnh"
+    "nguoiGhi": "Khiem Huynh"
   }
 ];
 
@@ -10091,7 +10091,7 @@ export const INITIAL_AUDIT_LOGS: AuditLog[] = [
   {
     "id": "LOG-001",
     "thoiGian": "2026-11-10 08:30:15",
-    "nguoiThaoTac": "Khiêm Huỳnh",
+    "nguoiThaoTac": "Khiem Huynh",
     "hanhDong": "Đăng nhập",
     "chucNang": "Hệ thống FACILITY SYSTEM MANAGEMENT",
     "doiTuong": "Tài khoản ID1460",
@@ -10295,8 +10295,8 @@ export const INITIAL_PROJECTS: FacilityProject[] = [
     phamVi: 'Mái nhà xưởng B & C, tuyến cáp DC/AC chống cháy, tủ hòa lưới MSB 2-3, tích hợp giám sát sản lượng lên hệ thống FSM.',
     trangThai: 'Đang triển khai',
     uuTien: 'Cao',
-    quanLyDuAn: 'Khiêm Huỳnh',
-    thanhVien: 'Khiêm Huỳnh, Tuấn Lê, Đoàn Quang Hùng, Nguyễn Xuân Tuyến',
+    quanLyDuAn: 'Khiem Huynh',
+    thanhVien: 'Khiem Huynh, Tuấn Lê, Đoàn Quang Hùng, Nguyễn Xuân Tuyến',
     ngayBatDau: '2026-10-01',
     ngayKetThucDuKien: '2026-12-15',
     nganSachDuKien: 3850000000,
@@ -10309,7 +10309,7 @@ export const INITIAL_PROJECTS: FacilityProject[] = [
         maCongViec: 'WBS-01',
         tieuDe: 'Khảo sát kết cấu mái & thiết kế bản vẽ một sợi hòa lưới',
         giaiDoan: '1. Khảo sát & Thiết kế',
-        nguoiPhuTrach: 'Khiêm Huỳnh, Tuấn Lê',
+        nguoiPhuTrach: 'Khiem Huynh, Tuấn Lê',
         trangThai: 'Hoàn thành',
         uuTien: 'Cao',
         ngayBatDau: '2026-10-01',
@@ -10365,7 +10365,7 @@ export const INITIAL_PROJECTS: FacilityProject[] = [
         maCongViec: 'WBS-05',
         tieuDe: 'Đo kiểm cách điện, chạy thử hòa lưới & nghiệm thu đóng điện',
         giaiDoan: '4. Nghiệm thu',
-        nguoiPhuTrach: 'Khiêm Huỳnh, Đoàn Quang Hùng',
+        nguoiPhuTrach: 'Khiem Huynh, Đoàn Quang Hùng',
         trangThai: 'Cần làm',
         uuTien: 'Cao',
         ngayBatDau: '2026-11-29',
@@ -10396,7 +10396,7 @@ export const INITIAL_PROJECTS: FacilityProject[] = [
         mucDo: 'Cao',
         giaiPhap: 'Thực hiện khóa LOTO và cắt điện vào Chủ Nhật tuần thứ 3 tháng 11.',
         trangThai: 'Đang theo dõi',
-        nguoiPhuTrach: 'Khiêm Huỳnh',
+        nguoiPhuTrach: 'Khiem Huynh',
       },
     ],
     khoanChi: [
@@ -10569,7 +10569,7 @@ export const INITIAL_PROJECTS: FacilityProject[] = [
         maCongViec: 'WBS-03',
         tieuDe: 'Theo dõi log dữ liệu 7 ngày & ký biên bản nghiệm thu bàn giao',
         giaiDoan: '3. Nghiệm thu',
-        nguoiPhuTrach: 'Đoàn Quang Hùng, Khiêm Huỳnh',
+        nguoiPhuTrach: 'Đoàn Quang Hùng, Khiem Huynh',
         trangThai: 'Chờ duyệt',
         uuTien: 'Trung bình',
         ngayBatDau: '2026-11-03',
@@ -10682,7 +10682,7 @@ export const INITIAL_SAFETY_INSPECTIONS: SafetyInspectionItem[] = [
     ngayKiemDinhGanNhat: '2025-11-18',
     ngayHetHan: '2026-11-18',
     nhacTruocNgay: 30,
-    nguoiPhuTrach: 'Khiêm Huỳnh',
+    nguoiPhuTrach: 'Khiem Huynh',
     emailCanhBao: 'khiemhuynhggs@gmail.com',
     trangThai: 'Sắp đến hạn',
     ghiChu: 'Kiểm tra siêu âm mối hàn bình chịu áp lực và thử nghiệm xả van an toàn 10 bar.',
@@ -10694,7 +10694,7 @@ export const INITIAL_SAFETY_INSPECTIONS: SafetyInspectionItem[] = [
         soTemChungNhan: 'KD2-2511-0842',
         ketQua: 'Đạt',
         ghiChu: 'Áp suất thử thủy lực 13.5 bar đạt yêu cầu.',
-        nguoiCapNhat: 'Khiêm Huỳnh',
+        nguoiCapNhat: 'Khiem Huynh',
       },
     ],
   },
@@ -11005,7 +11005,7 @@ export const INITIAL_TOOL_LOGS: ToolBorrowLog[] = [
     loaiGiaoDich: 'Mượn',
     soLuong: 1,
     nguoiMuon: 'Nguyễn Xuân Tuyến',
-    nguoiBanGiao: 'Khiêm Huỳnh',
+    nguoiBanGiao: 'Khiem Huynh',
     ngayGiaoDich: '2026-11-09',
     hanTra: '2026-11-11',
     ghiChu: 'Kiểm tra dòng tải tủ điện MSB1 và AHU 01.',
@@ -11029,7 +11029,7 @@ export const INITIAL_TOOL_LOGS: ToolBorrowLog[] = [
     loaiGiaoDich: 'Mượn',
     soLuong: 1,
     nguoiMuon: 'Đỗ Hữu Thịnh',
-    nguoiBanGiao: 'Khiêm Huỳnh',
+    nguoiBanGiao: 'Khiem Huynh',
     ngayGiaoDich: '2026-11-10',
     hanTra: '2026-11-12',
     ghiChu: 'Kiểm tra hệ thống Cooling Tower trên mái Utility.',
@@ -11041,7 +11041,7 @@ export const INITIAL_TOOL_LOGS: ToolBorrowLog[] = [
     loaiGiaoDich: 'Trả',
     soLuong: 1,
     nguoiMuon: 'Trương Quang Sơn',
-    nguoiBanGiao: 'Khiêm Huỳnh',
+    nguoiBanGiao: 'Khiem Huynh',
     ngayGiaoDich: '2026-11-05',
     tinhTrangKhiTra: 'Tốt',
     ghiChu: 'Đã chụp ảnh nhiệt định kỳ tủ phân phối MSB2, pin sạc đầy 100%.',
