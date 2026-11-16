@@ -523,7 +523,7 @@ service cloud.firestore {
       allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
       allow list: if isSignedIn() && isMemberOnDoc(existing());
       allow create: if isValidId(docId) && isSignedIn() && isValidPower10Days(incoming()) && isValidCreateMeta(incoming());
-      allow update: if isValidId(docId) && isSignedIn() && isValidPower10Days(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['thoiGianLuu', 'chuKy', 'tuNgay', 'denNgay', 'ngayLamViec', 'loaiCa', 'tbNgayKwh', 'evnBT', 'evnCD', 'evnTD', 'solarBT', 'solarCD', 'pLighting', 'pAcmv', 'pEquipment', 'uChiller', 'uMChiller', 'uComp', 'uPump', 'uCooling', 'uOther', 'oAcmv', 'oSocket', 'oKit', 'oServer', 'oLighting', 'nguoiChot', 'allowedEmails', 'updatedAt'])));
+      allow update: if isValidId(docId) && isAdmin() && isValidPower10Days(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['thoiGianLuu', 'chuKy', 'tuNgay', 'denNgay', 'ngayLamViec', 'loaiCa', 'tbNgayKwh', 'evnBT', 'evnCD', 'evnTD', 'solarBT', 'solarCD', 'pLighting', 'pAcmv', 'pEquipment', 'uChiller', 'uMChiller', 'uComp', 'uPump', 'uCooling', 'uOther', 'oAcmv', 'oSocket', 'oKit', 'oServer', 'oLighting', 'nguoiChot', 'allowedEmails', 'updatedAt']);
       allow delete: if isValidId(docId) && isAdmin();
     }
 
@@ -531,7 +531,7 @@ service cloud.firestore {
       allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
       allow list: if isSignedIn() && isMemberOnDoc(existing());
       allow create: if isValidId(docId) && isSignedIn() && isValidWaterMonthly(incoming()) && isValidCreateMeta(incoming());
-      allow update: if isValidId(docId) && isSignedIn() && isValidWaterMonthly(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['waterM3', 'waterVND', 'waterUSD', 'sewageVND', 'sewageUSD', 'allowedEmails', 'updatedAt'])));
+      allow update: if isValidId(docId) && isAdmin() && isValidWaterMonthly(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['waterM3', 'waterVND', 'waterUSD', 'sewageVND', 'sewageUSD', 'allowedEmails', 'updatedAt']);
       allow delete: if isValidId(docId) && isAdmin();
     }
 
@@ -539,7 +539,7 @@ service cloud.firestore {
       allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
       allow list: if isSignedIn() && isMemberOnDoc(existing());
       allow create: if isValidId(docId) && isSignedIn() && isValidMeterReading(incoming()) && isValidCreateMeta(incoming());
-      allow update: if isValidId(docId) && isSignedIn() && isValidMeterReading(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['chiSoCu', 'chiSoMoi', 'tieuThu', 'allowedEmails', 'updatedAt'])));
+      allow update: if isValidId(docId) && isAdmin() && isValidMeterReading(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['timestamp', 'ngayChot', 'nguon', 'tenDongHo', 'chiSoCu', 'chiSoMoi', 'tieuThu', 'donVi', 'nguoiGhi', 'allowedEmails', 'updatedAt']);
       allow delete: if isValidId(docId) && isAdmin();
     }
 

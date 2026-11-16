@@ -10,9 +10,11 @@ import {
   Legend,
 } from 'recharts';
 import { useCMMS } from '../../context/CMMSContext';
+import { Power10Days, WaterMonthly } from '../../types/cmms';
 import { UI_TEXTS } from '../../config/uiTexts';
-import { formatVND } from '../../utils/cmmsLogic';
+import { formatVND, isAdminLevel } from '../../utils/cmmsLogic';
 import { EnergyCompareDashboard } from '../energy/EnergyCompareDashboard';
+import { WaterCompareDashboard } from '../energy/WaterCompareDashboard';
 import { MonthlyEnergyTrendChart } from '../energy/MonthlyEnergyTrendChart';
 import { DailyPowerModal } from '../energy/DailyPowerModal';
 import { Power10DaysModal } from '../energy/Power10DaysModal';
@@ -33,6 +35,13 @@ import {
   Building2,
   Filter,
   ShieldAlert,
+  Pencil,
+  Trash2,
+  Lock,
+  ShieldCheck,
+  Search,
+  Download,
+  Table2,
 } from 'lucide-react';
 
 interface EnergyTabProps {
@@ -40,18 +49,36 @@ interface EnergyTabProps {
 }
 
 export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenMeterModal }) => {
-  const { power10Days, waterMonthly, meterReadings, tariffConfig, theme } = useCMMS();
+  const {
+    power10Days,
+    waterMonthly,
+    meterReadings,
+    tariffConfig,
+    theme,
+    currentUser,
+    deletePower10DaysRecord,
+    deleteWaterMonthlyRecord,
+  } = useCMMS();
+  const isAdmin = isAdminLevel(currentUser);
 
   const [activeSubTab, setActiveSubTab] = useState<
-    'compareDashboard' | 'dailyReadings' | 'power10' | 'waterMonth'
+    'compareDashboard' | 'waterDashboard' | 'dailyReadings' | 'power10' | 'waterMonth'
   >('compareDashboard');
 
   // Modal states
   const [isDailyPowerModalOpen, setIsDailyPowerModalOpen] = useState(false);
   const [isPower10DaysModalOpen, setIsPower10DaysModalOpen] = useState(false);
+  const [editingPower10Record, setEditingPower10Record] = useState<Power10Days | null>(null);
+  const [confirmDeletePowerRecord, setConfirmDeletePowerRecord] = useState<Power10Days | null>(null);
+  const [editingWaterRecord, setEditingWaterRecord] = useState<WaterMonthly | null>(null);
+  const [confirmDeleteWaterMonth, setConfirmDeleteWaterMonth] = useState<string | null>(null);
   const [isWaterModalOpen, setIsWaterModalOpen] = useState(false);
   const [waterModalMode, setWaterModalMode] = useState<'daily' | 'monthly'>('daily');
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
+
+  // Power 10-day detail table filter
+  const [powerYearFilter, setPowerYearFilter] = useState<'ALL' | string>('ALL');
+  const [powerSearchTerm, setPowerSearchTerm] = useState('');
 
   // Water month year filter
   const [waterYearFilter, setWaterYearFilter] = useState<'ALL' | '2026' | '2025' | '2024'>('ALL');
@@ -171,6 +198,100 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
 
   const maxVal = Math.max(...plantBreakdown.map((b) => b.value), 1);
 
+  const availablePowerYears = useMemo(() => {
+    const years = new Set<string>();
+    sortedPower.forEach((p) => {
+      const y = p.denNgay?.slice(0, 4) || p.tuNgay?.slice(0, 4);
+      if (y) years.add(y);
+    });
+    return Array.from(years).sort((a, b) => b.localeCompare(a));
+  }, [sortedPower]);
+
+  const filteredPower10Table = useMemo(() => {
+    const q = powerSearchTerm.trim().toLowerCase();
+    return sortedPower.filter((r) => {
+      if (powerYearFilter !== 'ALL') {
+        const y = r.denNgay?.slice(0, 4) || r.tuNgay?.slice(0, 4) || '';
+        if (y !== powerYearFilter) return false;
+      }
+      if (!q) return true;
+      return (
+        r.chuKy.toLowerCase().includes(q) ||
+        r.nguoiChot.toLowerCase().includes(q) ||
+        r.tuNgay.includes(q) ||
+        r.denNgay.includes(q) ||
+        r.loaiCa.toLowerCase().includes(q)
+      );
+    });
+  }, [sortedPower, powerYearFilter, powerSearchTerm]);
+
+  const handleExportPower10CSV = () => {
+    const headers = [
+      'Chu Ky',
+      'Tu Ngay',
+      'Den Ngay',
+      'So Ngay LV',
+      'Loai Ca',
+      'EVN BT (kWh)',
+      'EVN CD (kWh)',
+      'EVN TD (kWh)',
+      'Tong EVN (kWh)',
+      'Solar BT (kWh)',
+      'Solar CD (kWh)',
+      'Tong Solar (kWh)',
+      'Tong kWh',
+      'TB Ngay (kWh)',
+      'Utility (kWh)',
+      'Production (kWh)',
+      'Office (kWh)',
+      'Chi Phi Uoc Tinh (VND)',
+      'Nguoi Chot',
+    ];
+    const rows = filteredPower10Table.map((r) => {
+      const eTot = r.evnBT + r.evnCD + r.evnTD;
+      const sTot = r.solarBT + r.solarCD;
+      const totalKwh = eTot + sTot;
+      const util = r.uChiller + r.uMChiller + r.uComp + r.uPump + r.uCooling + r.uOther;
+      const prod = r.pLighting + r.pAcmv + r.pEquipment;
+      const off = r.oAcmv + r.oSocket + r.oKit + r.oServer + r.oLighting;
+      const cost =
+        r.evnBT * tariffConfig.evnBT +
+        r.evnCD * tariffConfig.evnCD +
+        r.evnTD * tariffConfig.evnTD +
+        r.solarBT * tariffConfig.evnBT +
+        r.solarCD * tariffConfig.evnCD;
+      return [
+        `"${r.chuKy}"`,
+        `"${r.tuNgay}"`,
+        `"${r.denNgay}"`,
+        r.ngayLamViec,
+        `"${r.loaiCa}"`,
+        r.evnBT,
+        r.evnCD,
+        r.evnTD,
+        eTot,
+        r.solarBT,
+        r.solarCD,
+        sTot,
+        totalKwh,
+        r.tbNgayKwh,
+        util,
+        prod,
+        off,
+        Math.round(cost),
+        `"${r.nguoiChot}"`,
+      ].join(',');
+    });
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Bang_Du_Lieu_Chi_Tiet_Chu_Ky_10_Ngay_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
 
 
   return (
@@ -195,7 +316,10 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
           </button>
 
           <button
-            onClick={() => setIsPower10DaysModalOpen(true)}
+            onClick={() => {
+              setEditingPower10Record(null);
+              setIsPower10DaysModalOpen(true);
+            }}
             className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow-sm"
             title="Chốt số điện chu kỳ 10 ngày (3 giá EVN/Solar + 3 khu vực)"
           >
@@ -205,6 +329,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
 
           <button
             onClick={() => {
+              setEditingWaterRecord(null);
               setWaterModalMode('daily');
               setIsWaterModalOpen(true);
             }}
@@ -221,53 +346,65 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
             title="Cài đặt giá điện 3 giá, giá nước và tỷ giá USD"
           >
             <Settings className="w-3.5 h-3.5 text-blue-400" />
-            <span>Đơn Giá & Tỷ Giá</span>
+            <span>Đơn Giá &amp; Tỷ Giá</span>
           </button>
         </div>
       </div>
 
       {/* Sub-tab Navigation */}
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
-        <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-800">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-900 border border-slate-800">
           <button
             onClick={() => setActiveSubTab('compareDashboard')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeSubTab === 'compareDashboard'
                 ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5 text-cyan-300" />
-            So Sánh Tiêu Thụ ({power10Days.length} Kỳ)
+            So Sánh Điện ({power10Days.length} Kỳ)
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('waterDashboard')}
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
+              activeSubTab === 'waterDashboard'
+                ? 'bg-gradient-to-r from-cyan-600 to-emerald-600 text-white shadow-md'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Droplet className="w-3.5 h-3.5 text-cyan-300" />
+            Dashboard &amp; So Sánh Nước ({waterMonthly.length} Tháng)
           </button>
 
           <button
             onClick={() => setActiveSubTab('dailyReadings')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeSubTab === 'dailyReadings'
                 ? 'bg-gradient-to-r from-amber-600 to-rose-600 text-white shadow-md'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
-            Số Điện - Nước Hàng Ngày & Cảnh Báo ({meterReadings.length})
+            Điện - Nước Hàng Ngày &amp; Cảnh Báo ({meterReadings.length})
           </button>
 
           <button
             onClick={() => setActiveSubTab('power10')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeSubTab === 'power10'
                 ? 'bg-blue-600 text-white shadow'
                 : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             <Zap className="w-3.5 h-3.5" />
-            Kỳ Gần Nhất & 3 Phân Hệ
+            Chu Kỳ 10 Ngày &amp; 3 Phân Hệ ({power10Days.length})
           </button>
 
           <button
             onClick={() => setActiveSubTab('waterMonth')}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap shrink-0 ${
               activeSubTab === 'waterMonth'
                 ? 'bg-blue-600 text-white shadow'
                 : 'text-slate-400 hover:text-slate-200'
@@ -295,6 +432,20 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
           />
           <EnergyCompareDashboard powerRecords={power10Days} />
         </div>
+      )}
+
+      {/* Sub-tab 0B: Dashboard & Biểu Đồ So Sánh Hệ Thống Quản Lý Nước */}
+      {activeSubTab === 'waterDashboard' && (
+        <WaterCompareDashboard
+          waterMonthly={waterMonthly}
+          meterReadings={meterReadings}
+          onOpenWaterModal={(mode) => {
+            setEditingWaterRecord(null);
+            setWaterModalMode(mode);
+            setIsWaterModalOpen(true);
+          }}
+          onGoToWaterTable={() => setActiveSubTab('waterMonth')}
+        />
       )}
 
       {/* Sub-tab: Số Điện - Nước Hàng Ngày & Cảnh Báo Bất Thường */}
@@ -522,10 +673,231 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
               })}
             </div>
           </div>
+
+          {/* Bảng Dữ Liệu Chi Tiết Chu Kỳ 10 Ngày (Sheet Dien_10_Ngay) */}
+          <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
+            <div className="p-4 border-b border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+              <div className="flex items-start gap-2.5">
+                <span className="p-2 rounded-xl bg-blue-500/15 text-blue-400 shrink-0">
+                  <Table2 className="w-4 h-4" />
+                </span>
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-sm font-bold text-slate-100">
+                      Bảng Dữ Liệu Chi Tiết Chu Kỳ 10 Ngày ({filteredPower10Table.length} Bản Ghi)
+                    </h3>
+                    <span
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                        isAdmin
+                          ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}
+                    >
+                      {isAdmin ? (
+                        <>
+                          <ShieldCheck className="w-3 h-3 text-emerald-400" />
+                          <span>Admin Only: Được Sửa / Xóa</span>
+                        </>
+                      ) : (
+                        <>
+                          <Lock className="w-3 h-3 text-amber-400" />
+                          <span>Chỉ xem • Chỉ Admin được sửa/xóa</span>
+                        </>
+                      )}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Chi tiết EVN 3 khung giờ (BT/CĐ/TĐ), Solar (BT/CĐ), TB/ngày, 3 khu vực (Utility, Production, Office) và chi phí ước tính
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={powerSearchTerm}
+                    onChange={(e) => setPowerSearchTerm(e.target.value)}
+                    placeholder="Tìm chu kỳ, người chốt..."
+                    className="pl-8 pr-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 w-44"
+                  />
+                </div>
+
+                <select
+                  value={powerYearFilter}
+                  onChange={(e) => setPowerYearFilter(e.target.value)}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-xs text-slate-200 font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="ALL">Tất cả năm ({sortedPower.length})</option>
+                  {availablePowerYears.map((yr) => (
+                    <option key={yr} value={yr}>
+                      Năm {yr}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  onClick={handleExportPower10CSV}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition"
+                >
+                  <Download className="w-3.5 h-3.5 text-cyan-400" />
+                  Xuất CSV
+                </button>
+              </div>
+            </div>
+
+            <SmartHorizontalScroll>
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-slate-800 bg-slate-800/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
+                    <th className="py-3 px-3.5">Chu Kỳ</th>
+                    <th className="py-3 px-3.5">Thời Gian</th>
+                    <th className="py-3 px-3.5 text-center">LV / Ca</th>
+                    <th className="py-3 px-3.5 text-right">EVN BT</th>
+                    <th className="py-3 px-3.5 text-right">EVN CĐ</th>
+                    <th className="py-3 px-3.5 text-right">EVN TĐ</th>
+                    <th className="py-3 px-3.5 text-right">Tổng EVN</th>
+                    <th className="py-3 px-3.5 text-right">Solar BT</th>
+                    <th className="py-3 px-3.5 text-right">Solar CĐ</th>
+                    <th className="py-3 px-3.5 text-right">Tổng Solar</th>
+                    <th className="py-3 px-3.5 text-right">Tổng kWh</th>
+                    <th className="py-3 px-3.5 text-right">TB/Ngày</th>
+                    <th className="py-3 px-3.5 text-right">Utility</th>
+                    <th className="py-3 px-3.5 text-right">Production</th>
+                    <th className="py-3 px-3.5 text-right">Office</th>
+                    <th className="py-3 px-3.5 text-right">Chi Phí (VNĐ)</th>
+                    <th className="py-3 px-3.5">Người Chốt</th>
+                    <th className="py-3 px-3.5 text-right">Thao Tác (Admin)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 text-slate-300">
+                  {filteredPower10Table.length === 0 ? (
+                    <tr>
+                      <td colSpan={18} className="py-8 text-center text-slate-500">
+                        Không có bản ghi chu kỳ 10 ngày nào phù hợp với bộ lọc.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPower10Table.map((rec) => {
+                      const eTot = rec.evnBT + rec.evnCD + rec.evnTD;
+                      const sTot = rec.solarBT + rec.solarCD;
+                      const totalKwh = eTot + sTot;
+                      const utilTotal =
+                        rec.uChiller +
+                        rec.uMChiller +
+                        rec.uComp +
+                        rec.uPump +
+                        rec.uCooling +
+                        rec.uOther;
+                      const prodTotal = rec.pLighting + rec.pAcmv + rec.pEquipment;
+                      const offTotal =
+                        rec.oAcmv + rec.oSocket + rec.oKit + rec.oServer + rec.oLighting;
+                      const estCost =
+                        rec.evnBT * tariffConfig.evnBT +
+                        rec.evnCD * tariffConfig.evnCD +
+                        rec.evnTD * tariffConfig.evnTD +
+                        rec.solarBT * tariffConfig.evnBT +
+                        rec.solarCD * tariffConfig.evnCD;
+
+                      return (
+                        <tr key={rec.id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-3 px-3.5 font-mono font-bold text-cyan-400 whitespace-nowrap">
+                            {rec.chuKy}
+                          </td>
+                          <td className="py-3 px-3.5 font-mono text-[11px] text-slate-400 whitespace-nowrap">
+                            {rec.tuNgay} → {rec.denNgay}
+                          </td>
+                          <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-semibold text-slate-300">
+                              {rec.ngayLamViec}d • {rec.loaiCa}
+                            </span>
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono whitespace-nowrap">
+                            {rec.evnBT.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono text-amber-300 whitespace-nowrap">
+                            {rec.evnCD.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono text-emerald-300 whitespace-nowrap">
+                            {rec.evnTD.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono font-bold text-cyan-300 whitespace-nowrap">
+                            {eTot.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono whitespace-nowrap">
+                            {rec.solarBT.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono whitespace-nowrap">
+                            {rec.solarCD.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono font-bold text-amber-400 whitespace-nowrap">
+                            {sTot.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono font-extrabold text-slate-100 whitespace-nowrap">
+                            {totalKwh.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono text-slate-300 whitespace-nowrap">
+                            {rec.tbNgayKwh.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono text-cyan-400 whitespace-nowrap">
+                            {utilTotal.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono text-amber-400 whitespace-nowrap">
+                            {prodTotal.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono text-purple-400 whitespace-nowrap">
+                            {offTotal.toLocaleString()}
+                          </td>
+                          <td className="py-3 px-3.5 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
+                            {formatVND(estCost)}
+                          </td>
+                          <td className="py-3 px-3.5 text-slate-300 whitespace-nowrap text-[11px]">
+                            {rec.nguoiChot}
+                          </td>
+                          <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                            {isAdmin ? (
+                              <div className="inline-flex items-center gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingPower10Record(rec);
+                                    setIsPower10DaysModalOpen(true);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-blue-600/30 text-blue-300 border border-slate-700 hover:border-blue-500/40 text-[11px] font-semibold transition"
+                                >
+                                  <Pencil className="w-3 h-3" />
+                                  Sửa
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setConfirmDeletePowerRecord(rec)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-600/30 text-rose-300 border border-slate-700 hover:border-rose-500/40 text-[11px] font-semibold transition"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                  Xóa
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/70 text-slate-500 border border-slate-700/60 text-[10px]">
+                                <Lock className="w-3 h-3" />
+                                Chỉ Admin
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </SmartHorizontalScroll>
+          </div>
         </div>
       )}
 
-      {/* Sub-tab 2: Nước hàng tháng (Sheet 9 - Nuoc_month toàn bộ 34 tháng) */}
+      {/* Sub-tab 2: Nước hàng tháng (Sheet 9 - Nuoc_month) */}
       {activeSubTab === 'waterMonth' && (
         <div className="space-y-6">
           {/* Banner Quy Tắc 80% & Nút Thao Tác */}
@@ -535,23 +907,33 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                 Lượng nước thải được tính quy chuẩn bằng <strong className="text-emerald-400 font-bold">80%</strong> lượng nước sinh hoạt chốt theo tháng. Đơn giá: Cấp {formatVND(tariffConfig.waterVNDPerM3)}/m³ • Thải {formatVND(tariffConfig.sewageVNDPerM3)}/m³.
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveSubTab('waterDashboard')}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs shadow-sm transition whitespace-nowrap shrink-0"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+                Dashboard &amp; So Sánh Nước
+              </button>
               <button
                 onClick={() => {
+                  setEditingWaterRecord(null);
                   setWaterModalMode('daily');
                   setIsWaterModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs shadow-sm transition"
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs shadow-sm transition whitespace-nowrap shrink-0"
               >
                 <Droplet className="w-3.5 h-3.5 text-cyan-400" />
                 Chốt Số Hàng Ngày (P1-P2)
               </button>
               <button
                 onClick={() => {
+                  setEditingWaterRecord(null);
                   setWaterModalMode('monthly');
                   setIsWaterModalOpen(true);
                 }}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold text-xs shadow-sm transition"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white font-bold text-xs shadow-sm transition whitespace-nowrap shrink-0"
               >
                 <Plus className="w-4 h-4" />
                 Chốt Nước Tháng Mới
@@ -587,7 +969,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Năm 2026 (10 Tháng)
+                  Năm 2026 ({waterMonthly.filter((w) => w.month.startsWith('2026')).length} Tháng)
                 </button>
                 <button
                   type="button"
@@ -598,7 +980,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Năm 2025 (12 Tháng)
+                  Năm 2025 ({waterMonthly.filter((w) => w.month.startsWith('2025')).length} Tháng)
                 </button>
                 <button
                   type="button"
@@ -609,7 +991,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                       : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  Năm 2024 (12 Tháng)
+                  Năm 2024 ({waterMonthly.filter((w) => w.month.startsWith('2024')).length} Tháng)
                 </button>
               </div>
             </div>
@@ -742,7 +1124,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
 
           {/* Full Table */}
           <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
-            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+            <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div>
                 <h3 className="text-sm font-bold text-slate-100">
                   Bảng Dữ Liệu Chi Tiết Sheet Nuoc_month ({filteredWaterMonthly.length} Bản Ghi)
@@ -751,6 +1133,25 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                   Đầy đủ dữ liệu nước cấp, nước thải quy chuẩn 80%, thành tiền VNĐ và quy đổi USD
                 </p>
               </div>
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border self-start sm:self-auto ${
+                  isAdmin
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {isAdmin ? (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Admin Only: Được Sửa / Xóa</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Chỉ Admin được sửa/xóa</span>
+                  </>
+                )}
+              </span>
             </div>
 
             <SmartHorizontalScroll>
@@ -765,6 +1166,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                     <th className="py-3 px-4 text-right">Phí Nước Thải (VNĐ)</th>
                     <th className="py-3 px-4 text-right">Phí Nước Thải (USD)</th>
                     <th className="py-3 px-4 text-right">Tổng Chi Phí Nước (VNĐ)</th>
+                    <th className="py-3 px-4 text-right">Thao Tác (Admin)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-300">
@@ -797,6 +1199,39 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                         <td className="py-3.5 px-4 text-right font-mono font-bold text-cyan-300">
                           {formatVND(totalMonthCost)}
                         </td>
+                        <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                          {isAdmin ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingWaterRecord(w);
+                                  setWaterModalMode('monthly');
+                                  setIsWaterModalOpen(true);
+                                }}
+                                title="Chỉnh sửa dữ liệu nước tháng (Admin Only)"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-blue-600/30 text-blue-300 border border-slate-700 hover:border-blue-500/40 text-[11px] font-semibold transition"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                Sửa
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteWaterMonth(w.month)}
+                                title="Xóa bản ghi nước tháng (Admin Only)"
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-600/30 text-rose-300 border border-slate-700 hover:border-rose-500/40 text-[11px] font-semibold transition"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Xóa
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/70 text-slate-500 border border-slate-700/60 text-[10px]">
+                              <Lock className="w-3 h-3" />
+                              Chỉ Admin
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -815,19 +1250,110 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
 
       <Power10DaysModal
         isOpen={isPower10DaysModalOpen}
-        onClose={() => setIsPower10DaysModalOpen(false)}
+        editingRecord={editingPower10Record}
+        onClose={() => {
+          setIsPower10DaysModalOpen(false);
+          setEditingPower10Record(null);
+        }}
       />
 
       <WaterRecordingModal
         isOpen={isWaterModalOpen}
         initialMode={waterModalMode}
-        onClose={() => setIsWaterModalOpen(false)}
+        editingRecord={editingWaterRecord}
+        onClose={() => {
+          setIsWaterModalOpen(false);
+          setEditingWaterRecord(null);
+        }}
       />
 
       <TariffConfigModal
         isOpen={isTariffModalOpen}
         onClose={() => setIsTariffModalOpen(false)}
       />
+
+      {/* Admin Confirm Delete Power 10 Days */}
+      {confirmDeletePowerRecord && isAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-sm font-bold text-slate-100">
+                  Xác Nhận Xóa Chu Kỳ 10 Ngày (Admin Only)
+                </h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Bạn có chắc muốn xóa bản ghi chu kỳ{' '}
+                  <strong className="font-mono text-cyan-300">{confirmDeletePowerRecord.chuKy}</strong> (
+                  {confirmDeletePowerRecord.tuNgay} → {confirmDeletePowerRecord.denNgay})?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmDeletePowerRecord(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deletePower10DaysRecord(confirmDeletePowerRecord.id);
+                  setConfirmDeletePowerRecord(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow"
+              >
+                Xác Nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Confirm Delete Water Monthly */}
+      {confirmDeleteWaterMonth && isAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-sm font-bold text-slate-100">
+                  Xác Nhận Xóa Nước Tháng (Admin Only)
+                </h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Bạn có chắc muốn xóa bản ghi nước tháng{' '}
+                  <strong className="font-mono text-cyan-300">{confirmDeleteWaterMonth}</strong>?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteWaterMonth(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteWaterMonthlyRecord(confirmDeleteWaterMonth);
+                  setConfirmDeleteWaterMonth(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow"
+              >
+                Xác Nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

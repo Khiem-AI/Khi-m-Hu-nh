@@ -66,6 +66,7 @@ import {
   getInspectionDaysRemaining,
   isPlaceholderEmail,
   isValidEmailFormat,
+  isAdminLevel,
 } from '../utils/cmmsLogic';
 import {
   GmailAccountInfo,
@@ -106,8 +107,10 @@ import {
   sanitizeToolItem,
   sanitizeToolLog,
   sanitizeWaterMonthly,
+  WATER_MONTHLY_SEED_VERSION,
   seedOrPushWorkspaceToFirestore,
   subscribeCloudCollection,
+  syncWaterMonthlySeedToFirestoreIfNeeded,
   upsertCloudDoc,
 } from '../utils/firestoreSync';
 
@@ -208,10 +211,14 @@ interface CMMSContextType {
   // Power & Water Actions
   addPower10DaysRecord: (record: Omit<Power10Days, 'id'>) => void;
   updatePower10DaysRecord: (record: Power10Days) => void;
+  deletePower10DaysRecord: (id: string) => void;
   addWaterMonthlyRecord: (record: WaterMonthly) => void;
   updateWaterMonthlyRecord: (record: WaterMonthly) => void;
+  deleteWaterMonthlyRecord: (month: string) => void;
   addMeterReading: (reading: Omit<MeterReading, 'id' | 'tieuThu'>) => void;
   addBatchMeterReadings: (readings: Omit<MeterReading, 'id' | 'tieuThu'>[]) => void;
+  updateMeterReading: (reading: MeterReading) => void;
+  deleteMeterReading: (id: string) => void;
 
   // Energy Tariff & Exchange Rates
   tariffConfig: EnergyTariffConfig;
@@ -416,7 +423,18 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [stockTransactions, setStockTransactions] = useState<StockTransaction[]>(() => loadStorage('stockTransactions', INITIAL_STOCK_TRANSACTIONS));
   const [power10Days, setPower10Days] = useState<Power10Days[]>(() => loadStorage('power10Days', INITIAL_POWER_10DAYS));
   const [costRecords, setCostRecords] = useState<CostRecord[]>(() => loadStorage('costRecords', INITIAL_COST_RECORDS));
-  const [waterMonthly, setWaterMonthly] = useState<WaterMonthly[]>(() => loadStorage('waterMonthly', INITIAL_WATER_MONTHLY));
+  const [waterMonthly, setWaterMonthly] = useState<WaterMonthly[]>(() => {
+    try {
+      const seedVer = localStorage.getItem('cmms_water_monthly_seed_version');
+      if (seedVer !== WATER_MONTHLY_SEED_VERSION) {
+        localStorage.setItem('cmms_water_monthly_seed_version', WATER_MONTHLY_SEED_VERSION);
+        return INITIAL_WATER_MONTHLY;
+      }
+    } catch {
+      // ignore localStorage access error
+    }
+    return loadStorage('waterMonthly', INITIAL_WATER_MONTHLY);
+  });
   const [employees, setEmployees] = useState<Employee[]>(() => {
     const loaded = loadStorage('employees', INITIAL_EMPLOYEES);
     const initByCode = new Map(
@@ -821,6 +839,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
             latestSnapshotRef.current,
             { knownCloudIds: knownCloudIdsRef.current }
           );
+          const waterSeedUpdated = await syncWaterMonthlySeedToFirestoreIfNeeded(
+            fbUser.uid,
+            fbUser.email,
+            INITIAL_WATER_MONTHLY,
+            latestSnapshotRef.current.employees,
+            knownCloudIdsRef.current
+          );
+          if (waterSeedUpdated && !cancelled) {
+            setWaterMonthly([...INITIAL_WATER_MONTHLY].sort((a, b) => b.month.localeCompare(a.month)));
+          }
           if (cancelled) return;
           workspaceReadyRef.current = true;
         } catch (err) {
@@ -1673,9 +1701,18 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updatePower10DaysRecord = (record: Power10Days) => {
+    if (!isAdminLevel(currentUserRef.current)) return;
     setPower10Days((prev) => prev.map((r) => (r.id === record.id ? record : r)));
     syncDoc('power_10days', record.id, sanitizePower10Days(record));
     addAuditLog('Sửa', 'Điện 10 Ngày', record.chuKy, `Cập nhật số liệu điện chu kỳ: ${record.chuKy}`);
+  };
+
+  const deletePower10DaysRecord = (id: string) => {
+    if (!isAdminLevel(currentUserRef.current)) return;
+    const target = power10Days.find((r) => r.id === id);
+    setPower10Days((prev) => prev.filter((r) => r.id !== id));
+    removeDocCloud('power_10days', id);
+    addAuditLog('Xóa', 'Điện 10 Ngày', target?.chuKy || id, `Xóa bản ghi chu kỳ điện 10 ngày: ${target?.chuKy || id}`);
   };
 
   // Water Monthly Actions
@@ -1686,9 +1723,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateWaterMonthlyRecord = (record: WaterMonthly) => {
+    if (!isAdminLevel(currentUserRef.current)) return;
     setWaterMonthly((prev) => prev.map((r) => (r.month === record.month ? record : r)));
     syncDoc('water_monthly', record.month, sanitizeWaterMonthly(record));
     addAuditLog('Sửa', 'Nước Tháng', record.month, `Cập nhật số liệu nước tháng: ${record.month}`);
+  };
+
+  const deleteWaterMonthlyRecord = (month: string) => {
+    if (!isAdminLevel(currentUserRef.current)) return;
+    setWaterMonthly((prev) => prev.filter((r) => r.month !== month));
+    removeDocCloud('water_monthly', month);
+    addAuditLog('Xóa', 'Nước Tháng', month, `Xóa bản ghi nước tháng: ${month}`);
   };
 
   // Meter Reading Actions (auto consumption calculation)
@@ -1726,6 +1771,36 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'Chốt Điện Nước',
       `${readingsData.length} đồng hồ`,
       `Chốt số đồng loạt ${readingsData.length} đồng hồ cho ngày ${readingsData[0]?.ngayChot || 'hôm nay'}`
+    );
+  };
+
+  const updateMeterReading = (reading: MeterReading) => {
+    if (!isAdminLevel(currentUserRef.current)) return;
+    const consumption = calculateMeterConsumption(reading.chiSoCu, reading.chiSoMoi);
+    const normalized: MeterReading = {
+      ...reading,
+      tieuThu: consumption,
+    };
+    setMeterReadings((prev) => prev.map((r) => (r.id === normalized.id ? normalized : r)));
+    syncDoc('meter_readings', normalized.id, sanitizeMeterReading(normalized));
+    addAuditLog(
+      'Sửa',
+      'Chốt Điện Nước',
+      normalized.tenDongHo,
+      `Admin cập nhật chỉ số ${normalized.tenDongHo} (${normalized.ngayChot}): Cũ ${normalized.chiSoCu} -> Mới ${normalized.chiSoMoi} (Tiêu thụ ${consumption} ${normalized.donVi})`
+    );
+  };
+
+  const deleteMeterReading = (id: string) => {
+    if (!isAdminLevel(currentUserRef.current)) return;
+    const target = meterReadings.find((r) => r.id === id);
+    setMeterReadings((prev) => prev.filter((r) => r.id !== id));
+    removeDocCloud('meter_readings', id);
+    addAuditLog(
+      'Xóa',
+      'Chốt Điện Nước',
+      target?.tenDongHo || id,
+      `Admin xóa bản ghi chỉ số ${target?.tenDongHo || id} (${target?.ngayChot || ''})`
     );
   };
 
@@ -3110,10 +3185,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         createStockTransaction,
         addPower10DaysRecord,
         updatePower10DaysRecord,
+        deletePower10DaysRecord,
         addWaterMonthlyRecord,
         updateWaterMonthlyRecord,
+        deleteWaterMonthlyRecord,
         addMeterReading,
         addBatchMeterReadings,
+        updateMeterReading,
+        deleteMeterReading,
         tariffConfig,
         updateTariffConfig,
         addCostRecord,

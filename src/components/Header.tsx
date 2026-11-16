@@ -31,6 +31,8 @@ import {
   CloudOff,
   RefreshCw,
   UserCircle,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -39,6 +41,8 @@ interface HeaderProps {
   onToggleMobileNav: () => void;
   isMobileNavOpen: boolean;
   onNavigateTab: (tabId: string) => void;
+  isDesktopSidebarPinned?: boolean;
+  onToggleDesktopSidebarPin?: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -47,6 +51,8 @@ export const Header: React.FC<HeaderProps> = ({
   onToggleMobileNav,
   isMobileNavOpen,
   onNavigateTab,
+  isDesktopSidebarPinned = true,
+  onToggleDesktopSidebarPin,
 }) => {
   const {
     currentUser,
@@ -172,7 +178,7 @@ export const Header: React.FC<HeaderProps> = ({
   return (
     <header className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/90 backdrop-blur-md transition-colors shadow-xs">
       <div className="flex h-16 items-center justify-between px-3 sm:px-6 gap-4">
-        {/* Left: Mobile hamburger & Brand */}
+        {/* Left: Mobile hamburger, Desktop sidebar toggle & Brand */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={onToggleMobileNav}
@@ -181,6 +187,34 @@ export const Header: React.FC<HeaderProps> = ({
           >
             {isMobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
+
+          {onToggleDesktopSidebarPin && (
+            <button
+              type="button"
+              onClick={onToggleDesktopSidebarPin}
+              aria-label={
+                isDesktopSidebarPinned
+                  ? 'Bật tự động ẩn thanh menu trái'
+                  : 'Ghim cố định thanh menu trái'
+              }
+              title={
+                isDesktopSidebarPinned
+                  ? 'Tự động ẩn menu trái (tối ưu không gian)'
+                  : 'Đang tự động ẩn menu • Bấm để ghim cố định'
+              }
+              className={`hidden lg:inline-flex items-center justify-center p-2 rounded-xl border transition shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
+                isDesktopSidebarPinned
+                  ? 'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/60 border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100 dark:hover:bg-cyan-900/60'
+              }`}
+            >
+              {isDesktopSidebarPinned ? (
+                <PanelLeftClose className="w-5 h-5" />
+              ) : (
+                <PanelLeftOpen className="w-5 h-5" />
+              )}
+            </button>
+          )}
 
           <div
             onClick={() => onNavigateTab('dashboard')}

@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Power10Days } from '../../types/cmms';
 import { useCMMS } from '../../context/CMMSContext';
-import { formatVND } from '../../utils/cmmsLogic';
+import { formatVND, isAdminLevel } from '../../utils/cmmsLogic';
 import { TariffConfigModal } from './TariffConfigModal';
+import { Power10DaysModal } from './Power10DaysModal';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Zap,
@@ -25,6 +26,11 @@ import {
   Cpu,
   Factory,
   Building2,
+  Pencil,
+  Trash2,
+  Lock,
+  ShieldCheck,
+  Table2,
 } from 'lucide-react';
 
 interface EnergyCompareDashboardProps {
@@ -155,8 +161,11 @@ function getOperatingHours(r: Power10Days): number {
 }
 
 export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ powerRecords }) => {
-  const { tariffConfig } = useCMMS();
+  const { tariffConfig, currentUser, deletePower10DaysRecord } = useCMMS();
+  const isAdmin = isAdminLevel(currentUser);
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
+  const [editingPowerRecord, setEditingPowerRecord] = useState<Power10Days | null>(null);
+  const [confirmDeleteRecord, setConfirmDeleteRecord] = useState<Power10Days | null>(null);
 
   // EVN cost only
   const estimateEvnCost = (bt: number, cd: number, td: number): number => {
@@ -2251,6 +2260,39 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
 
           {/* Filtered Data Table */}
           <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
+            <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-slate-900/90">
+              <div className="flex items-center gap-2">
+                <Table2 className="w-4 h-4 text-cyan-400 shrink-0" />
+                <div>
+                  <h4 className="text-sm font-bold text-slate-100">
+                    Bảng Dữ Liệu Chi Tiết Chu Kỳ 10 Ngày ({filteredList.length} Kỳ)
+                  </h4>
+                  <p className="text-[11px] text-slate-400">
+                    Đối soát sản lượng EVN, Solar, hiệu suất kWh/giờ và chi phí từng chu kỳ 10 ngày
+                  </p>
+                </div>
+              </div>
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border self-start sm:self-auto ${
+                  isAdmin
+                    ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                    : 'bg-slate-800 text-slate-400 border-slate-700'
+                }`}
+              >
+                {isAdmin ? (
+                  <>
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Admin: Được Sửa / Xóa</span>
+                  </>
+                ) : (
+                  <>
+                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Chỉ Admin được sửa/xóa</span>
+                  </>
+                )}
+              </span>
+            </div>
+
             <SmartHorizontalScroll>
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
@@ -2265,6 +2307,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                     <th className="py-3 px-3.5 text-right">Tổng Chi Phí (EVN+Solar)</th>
                     <th className="py-3 px-3.5 text-right">Chi Phí / 1 Giờ</th>
                     <th className="py-3 px-3.5">Người Chốt</th>
+                    <th className="py-3 px-3.5 text-right">Thao Tác (Admin)</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-300">
@@ -2311,12 +2354,39 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                         <td className="py-3 px-3.5 text-slate-400 whitespace-nowrap text-[11px]">
                           {r.nguoiChot}
                         </td>
+                        <td className="py-3 px-3.5 text-right whitespace-nowrap">
+                          {isAdmin ? (
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => setEditingPowerRecord(r)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-blue-600/30 text-blue-300 border border-slate-700 hover:border-blue-500/40 text-[11px] font-semibold transition"
+                              >
+                                <Pencil className="w-3 h-3" />
+                                Sửa
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteRecord(r)}
+                                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-600/30 text-rose-300 border border-slate-700 hover:border-rose-500/40 text-[11px] font-semibold transition"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                                Xóa
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/70 text-slate-500 border border-slate-700/60 text-[10px]">
+                              <Lock className="w-3 h-3" />
+                              Chỉ Admin
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
                   {filteredList.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="py-8 text-center text-slate-500 text-xs">
+                      <td colSpan={11} className="py-8 text-center text-slate-500 text-xs">
                         Không tìm thấy dữ liệu chu kỳ phù hợp với bộ lọc đã chọn.
                       </td>
                     </tr>
@@ -2333,6 +2403,55 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
         isOpen={isTariffModalOpen}
         onClose={() => setIsTariffModalOpen(false)}
       />
+
+      {/* Modal Chỉnh Sửa Chu Kỳ 10 Ngày (Admin Only) */}
+      <Power10DaysModal
+        isOpen={Boolean(editingPowerRecord)}
+        editingRecord={editingPowerRecord}
+        onClose={() => setEditingPowerRecord(null)}
+      />
+
+      {/* Xác Nhận Xóa Chu Kỳ 10 Ngày (Admin Only) */}
+      {confirmDeleteRecord && isAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-sm font-bold text-slate-100">
+                  Xác Nhận Xóa Chu Kỳ 10 Ngày (Admin Only)
+                </h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Bạn có chắc muốn xóa dữ liệu chu kỳ{' '}
+                  <strong className="font-mono text-cyan-300">{confirmDeleteRecord.chuKy}</strong> (
+                  {confirmDeleteRecord.tuNgay} → {confirmDeleteRecord.denNgay})?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteRecord(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deletePower10DaysRecord(confirmDeleteRecord.id);
+                  setConfirmDeleteRecord(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow"
+              >
+                Xác Nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

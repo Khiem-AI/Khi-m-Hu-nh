@@ -22,6 +22,10 @@ import {
   ShieldCheck,
   UserCircle,
   X,
+  Pin,
+  PinOff,
+  PanelLeftClose,
+  ChevronRight,
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -29,6 +33,10 @@ interface NavigationProps {
   onSelectTab: (tabId: string) => void;
   isMobileOpen: boolean;
   onCloseMobile: () => void;
+  isDesktopPinned?: boolean;
+  onToggleDesktopPin?: () => void;
+  isDesktopHoverOpen?: boolean;
+  onDesktopHoverChange?: (open: boolean) => void;
 }
 
 export const Navigation: React.FC<NavigationProps> = ({
@@ -36,8 +44,48 @@ export const Navigation: React.FC<NavigationProps> = ({
   onSelectTab,
   isMobileOpen,
   onCloseMobile,
+  isDesktopPinned = true,
+  onToggleDesktopPin,
+  isDesktopHoverOpen = false,
+  onDesktopHoverChange,
 }) => {
   const { maintenancePlans, tickets, spareParts, projects, safetyInspections, tools, currentUser } = useCMMS();
+  const hoverCloseTimerRef = React.useRef<number | null>(null);
+
+  const clearHoverTimer = React.useCallback(() => {
+    if (hoverCloseTimerRef.current !== null) {
+      window.clearTimeout(hoverCloseTimerRef.current);
+      hoverCloseTimerRef.current = null;
+    }
+  }, []);
+
+  const handleOpenDesktopHover = React.useCallback(() => {
+    clearHoverTimer();
+    onDesktopHoverChange?.(true);
+  }, [clearHoverTimer, onDesktopHoverChange]);
+
+  const handleScheduleCloseDesktopHover = React.useCallback(() => {
+    clearHoverTimer();
+    hoverCloseTimerRef.current = window.setTimeout(() => {
+      onDesktopHoverChange?.(false);
+    }, 220);
+  }, [clearHoverTimer, onDesktopHoverChange]);
+
+  React.useEffect(() => {
+    return () => clearHoverTimer();
+  }, [clearHoverTimer]);
+
+  React.useEffect(() => {
+    if (isDesktopPinned || !isDesktopHoverOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        clearHoverTimer();
+        onDesktopHoverChange?.(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDesktopPinned, isDesktopHoverOpen, clearHoverTimer, onDesktopHoverChange]);
 
   const overdueCount = maintenancePlans.filter((p) => p.trangThai === 'Quá hạn').length;
   const dueInspectionsCount = safetyInspections.filter((item) => {
@@ -220,8 +268,17 @@ export const Navigation: React.FC<NavigationProps> = ({
     (item) => allowedViewIds.includes(item.id) && (!item.adminOnly || adminAccess)
   );
 
+  const handleItemSelect = (tabId: string) => {
+    onSelectTab(tabId);
+    onCloseMobile();
+    if (!isDesktopPinned) {
+      clearHoverTimer();
+      onDesktopHoverChange?.(false);
+    }
+  };
+
   const content = (
-    <div className="flex h-full flex-col justify-between py-4 px-3 space-y-4">
+    <div className="flex min-h-full flex-col justify-between py-4 px-3 space-y-4">
       {/* Nav List */}
       <div className="space-y-1">
         <div className="px-3 py-1.5 text-[11px] font-bold tracking-wide text-slate-500 dark:text-slate-400 flex items-center justify-between">
@@ -237,11 +294,8 @@ export const Navigation: React.FC<NavigationProps> = ({
           return (
             <button
               key={item.id}
-              onClick={() => {
-                onSelectTab(item.id);
-                onCloseMobile();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition group ${
+              onClick={() => handleItemSelect(item.id)}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
                 isActive
                   ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold shadow-md shadow-cyan-900/20'
                   : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/90'
@@ -286,11 +340,8 @@ export const Navigation: React.FC<NavigationProps> = ({
       {/* User Status Card - Clickable shortcut to Profile */}
       <button
         type="button"
-        onClick={() => {
-          onSelectTab('profile');
-          onCloseMobile();
-        }}
-        className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800 text-xs space-y-1 transition"
+        onClick={() => handleItemSelect('profile')}
+        className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800 text-xs space-y-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
         title="Mở Hồ Sơ Cá Nhân (Profile)"
       >
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
@@ -309,12 +360,108 @@ export const Navigation: React.FC<NavigationProps> = ({
     </div>
   );
 
+  const desktopPinHeader = (
+    <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 shrink-0">
+      <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 truncate">
+        {isDesktopPinned ? 'Menu đang ghim' : 'Menu tự động ẩn'}
+      </span>
+      <div className="flex items-center gap-1 shrink-0">
+        {onToggleDesktopPin && (
+          <button
+            type="button"
+            onClick={() => {
+              clearHoverTimer();
+              onToggleDesktopPin();
+            }}
+            title={
+              isDesktopPinned
+                ? 'Bỏ ghim để tự động ẩn menu trái (tối ưu không gian)'
+                : 'Ghim cố định menu bên trái'
+            }
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
+              isDesktopPinned
+                ? 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800'
+                : 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-xs'
+            }`}
+          >
+            {isDesktopPinned ? (
+              <>
+                <PinOff className="w-3.5 h-3.5" />
+                <span>Tự ẩn</span>
+              </>
+            ) : (
+              <>
+                <Pin className="w-3.5 h-3.5" />
+                <span>Ghim</span>
+              </>
+            )}
+          </button>
+        )}
+        {!isDesktopPinned && (
+          <button
+            type="button"
+            onClick={() => {
+              clearHoverTimer();
+              onDesktopHoverChange?.(false);
+            }}
+            aria-label="Thu gọn menu ngay"
+            title="Thu gọn menu ngay"
+            className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+          >
+            <PanelLeftClose className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <>
-      {/* Desktop Persistent Sidebar */}
-      <aside className="hidden lg:block w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 min-h-[calc(100vh-4rem)]">
-        {content}
-      </aside>
+      {/* Desktop Pinned Persistent Sidebar */}
+      {isDesktopPinned ? (
+        <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 sticky top-16 h-[calc(100vh-4rem)]">
+          {desktopPinHeader}
+          <div className="flex-1 overflow-y-auto">{content}</div>
+        </aside>
+      ) : (
+        <>
+          {/* Left-edge hover trigger zone when desktop sidebar is auto-hidden */}
+          {!isDesktopHoverOpen && (
+            <>
+              <div
+                onMouseEnter={handleOpenDesktopHover}
+                aria-hidden="true"
+                className="hidden lg:block fixed left-0 top-16 bottom-0 w-3.5 z-30"
+              />
+              <button
+                type="button"
+                onMouseEnter={handleOpenDesktopHover}
+                onClick={handleOpenDesktopHover}
+                aria-label="Hiện thanh menu bên trái"
+                title="Di chuột hoặc bấm để mở thanh menu"
+                className="hidden lg:flex fixed left-0 top-28 z-30 items-center justify-center w-6 h-12 rounded-r-xl bg-white/95 dark:bg-slate-900/95 border border-l-0 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:w-7 hover:text-cyan-600 dark:hover:text-cyan-400 shadow-md transition-[width,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </>
+          )}
+
+          {/* Desktop Auto-Hide Floating Drawer */}
+          <aside
+            onMouseEnter={handleOpenDesktopHover}
+            onMouseLeave={handleScheduleCloseDesktopHover}
+            aria-hidden={!isDesktopHoverOpen}
+            className={`hidden lg:flex lg:flex-col fixed left-0 top-16 bottom-0 w-64 z-40 border-r border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl transition-transform duration-200 ease-out ${
+              isDesktopHoverOpen
+                ? 'translate-x-0 pointer-events-auto'
+                : '-translate-x-full pointer-events-none'
+            }`}
+          >
+            {desktopPinHeader}
+            <div className="flex-1 overflow-y-auto">{content}</div>
+          </aside>
+        </>
+      )}
 
       {/* Mobile Drawer */}
       {isMobileOpen && (

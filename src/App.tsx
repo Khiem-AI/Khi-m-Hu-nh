@@ -44,6 +44,27 @@ function CMMSApp() {
   const { theme, isAuthenticated, currentUser } = useCMMS();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isDesktopSidebarPinned, setIsDesktopSidebarPinned] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('cmms_desktop_sidebar_pinned') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+  const [isDesktopSidebarHoverOpen, setIsDesktopSidebarHoverOpen] = useState(false);
+
+  const handleToggleDesktopSidebarPin = () => {
+    setIsDesktopSidebarPinned((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('cmms_desktop_sidebar_pinned', String(next));
+      } catch {
+        // Ignore storage errors in restricted environments
+      }
+      setIsDesktopSidebarHoverOpen(false);
+      return next;
+    });
+  };
 
   // Modal states
   const [selectedQRForEquipment, setSelectedQRForEquipment] = useState<Equipment | null>(null);
@@ -170,19 +191,29 @@ function CMMSApp() {
         onToggleMobileNav={() => setIsMobileNavOpen(!isMobileNavOpen)}
         isMobileNavOpen={isMobileNavOpen}
         onNavigateTab={handleNavigateTab}
+        isDesktopSidebarPinned={isDesktopSidebarPinned}
+        onToggleDesktopSidebarPin={handleToggleDesktopSidebarPin}
       />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-x-clip">
         {/* Navigation Sidebar */}
         <Navigation
           activeTab={activeTab}
           onSelectTab={handleNavigateTab}
           isMobileOpen={isMobileNavOpen}
           onCloseMobile={() => setIsMobileNavOpen(false)}
+          isDesktopPinned={isDesktopSidebarPinned}
+          onToggleDesktopPin={handleToggleDesktopSidebarPin}
+          isDesktopHoverOpen={isDesktopSidebarHoverOpen}
+          onDesktopHoverChange={setIsDesktopSidebarHoverOpen}
         />
 
         {/* Main Workspace Area */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto max-w-7xl mx-auto w-full">
+        <main
+          className={`flex-1 p-4 sm:p-6 overflow-y-auto mx-auto w-full transition-[max-width,padding] duration-200 ${
+            isDesktopSidebarPinned ? 'lg:p-8 max-w-7xl' : 'lg:py-7 lg:px-10 max-w-[1600px]'
+          }`}
+        >
           {activeTab === 'dashboard' && (
             <DashboardTab
               onOpenScanner={() => setIsScannerOpen(true)}

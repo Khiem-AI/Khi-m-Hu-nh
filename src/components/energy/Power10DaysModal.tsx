@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { Power10Days } from '../../types/cmms';
+import { isAdminLevel } from '../../utils/cmmsLogic';
 import { NumericInput } from '../common/NumericInput';
 import {
   X,
@@ -8,23 +9,27 @@ import {
   Sun,
   CheckCircle2,
   AlertTriangle,
-  Calendar,
   User,
-  Layers,
   Building2,
   Factory,
   Cpu,
-  BarChart3,
-  HelpCircle,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface Power10DaysModalProps {
   isOpen: boolean;
   onClose: () => void;
+  editingRecord?: Power10Days | null;
 }
 
-export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({ isOpen, onClose }) => {
-  const { currentUser, addPower10DaysRecord, power10Days } = useCMMS();
+export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({
+  isOpen,
+  onClose,
+  editingRecord = null,
+}) => {
+  const { currentUser, addPower10DaysRecord, updatePower10DaysRecord } = useCMMS();
+  const isAdmin = isAdminLevel(currentUser);
+  const isEditMode = Boolean(editingRecord && isAdmin);
 
   // Đề xuất chu kỳ mới nhất tiếp theo
   const nextPeriodSuggestion = useMemo(() => {
@@ -91,6 +96,65 @@ export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({ isOpen, onCl
   const [errorMsg, setErrorMsg] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    setErrorMsg('');
+    setSavedSuccess(false);
+    if (editingRecord) {
+      setChuKy(editingRecord.chuKy);
+      setTuNgay(editingRecord.tuNgay);
+      setDenNgay(editingRecord.denNgay);
+      setNgayLamViec(editingRecord.ngayLamViec);
+      setLoaiCa(editingRecord.loaiCa);
+      setNguoiChot(editingRecord.nguoiChot || currentUser.tenNhanVien || 'Khiêm Huỳnh');
+      setEvnBT(editingRecord.evnBT);
+      setEvnCD(editingRecord.evnCD);
+      setEvnTD(editingRecord.evnTD);
+      setSolarBT(editingRecord.solarBT);
+      setSolarCD(editingRecord.solarCD);
+      setUChiller(editingRecord.uChiller);
+      setUMChiller(editingRecord.uMChiller);
+      setUComp(editingRecord.uComp);
+      setUPump(editingRecord.uPump);
+      setUCooling(editingRecord.uCooling);
+      setUOther(editingRecord.uOther);
+      setPLighting(editingRecord.pLighting);
+      setPAcmv(editingRecord.pAcmv);
+      setPEquipment(editingRecord.pEquipment);
+      setOAcmv(editingRecord.oAcmv);
+      setOSocket(editingRecord.oSocket);
+      setOKit(editingRecord.oKit);
+      setOServer(editingRecord.oServer);
+      setOLighting(editingRecord.oLighting);
+    } else {
+      setChuKy(nextPeriodSuggestion.chuKy);
+      setTuNgay(nextPeriodSuggestion.tuNgay);
+      setDenNgay(nextPeriodSuggestion.denNgay);
+      setNgayLamViec(10);
+      setLoaiCa('Ca 2');
+      setNguoiChot(currentUser.tenNhanVien || 'Khiêm Huỳnh');
+      setEvnBT(75000);
+      setEvnCD(32000);
+      setEvnTD(18000);
+      setSolarBT(24000);
+      setSolarCD(11000);
+      setUChiller(42000);
+      setUMChiller(4500);
+      setUComp(21500);
+      setUPump(8500);
+      setUCooling(6800);
+      setUOther(2200);
+      setPLighting(5400);
+      setPAcmv(18500);
+      setPEquipment(31200);
+      setOAcmv(5800);
+      setOSocket(3200);
+      setOKit(1800);
+      setOServer(5200);
+      setOLighting(3500);
+    }
+  }, [isOpen, editingRecord, nextPeriodSuggestion, currentUser.tenNhanVien]);
+
   if (!isOpen) return null;
 
   // Tính tổng EVN, Solar & Chu kỳ
@@ -117,19 +181,24 @@ export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({ isOpen, onCl
     e.preventDefault();
     setErrorMsg('');
 
+    if (editingRecord && !isAdmin) {
+      setErrorMsg('Chỉ tài khoản Admin mới có quyền chỉnh sửa dữ liệu chu kỳ 10 ngày.');
+      return;
+    }
+
     if (grandTotal <= 0) {
       setErrorMsg('Tổng sản lượng điện chu kỳ phải lớn hơn 0 kWh!');
       return;
     }
 
     const now = new Date();
-    const thoiGianLuu = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    const thoiGianLuu = editingRecord?.thoiGianLuu || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
       now.getDate()
     ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(
       now.getMinutes()
     ).padStart(2, '0')}`;
 
-    const newRecord: Omit<Power10Days, 'id'> = {
+    const payload: Omit<Power10Days, 'id'> = {
       thoiGianLuu,
       chuKy,
       tuNgay,
@@ -159,12 +228,17 @@ export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({ isOpen, onCl
       nguoiChot,
     };
 
-    addPower10DaysRecord(newRecord);
+    if (editingRecord && isAdmin) {
+      updatePower10DaysRecord({ ...editingRecord, ...payload });
+    } else {
+      addPower10DaysRecord(payload);
+    }
+
     setSavedSuccess(true);
     setTimeout(() => {
       setSavedSuccess(false);
       onClose();
-    }, 1000);
+    }, 900);
   };
 
   return (
@@ -177,11 +251,21 @@ export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({ isOpen, onCl
               <Zap className="w-5 h-5" />
             </span>
             <div>
-              <h3 className="font-bold text-slate-100 text-base">
-                Chốt Chỉ Số Điện Chu Kỳ 10 Ngày (Sheet Dien_10_Ngay)
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-100 text-base">
+                  {isEditMode
+                    ? `Chỉnh Sửa Số Điện Chu Kỳ 10 Ngày (${editingRecord?.chuKy})`
+                    : 'Chốt Chỉ Số Điện Chu Kỳ 10 Ngày (Sheet Dien_10_Ngay)'}
+                </h3>
+                {isEditMode && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                    <ShieldCheck className="w-3 h-3" />
+                    Admin Only
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400">
-                EVN & Solar theo khung giờ (BT, CĐ, TĐ) • 3 Phân hệ: Utility, Production, Office
+                EVN &amp; Solar theo khung giờ (BT, CĐ, TĐ) • 3 Phân hệ: Utility, Production, Office
               </p>
             </div>
           </div>
@@ -272,18 +356,36 @@ export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({ isOpen, onCl
                 </select>
               </div>
 
-              {/* Người chốt số: Tự động lấy tài khoản đang đăng nhập */}
-              <div className="col-span-2 sm:col-span-6 flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 text-xs">
-                <div className="flex items-center gap-2 truncate">
-                  <User className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="text-slate-400">Người chốt số (Tài khoản đăng nhập):</span>
-                  <span className="font-bold text-slate-100">{currentUser.tenNhanVien}</span>
-                  <span className="text-[11px] text-slate-400">({currentUser.chucVu})</span>
+              {/* Người chốt số */}
+              {isEditMode ? (
+                <div className="col-span-2 sm:col-span-6 flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-900/90 border border-amber-500/30 text-xs">
+                  <div className="flex items-center gap-2 flex-1">
+                    <User className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <span className="text-slate-400 shrink-0">Người chốt số:</span>
+                    <input
+                      type="text"
+                      value={nguoiChot}
+                      onChange={(e) => setNguoiChot(e.target.value)}
+                      className="flex-1 max-w-xs px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-amber-500 outline-none"
+                    />
+                  </div>
+                  <span className="text-[11px] text-amber-300 font-semibold shrink-0">
+                    Đang sửa bởi Admin: {currentUser.tenNhanVien} ({currentUser.maNhanVien})
+                  </span>
                 </div>
-                <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-bold border border-slate-700 shrink-0 ml-2">
-                  {currentUser.maNhanVien}
-                </span>
-              </div>
+              ) : (
+                <div className="col-span-2 sm:col-span-6 flex items-center justify-between p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 text-xs">
+                  <div className="flex items-center gap-2 truncate">
+                    <User className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-slate-400">Người chốt số (Tài khoản đăng nhập):</span>
+                    <span className="font-bold text-slate-100">{currentUser.tenNhanVien}</span>
+                    <span className="text-[11px] text-slate-400">({currentUser.chucVu})</span>
+                  </div>
+                  <span className="font-mono text-[11px] px-2 py-0.5 rounded bg-slate-800 text-cyan-300 font-bold border border-slate-700 shrink-0 ml-2">
+                    {currentUser.maNhanVien}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -661,7 +763,7 @@ export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({ isOpen, onCl
                 className="w-full py-3 px-4 rounded-xl text-xs font-bold bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 hover:brightness-110 text-white shadow-lg transition flex items-center justify-center gap-1.5"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                Lưu Số Điện Chu Kỳ 10 Ngày
+                {isEditMode ? 'Cập Nhật Chu Kỳ 10 Ngày' : 'Lưu Số Điện Chu Kỳ 10 Ngày'}
               </button>
               <button
                 type="button"

@@ -1,8 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { WATER_DAILY_METERS, MeterReading, WaterMonthly } from '../../types/cmms';
 import { NumericInput } from '../common/NumericInput';
-import { formatVND } from '../../utils/cmmsLogic';
+import { formatVND, isAdminLevel } from '../../utils/cmmsLogic';
 import {
   X,
   Droplet,
@@ -11,16 +11,15 @@ import {
   Calendar,
   User,
   Calculator,
-  Layers,
-  ArrowRight,
-  TrendingDown,
-  DollarSign,
+  ShieldCheck,
+  RotateCcw,
 } from 'lucide-react';
 
 interface WaterRecordingModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialMode?: 'daily' | 'monthly';
+  editingRecord?: WaterMonthly | null;
 }
 
 interface WaterMeterRow {
@@ -34,6 +33,7 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
   isOpen,
   onClose,
   initialMode = 'daily',
+  editingRecord = null,
 }) => {
   const {
     currentUser,
@@ -46,7 +46,11 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
     tariffConfig,
   } = useCMMS();
 
-  const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>(initialMode);
+  const isAdmin = isAdminLevel(currentUser);
+  const isEditMode = Boolean(editingRecord && isAdmin);
+  const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>(
+    editingRecord ? 'monthly' : initialMode
+  );
 
   // Ngày chốt hàng ngày
   const todayStr = useMemo(() => {
@@ -129,7 +133,56 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
   }, []);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthStr);
   const [monthlyWaterM3, setMonthlyWaterM3] = useState<number>(4750);
+  const [monthlyWaterVNDInput, setMonthlyWaterVNDInput] = useState<number>(() =>
+    Math.round(4750 * tariffConfig.waterVNDPerM3)
+  );
+  const [monthlyWaterUSDInput, setMonthlyWaterUSDInput] = useState<number>(() =>
+    Math.round((4750 * tariffConfig.waterVNDPerM3) / (tariffConfig.usdToVndRate || 25400))
+  );
+  const [monthlySewageVNDInput, setMonthlySewageVNDInput] = useState<number>(() =>
+    Math.round(4750 * 0.8 * tariffConfig.sewageVNDPerM3)
+  );
+  const [monthlySewageUSDInput, setMonthlySewageUSDInput] = useState<number>(() =>
+    Math.round((4750 * 0.8 * tariffConfig.sewageVNDPerM3) / (tariffConfig.usdToVndRate || 25400))
+  );
+  const [monthlyError, setMonthlyError] = useState('');
   const [monthlySuccess, setMonthlySuccess] = useState(false);
+
+  const recalcMonthlyCosts = (m3: number) => {
+    const sewM3 = Math.round(m3 * 0.8 * 10) / 10;
+    const wVND = Math.round(m3 * tariffConfig.waterVNDPerM3);
+    const wUSD = Math.round(wVND / (tariffConfig.usdToVndRate || 25400));
+    const sVND = Math.round(sewM3 * tariffConfig.sewageVNDPerM3);
+    const sUSD = Math.round(sVND / (tariffConfig.usdToVndRate || 25400));
+    setMonthlyWaterVNDInput(wVND);
+    setMonthlyWaterUSDInput(wUSD);
+    setMonthlySewageVNDInput(sVND);
+    setMonthlySewageUSDInput(sUSD);
+  };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setDailyError('');
+    setDailySuccess(false);
+    setMonthlyError('');
+    setMonthlySuccess(false);
+
+    if (editingRecord) {
+      setActiveTab('monthly');
+      setSelectedMonth(editingRecord.month);
+      setMonthlyWaterM3(editingRecord.waterM3);
+      setMonthlyWaterVNDInput(editingRecord.waterVND);
+      setMonthlyWaterUSDInput(editingRecord.waterUSD);
+      setMonthlySewageVNDInput(editingRecord.sewageVND);
+      setMonthlySewageUSDInput(editingRecord.sewageUSD);
+    } else {
+      setActiveTab(initialMode);
+      setSelectedMonth(currentMonthStr);
+      setMonthlyWaterM3(4750);
+      recalcMonthlyCosts(4750);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, initialMode, editingRecord, currentMonthStr]);
 
   if (!isOpen) return null;
 
@@ -205,16 +258,23 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
 
   // Tính toán số liệu chốt tháng: Lượng nước thải = 80% Lượng nước sinh hoạt
   const monthlySewageM3 = Math.round(monthlyWaterM3 * 0.8 * 10) / 10;
-  const monthlyWaterVND = Math.round(monthlyWaterM3 * tariffConfig.waterVNDPerM3);
-  const monthlyWaterUSD = Math.round((monthlyWaterVND / (tariffConfig.usdToVndRate || 25400)) * 100) / 100;
-  const monthlySewageVND = Math.round(monthlySewageM3 * tariffConfig.sewageVNDPerM3);
-  const monthlySewageUSD = Math.round((monthlySewageVND / (tariffConfig.usdToVndRate || 25400)) * 100) / 100;
+  const monthlyWaterVND = monthlyWaterVNDInput;
+  const monthlyWaterUSD = monthlyWaterUSDInput;
+  const monthlySewageVND = monthlySewageVNDInput;
+  const monthlySewageUSD = monthlySewageUSDInput;
   const monthlyTotalVND = monthlyWaterVND + monthlySewageVND;
   const monthlyTotalUSD = monthlyWaterUSD + monthlySewageUSD;
 
   // Lưu chốt nước hàng tháng
   const handleSaveMonthly = (e: React.FormEvent) => {
     e.preventDefault();
+    setMonthlyError('');
+
+    const existing = waterMonthly.find((w) => w.month === selectedMonth);
+    if ((editingRecord || existing) && !isAdmin) {
+      setMonthlyError(`Tháng ${selectedMonth} đã được chốt trước đó. Chỉ Admin mới có quyền chỉnh sửa dữ liệu đã lưu.`);
+      return;
+    }
 
     const record: WaterMonthly = {
       month: selectedMonth,
@@ -225,8 +285,7 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
       sewageUSD: Math.round(monthlySewageUSD),
     };
 
-    const existing = waterMonthly.find((w) => w.month === selectedMonth);
-    if (existing) {
+    if (editingRecord || existing) {
       updateWaterMonthlyRecord(record);
     } else {
       addWaterMonthlyRecord(record);
@@ -236,22 +295,32 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
     setTimeout(() => {
       setMonthlySuccess(false);
       onClose();
-    }, 1000);
+    }, 900);
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
-      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto">
+      <div className="relative w-full max-w-4xl bg-slate-900 border border-slate-700 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 my-auto max-h-[92vh] flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/80">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-slate-800/80 shrink-0">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-tr from-blue-600 to-cyan-500 text-white shadow-md">
               <Droplet className="w-5 h-5" />
             </span>
             <div>
-              <h3 className="font-bold text-slate-100 text-base">
-                Quản Lý & Chốt Số Nước Cấp - Nước Thải
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-100 text-base">
+                  {isEditMode
+                    ? `Chỉnh Sửa Dữ Liệu Nước Tháng ${editingRecord?.month} (Sheet Nuoc_month)`
+                    : 'Quản Lý & Chốt Số Nước Cấp - Nước Thải'}
+                </h3>
+                {isEditMode && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold">
+                    <ShieldCheck className="w-3 h-3" />
+                    Admin Only
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-slate-400">
                 Chốt 8 đồng hồ hàng ngày (Nước sinh hoạt = P1 - P2) và Chốt nước tháng (Nước thải = 80%)
               </p>
@@ -267,32 +336,34 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
         </div>
 
         {/* Tab Switcher */}
-        <div className="flex border-b border-slate-800 bg-slate-900/60 px-6 pt-3 gap-2">
-          <button
-            type="button"
-            onClick={() => setActiveTab('daily')}
-            className={`pb-3 px-3 text-xs font-bold border-b-2 transition flex items-center gap-2 ${
-              activeTab === 'daily'
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Droplet className="w-3.5 h-3.5" />
-            1. Chốt Số Nước Hàng Ngày (P1, P2, Chiller, DI, Thải...)
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('monthly')}
-            className={`pb-3 px-3 text-xs font-bold border-b-2 transition flex items-center gap-2 ${
-              activeTab === 'monthly'
-                ? 'border-blue-500 text-blue-400'
-                : 'border-transparent text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Calculator className="w-3.5 h-3.5" />
-            2. Chốt Hóa Đơn Nước Hàng Tháng (Quy Tắc Thải 80%)
-          </button>
-        </div>
+        {!isEditMode && (
+          <div className="flex border-b border-slate-800 bg-slate-900/60 px-6 pt-3 gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveTab('daily')}
+              className={`pb-3 px-3 text-xs font-bold border-b-2 transition flex items-center gap-2 ${
+                activeTab === 'daily'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Droplet className="w-3.5 h-3.5" />
+              1. Chốt Số Nước Hàng Ngày (P1, P2, Chiller, DI, Thải...)
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('monthly')}
+              className={`pb-3 px-3 text-xs font-bold border-b-2 transition flex items-center gap-2 ${
+                activeTab === 'monthly'
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Calculator className="w-3.5 h-3.5" />
+              2. Chốt Hóa Đơn Nước Hàng Tháng (Quy Tắc Thải 80%)
+            </button>
+          </div>
+        )}
 
         {/* TAB 1: Chốt hàng ngày */}
         {activeTab === 'daily' && (
@@ -471,11 +542,22 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
 
         {/* TAB 2: Chốt Hóa Đơn Nước Hàng Tháng (Sheet Nuoc_month) */}
         {activeTab === 'monthly' && (
-          <form onSubmit={handleSaveMonthly} className="p-5 sm:p-6 space-y-5">
+          <form onSubmit={handleSaveMonthly} className="p-5 sm:p-6 space-y-5 overflow-y-auto">
+            {monthlyError && (
+              <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                <span>{monthlyError}</span>
+              </div>
+            )}
+
             {monthlySuccess && (
               <div className="p-3.5 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>Đã lưu thành công dữ liệu nước tháng {selectedMonth} vào Sheet Nuoc_month!</span>
+                <span>
+                  {isEditMode
+                    ? `Đã cập nhật dữ liệu nước tháng ${selectedMonth} thành công!`
+                    : `Đã lưu thành công dữ liệu nước tháng ${selectedMonth} vào Sheet Nuoc_month!`}
+                </span>
               </div>
             )}
 
@@ -489,8 +571,9 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                   type="month"
                   value={selectedMonth}
                   onChange={(e) => setSelectedMonth(e.target.value)}
+                  disabled={isEditMode}
                   required
-                  className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-60"
                 />
               </div>
 
@@ -501,7 +584,10 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                 </label>
                 <NumericInput
                   value={monthlyWaterM3}
-                  onChange={(v) => setMonthlyWaterM3(v)}
+                  onChange={(v) => {
+                    setMonthlyWaterM3(v);
+                    recalcMonthlyCosts(v);
+                  }}
                   suffix="m³"
                   className="text-cyan-200 font-bold"
                 />
@@ -510,7 +596,7 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
 
             {/* Quy tắc 80% Nước Thải & Hạch Toán Chi Phí */}
             <div className="p-5 rounded-2xl bg-slate-800/50 border border-slate-700 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-700/80 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-700/80 pb-3">
                 <div className="flex items-center gap-2">
                   <span className="p-1 rounded-lg bg-emerald-500/20 text-emerald-400">
                     <CheckCircle2 className="w-4 h-4" />
@@ -519,14 +605,26 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                     Quy Tắc: Lượng Nước Thải = 80% Lượng Nước Sinh Hoạt Chốt Theo Tháng
                   </h4>
                 </div>
-                <span className="text-xs font-bold text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
-                  80% Chuẩn Môi Trường
-                </span>
+                <div className="flex items-center gap-2">
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => recalcMonthlyCosts(monthlyWaterM3)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-[11px] font-semibold transition"
+                    >
+                      <RotateCcw className="w-3 h-3" />
+                      Tính lại theo đơn giá
+                    </button>
+                  )}
+                  <span className="text-xs font-bold text-emerald-400 font-mono bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                    80% Chuẩn Môi Trường
+                  </span>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Khối 1: Nước cấp sinh hoạt */}
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
                   <span className="text-xs font-bold text-blue-400 block">1. Nước Cấp Sinh Hoạt</span>
                   <div className="flex items-baseline justify-between">
                     <span className="text-xl font-black text-slate-100 font-mono">
@@ -536,17 +634,38 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                       @{formatVND(tariffConfig.waterVNDPerM3)}/m³
                     </span>
                   </div>
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">Thành tiền:</span>
-                    <div className="text-right">
-                      <span className="font-bold text-emerald-400 font-mono">{formatVND(monthlyWaterVND)}</span>
-                      <span className="text-[11px] text-slate-500 block font-mono">(${monthlyWaterUSD.toLocaleString()})</span>
+                  {isEditMode ? (
+                    <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-slate-400">Tiền nước (VNĐ)</label>
+                        <NumericInput
+                          value={monthlyWaterVNDInput}
+                          onChange={setMonthlyWaterVNDInput}
+                          className="text-right font-mono text-xs py-1"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-slate-400">Tiền nước (USD)</label>
+                        <NumericInput
+                          value={monthlyWaterUSDInput}
+                          onChange={setMonthlyWaterUSDInput}
+                          className="text-right font-mono text-xs py-1"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Thành tiền:</span>
+                      <div className="text-right">
+                        <span className="font-bold text-emerald-400 font-mono">{formatVND(monthlyWaterVND)}</span>
+                        <span className="text-[11px] text-slate-500 block font-mono">(${monthlyWaterUSD.toLocaleString()})</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Khối 2: Phí xử lý nước thải (80%) */}
-                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 space-y-2.5">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-amber-400 block">2. Lượng Nước Thải (80%)</span>
                     <span className="text-[10px] text-emerald-400 font-semibold">= {monthlyWaterM3} × 80%</span>
@@ -559,13 +678,34 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                       @{formatVND(tariffConfig.sewageVNDPerM3)}/m³
                     </span>
                   </div>
-                  <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">Phí xử lý:</span>
-                    <div className="text-right">
-                      <span className="font-bold text-amber-400 font-mono">{formatVND(monthlySewageVND)}</span>
-                      <span className="text-[11px] text-slate-500 block font-mono">(${monthlySewageUSD.toLocaleString()})</span>
+                  {isEditMode ? (
+                    <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-slate-400">Phí thải (VNĐ)</label>
+                        <NumericInput
+                          value={monthlySewageVNDInput}
+                          onChange={setMonthlySewageVNDInput}
+                          className="text-right font-mono text-xs py-1"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] text-slate-400">Phí thải (USD)</label>
+                        <NumericInput
+                          value={monthlySewageUSDInput}
+                          onChange={setMonthlySewageUSDInput}
+                          className="text-right font-mono text-xs py-1"
+                        />
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Phí xử lý:</span>
+                      <div className="text-right">
+                        <span className="font-bold text-amber-400 font-mono">{formatVND(monthlySewageVND)}</span>
+                        <span className="text-[11px] text-slate-500 block font-mono">(${monthlySewageUSD.toLocaleString()})</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -609,7 +749,9 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                   className="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:brightness-110 text-white shadow-lg transition flex items-center gap-1.5"
                 >
                   <CheckCircle2 className="w-4 h-4" />
-                  Lưu Chốt Nước Tháng {selectedMonth}
+                  {isEditMode
+                    ? `Cập Nhật Nước Tháng ${selectedMonth}`
+                    : `Lưu Chốt Nước Tháng ${selectedMonth}`}
                 </button>
               </div>
             </div>

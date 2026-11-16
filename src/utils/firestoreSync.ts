@@ -578,7 +578,7 @@ const IMMUTABLE_KEYS_BY_COL: Record<string, Set<string>> = {
   ]),
   power_10days: new Set(['id']),
   water_monthly: new Set(['month']),
-  meter_readings: new Set(['id', 'timestamp', 'ngayChot', 'nguon', 'tenDongHo', 'donVi', 'nguoiGhi']),
+  meter_readings: new Set(['id']),
   cost_records: new Set(['idChiPhi']),
   employees_public: new Set(['maNhanVien']),
   employees_private: new Set(['maNhanVien']),
@@ -860,6 +860,19 @@ export async function seedOrPushWorkspaceToFirestore(
       },
     },
   });
+  ops.push({
+    col: 'settings',
+    id: 'water_monthly_seed_meta',
+    data: {
+      key: 'water_monthly_seed_meta',
+      payload: {
+        seedVersion: WATER_MONTHLY_SEED_VERSION,
+        count: snapshotData.waterMonthly.length,
+        updatedBy: userEmail,
+        updatedAtIso: new Date().toISOString(),
+      },
+    },
+  });
 
   // Check existing IDs in Firestore when pushing onto an already-initialized workspace
   const existingPaths = new Set<string>(options.knownCloudIds || []);
@@ -906,6 +919,95 @@ export async function seedOrPushWorkspaceToFirestore(
   }
 
   return { seeded: true, totalWritten: ops.length };
+}
+
+export const WATER_MONTHLY_SEED_VERSION = 'nuoc_month_2026_11_v1';
+
+export async function syncWaterMonthlySeedToFirestoreIfNeeded(
+  uid: string,
+  userEmail: string,
+  waterRecords: WaterMonthly[],
+  employees: Employee[],
+  knownCloudIds?: Set<string>
+): Promise<boolean> {
+  const metaDocId = 'water_monthly_seed_meta';
+  const metaPath = `settings/${metaDocId}`;
+  const metaRef = doc(db, 'settings', metaDocId);
+
+  let metaExists = false;
+  try {
+    const metaSnap = await getDoc(metaRef);
+    metaExists = metaSnap.exists();
+    if (metaExists) {
+      const data = metaSnap.data() as { payload?: { seedVersion?: string } } | undefined;
+      if (data?.payload?.seedVersion === WATER_MONTHLY_SEED_VERSION) {
+        return false;
+      }
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.GET, metaPath);
+  }
+
+  const allowedEmails = buildAllowedEmails(employees, userEmail);
+  const existingDocIds = new Set<string>();
+  try {
+    const snap = await getDocs(collection(db, 'water_monthly'));
+    snap.forEach((d) => {
+      existingDocIds.add(d.id);
+      knownCloudIds?.add(`water_monthly/${d.id}`);
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.LIST, 'water_monthly');
+  }
+
+  const batch = writeBatch(db);
+  for (const item of waterRecords) {
+    const docId = toFirestoreDocId(item.month);
+    const sanitized = sanitizeWaterMonthly(item);
+    const ref = doc(db, 'water_monthly', docId);
+    if (existingDocIds.has(docId)) {
+      batch.update(ref, buildUpdatePayload('water_monthly', sanitized, allowedEmails, true));
+    } else {
+      batch.set(ref, {
+        ...sanitized,
+        ownerUid: uid,
+        allowedEmails,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      knownCloudIds?.add(`water_monthly/${docId}`);
+    }
+  }
+
+  const metaData = {
+    key: metaDocId,
+    payload: {
+      seedVersion: WATER_MONTHLY_SEED_VERSION,
+      count: waterRecords.length,
+      updatedBy: userEmail,
+      updatedAtIso: new Date().toISOString(),
+    },
+  };
+  if (metaExists) {
+    batch.update(metaRef, buildUpdatePayload('settings', metaData, allowedEmails, true));
+  } else {
+    batch.set(metaRef, {
+      ...metaData,
+      ownerUid: uid,
+      allowedEmails,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    knownCloudIds?.add(metaPath);
+  }
+
+  try {
+    await batch.commit();
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, 'water_monthly');
+  }
+
+  return true;
 }
 
 export async function propagateAllowedEmails(allowedEmails: string[]): Promise<void> {

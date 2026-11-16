@@ -9471,279 +9471,287 @@ export const INITIAL_COST_RECORDS: CostRecord[] = [
   }
 ];
 
-// Sheet 9: Nuoc_month
+// Sheet 9: Nuoc_month (2024-01 -> 2026-11, 35 tháng)
 export const INITIAL_WATER_MONTHLY: WaterMonthly[] = [
   {
+    "month": "2026-11",
+    "waterM3": 4060,
+    "waterVND": 58829400,
+    "waterUSD": 2237,
+    "sewageVND": 26081440,
+    "sewageUSD": 992
+  },
+  {
     "month": "2026-10",
-    "waterM3": 4820,
-    "waterVND": 72300000,
-    "waterUSD": 2892,
-    "sewageVND": 36150000,
-    "sewageUSD": 1446
+    "waterM3": 2953,
+    "waterVND": 42788970,
+    "waterUSD": 1627,
+    "sewageVND": 18970072,
+    "sewageUSD": 721
   },
   {
     "month": "2026-09",
-    "waterM3": 4650,
-    "waterVND": 69750000,
-    "waterUSD": 2790,
-    "sewageVND": 34875000,
-    "sewageUSD": 1395
+    "waterM3": 2989,
+    "waterVND": 43310610,
+    "waterUSD": 1647,
+    "sewageVND": 19201336,
+    "sewageUSD": 730
   },
   {
     "month": "2026-08",
-    "waterM3": 4910,
-    "waterVND": 73650000,
-    "waterUSD": 2946,
-    "sewageVND": 36825000,
-    "sewageUSD": 1473
+    "waterM3": 3407,
+    "waterVND": 49367430,
+    "waterUSD": 1899,
+    "sewageVND": 21886568,
+    "sewageUSD": 842
   },
   {
     "month": "2026-07",
-    "waterM3": 5120,
-    "waterVND": 76800000,
-    "waterUSD": 3072,
-    "sewageVND": 38400000,
-    "sewageUSD": 1536
+    "waterM3": 3364,
+    "waterVND": 48744360,
+    "waterUSD": 1875,
+    "sewageVND": 21610336,
+    "sewageUSD": 831
   },
   {
     "month": "2026-06",
-    "waterM3": 4980,
-    "waterVND": 74700000,
-    "waterUSD": 2988,
-    "sewageVND": 37350000,
-    "sewageUSD": 1494
+    "waterM3": 3046,
+    "waterVND": 44136540,
+    "waterUSD": 1698,
+    "sewageVND": 19567504,
+    "sewageUSD": 753
   },
   {
     "month": "2026-05",
-    "waterM3": 5240,
-    "waterVND": 78600000,
-    "waterUSD": 3144,
-    "sewageVND": 39300000,
-    "sewageUSD": 1572
+    "waterM3": 2963,
+    "waterVND": 42933870,
+    "waterUSD": 1651,
+    "sewageVND": 19034312,
+    "sewageUSD": 732
   },
   {
     "month": "2026-04",
-    "waterM3": 5080,
-    "waterVND": 76200000,
-    "waterUSD": 3048,
-    "sewageVND": 38100000,
-    "sewageUSD": 1524
+    "waterM3": 3131,
+    "waterVND": 45368190,
+    "waterUSD": 1745,
+    "sewageVND": 20113544,
+    "sewageUSD": 774
   },
   {
     "month": "2026-03",
-    "waterM3": 4790,
-    "waterVND": 71850000,
-    "waterUSD": 2874,
-    "sewageVND": 35925000,
-    "sewageUSD": 1437
+    "waterM3": 2811,
+    "waterVND": 40731390,
+    "waterUSD": 1567,
+    "sewageVND": 18057864,
+    "sewageUSD": 695
   },
   {
     "month": "2026-02",
-    "waterM3": 4350,
-    "waterVND": 65250000,
-    "waterUSD": 2610,
-    "sewageVND": 32625000,
-    "sewageUSD": 1305
+    "waterM3": 2257,
+    "waterVND": 32703930,
+    "waterUSD": 1258,
+    "sewageVND": 14498968,
+    "sewageUSD": 558
   },
   {
     "month": "2026-01",
-    "waterM3": 4620,
-    "waterVND": 69300000,
-    "waterUSD": 2772,
-    "sewageVND": 34650000,
-    "sewageUSD": 1386
+    "waterM3": 2636,
+    "waterVND": 38195640,
+    "waterUSD": 1469,
+    "sewageVND": 16933664,
+    "sewageUSD": 651
   },
   {
     "month": "2025-12",
-    "waterM3": 4850,
-    "waterVND": 72750000,
-    "waterUSD": 2910,
-    "sewageVND": 36375000,
-    "sewageUSD": 1455
+    "waterM3": 3002,
+    "waterVND": 43498980,
+    "waterUSD": 1673,
+    "sewageVND": 19284848,
+    "sewageUSD": 742
   },
   {
     "month": "2025-11",
-    "waterM3": 4710,
-    "waterVND": 70650000,
-    "waterUSD": 2826,
-    "sewageVND": 35325000,
-    "sewageUSD": 1413
+    "waterM3": 2218,
+    "waterVND": 32138820,
+    "waterUSD": 1236,
+    "sewageVND": 12953120,
+    "sewageUSD": 498
   },
   {
     "month": "2025-10",
-    "waterM3": 4890,
-    "waterVND": 73350000,
-    "waterUSD": 2934,
-    "sewageVND": 36675000,
-    "sewageUSD": 1467
+    "waterM3": 1882,
+    "waterVND": 27270180,
+    "waterUSD": 1049,
+    "sewageVND": 10990880,
+    "sewageUSD": 423
   },
   {
     "month": "2025-09",
-    "waterM3": 4600,
-    "waterVND": 69000000,
-    "waterUSD": 2760,
-    "sewageVND": 34500000,
-    "sewageUSD": 1380
+    "waterM3": 1571,
+    "waterVND": 22763790,
+    "waterUSD": 876,
+    "sewageVND": 9174640,
+    "sewageUSD": 353
   },
   {
     "month": "2025-08",
-    "waterM3": 4950,
-    "waterVND": 74250000,
-    "waterUSD": 2970,
-    "sewageVND": 37125000,
-    "sewageUSD": 1485
+    "waterM3": 2081,
+    "waterVND": 30153690,
+    "waterUSD": 1160,
+    "sewageVND": 12153040,
+    "sewageUSD": 467
   },
   {
     "month": "2025-07",
-    "waterM3": 5180,
-    "waterVND": 77700000,
-    "waterUSD": 3108,
-    "sewageVND": 38850000,
-    "sewageUSD": 1554
+    "waterM3": 2190,
+    "waterVND": 31733100,
+    "waterUSD": 1221,
+    "sewageVND": 12789600,
+    "sewageUSD": 492
   },
   {
     "month": "2025-06",
-    "waterM3": 5020,
-    "waterVND": 75300000,
-    "waterUSD": 3012,
-    "sewageVND": 37650000,
-    "sewageUSD": 1506
+    "waterM3": 2411,
+    "waterVND": 34935390,
+    "waterUSD": 1344,
+    "sewageVND": 14080240,
+    "sewageUSD": 542
   },
   {
     "month": "2025-05",
-    "waterM3": 5150,
-    "waterVND": 77250000,
-    "waterUSD": 3090,
-    "sewageVND": 38625000,
-    "sewageUSD": 1545
+    "waterM3": 2768,
+    "waterVND": 40108320,
+    "waterUSD": 1543,
+    "sewageVND": 16165120,
+    "sewageUSD": 622
   },
   {
     "month": "2025-04",
-    "waterM3": 4970,
-    "waterVND": 74550000,
-    "waterUSD": 2982,
-    "sewageVND": 37275000,
-    "sewageUSD": 1491
+    "waterM3": 3059,
+    "waterVND": 44324910,
+    "waterUSD": 1705,
+    "sewageVND": 17864560,
+    "sewageUSD": 687
   },
   {
     "month": "2025-03",
-    "waterM3": 4720,
-    "waterVND": 70800000,
-    "waterUSD": 2832,
-    "sewageVND": 35400000,
-    "sewageUSD": 1416
+    "waterM3": 3046,
+    "waterVND": 44136540,
+    "waterUSD": 1698,
+    "sewageVND": 17788640,
+    "sewageUSD": 684
   },
   {
     "month": "2025-02",
-    "waterM3": 4280,
-    "waterVND": 64200000,
-    "waterUSD": 2568,
-    "sewageVND": 32100000,
-    "sewageUSD": 1284
+    "waterM3": 2663,
+    "waterVND": 38586870,
+    "waterUSD": 1484,
+    "sewageVND": 15551920,
+    "sewageUSD": 598
   },
   {
     "month": "2025-01",
-    "waterM3": 4550,
-    "waterVND": 68250000,
-    "waterUSD": 2730,
-    "sewageVND": 34125000,
-    "sewageUSD": 1365
+    "waterM3": 3118,
+    "waterVND": 45179820,
+    "waterUSD": 1738,
+    "sewageVND": 18209120,
+    "sewageUSD": 700
   },
   {
     "month": "2024-12",
-    "waterM3": 4780,
-    "waterVND": 71700000,
-    "waterUSD": 2868,
-    "sewageVND": 35850000,
-    "sewageUSD": 1434
+    "waterM3": 3972,
+    "waterVND": 57554280,
+    "waterUSD": 2398,
+    "sewageVND": 23196480,
+    "sewageUSD": 967
   },
   {
     "month": "2024-11",
-    "waterM3": 4660,
-    "waterVND": 69900000,
-    "waterUSD": 2796,
-    "sewageVND": 34950000,
-    "sewageUSD": 1398
+    "waterM3": 3221,
+    "waterVND": 46672290,
+    "waterUSD": 1945,
+    "sewageVND": 18810640,
+    "sewageUSD": 784
   },
   {
     "month": "2024-10",
-    "waterM3": 4750,
-    "waterVND": 71250000,
-    "waterUSD": 2850,
-    "sewageVND": 35625000,
-    "sewageUSD": 1425
+    "waterM3": 2408,
+    "waterVND": 34891920,
+    "waterUSD": 1454,
+    "sewageVND": 14062720,
+    "sewageUSD": 586
   },
   {
     "month": "2024-09",
-    "waterM3": 4520,
-    "waterVND": 67800000,
-    "waterUSD": 2712,
-    "sewageVND": 33900000,
-    "sewageUSD": 1356
+    "waterM3": 2597,
+    "waterVND": 37630530,
+    "waterUSD": 1568,
+    "sewageVND": 15166480,
+    "sewageUSD": 632
   },
   {
     "month": "2024-08",
-    "waterM3": 4870,
-    "waterVND": 73050000,
-    "waterUSD": 2922,
-    "sewageVND": 36525000,
-    "sewageUSD": 1461
+    "waterM3": 2748,
+    "waterVND": 39818520,
+    "waterUSD": 1659,
+    "sewageVND": 16048320,
+    "sewageUSD": 669
   },
   {
     "month": "2024-07",
-    "waterM3": 5060,
-    "waterVND": 75900000,
-    "waterUSD": 3036,
-    "sewageVND": 37950000,
-    "sewageUSD": 1518
+    "waterM3": 2787,
+    "waterVND": 40383630,
+    "waterUSD": 1683,
+    "sewageVND": 16276080,
+    "sewageUSD": 678
   },
   {
     "month": "2024-06",
-    "waterM3": 4910,
-    "waterVND": 73650000,
-    "waterUSD": 2946,
-    "sewageVND": 36825000,
-    "sewageUSD": 1473
+    "waterM3": 3073,
+    "waterVND": 44527770,
+    "waterUSD": 1855,
+    "sewageVND": 17946320,
+    "sewageUSD": 748
   },
   {
     "month": "2024-05",
-    "waterM3": 5050,
-    "waterVND": 75750000,
-    "waterUSD": 3030,
-    "sewageVND": 37875000,
-    "sewageUSD": 1515
+    "waterM3": 3685,
+    "waterVND": 53395650,
+    "waterUSD": 2225,
+    "sewageVND": 21520400,
+    "sewageUSD": 897
   },
   {
     "month": "2024-04",
-    "waterM3": 4890,
-    "waterVND": 73350000,
-    "waterUSD": 2934,
-    "sewageVND": 36675000,
-    "sewageUSD": 1467
+    "waterM3": 4293,
+    "waterVND": 62205570,
+    "waterUSD": 2592,
+    "sewageVND": 25071120,
+    "sewageUSD": 1045
   },
   {
     "month": "2024-03",
-    "waterM3": 4630,
-    "waterVND": 69450000,
-    "waterUSD": 2778,
-    "sewageVND": 34725000,
-    "sewageUSD": 1389
+    "waterM3": 3484,
+    "waterVND": 50483160,
+    "waterUSD": 2103,
+    "sewageVND": 20346560,
+    "sewageUSD": 848
   },
   {
     "month": "2024-02",
-    "waterM3": 4210,
-    "waterVND": 63150000,
-    "waterUSD": 2526,
-    "sewageVND": 31575000,
-    "sewageUSD": 1263
+    "waterM3": 3498,
+    "waterVND": 50686020,
+    "waterUSD": 2112,
+    "sewageVND": 20428320,
+    "sewageUSD": 851
   },
   {
     "month": "2024-01",
-    "waterM3": 4480,
-    "waterVND": 67200000,
-    "waterUSD": 2688,
-    "sewageVND": 33600000,
-    "sewageUSD": 1344
+    "waterM3": 3455,
+    "waterVND": 50062950,
+    "waterUSD": 2086,
+    "sewageVND": 20177200,
+    "sewageUSD": 841
   }
 ];
 

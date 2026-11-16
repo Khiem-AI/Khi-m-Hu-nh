@@ -1,22 +1,26 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { MeterReading } from '../../types/cmms';
+import { useCMMS } from '../../context/CMMSContext';
+import { isAdminLevel } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
+import { MeterReadingEditModal } from './MeterReadingEditModal';
 import {
   AlertTriangle,
   CheckCircle2,
-  Filter,
   Search,
-  Settings,
   Download,
   Zap,
   Droplet,
   Calendar,
   User,
   Activity,
-  ArrowUpRight,
   ShieldAlert,
-  Gauge,
   SlidersHorizontal,
+  Pencil,
+  Trash2,
+  Lock,
+  ShieldCheck,
+  Table2,
 } from 'lucide-react';
 
 interface DailyThresholds {
@@ -44,12 +48,15 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
   onOpenDailyPowerModal,
   onOpenDailyWaterModal,
 }) => {
+  const { currentUser, deleteMeterReading } = useCMMS();
+  const isAdmin = isAdminLevel(currentUser);
+
   // Thresholds state with localStorage persistence
   const [thresholds, setThresholds] = useState<DailyThresholds>(() => {
     try {
       const saved = localStorage.getItem('cmms_daily_energy_thresholds');
       if (saved) return JSON.parse(saved);
-    } catch (e) {
+    } catch {
       // fallback
     }
     return DEFAULT_THRESHOLDS;
@@ -58,9 +65,13 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [tempThresholds, setTempThresholds] = useState<DailyThresholds>(thresholds);
 
+  // Admin Edit / Delete state
+  const [editingReading, setEditingReading] = useState<MeterReading | null>(null);
+  const [confirmDeleteReading, setConfirmDeleteReading] = useState<MeterReading | null>(null);
+
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [sourceFilter, setSourceFilter] = useState<'ALL' | string>('ALL');
+  const [sourceFilter, setSourceFilter] = useState<'ALL' | 'POWER_DAILY' | 'WATER_DAILY' | string>('ALL');
   const [onlyAbnormal, setOnlyAbnormal] = useState(false);
   const [dateFilter, setDateFilter] = useState('');
 
@@ -107,6 +118,8 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
 
       const matchSource =
         sourceFilter === 'ALL' ||
+        (sourceFilter === 'POWER_DAILY' && (r.nguon === 'EVN' || r.nguon === 'Solar')) ||
+        (sourceFilter === 'WATER_DAILY' && (r.donVi.toLowerCase().includes('m3') || r.nguon.includes('Nước'))) ||
         r.nguon === sourceFilter ||
         (sourceFilter === 'Nước Sinh hoạt' && r.nguon === 'Nước Máy');
       const matchDate = !dateFilter || r.ngayChot === dateFilter;
@@ -122,7 +135,23 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
   const totalLogs = readings.length;
   const abnormalLogs = readings.filter((r) => checkReadingStatus(r).isAbnormal).length;
   const evnLogs = readings.filter((r) => r.nguon === 'EVN').length;
+  const solarLogs = readings.filter((r) => r.nguon === 'Solar').length;
   const waterLogs = readings.filter((r) => r.donVi.includes('m3') || r.nguon.includes('Nước')).length;
+
+  const dailyPowerTotals = useMemo(() => {
+    const evnKwh = filteredReadings
+      .filter((r) => r.nguon === 'EVN')
+      .reduce((acc, r) => acc + r.tieuThu, 0);
+    const solarKwh = filteredReadings
+      .filter((r) => r.nguon === 'Solar')
+      .reduce((acc, r) => acc + r.tieuThu, 0);
+    return {
+      evnKwh,
+      solarKwh,
+      totalPowerKwh: evnKwh + solarKwh,
+      powerCount: filteredReadings.filter((r) => r.nguon === 'EVN' || r.nguon === 'Solar').length,
+    };
+  }, [filteredReadings]);
 
   const handleExportCSV = () => {
     const headers = [
@@ -286,7 +315,91 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
       </div>
 
       {/* Control Filter Bar */}
-      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
+      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+        {/* Quick Focus Switcher for Daily Electricity vs All Sources */}
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-800">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSourceFilter('POWER_DAILY')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 ${
+                sourceFilter === 'POWER_DAILY'
+                  ? 'bg-cyan-600 text-white shadow'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              <Zap className="w-3.5 h-3.5 text-cyan-300" />
+              Điện Hàng Ngày (EVN + Solar: {evnLogs + solarLogs})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('EVN')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                sourceFilter === 'EVN'
+                  ? 'bg-blue-600 text-white shadow'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              Tủ EVN ({evnLogs})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('Solar')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                sourceFilter === 'Solar'
+                  ? 'bg-amber-600 text-white shadow'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              Tủ Solar ({solarLogs})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('WATER_DAILY')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition inline-flex items-center gap-1.5 ${
+                sourceFilter === 'WATER_DAILY'
+                  ? 'bg-emerald-600 text-white shadow'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              <Droplet className="w-3.5 h-3.5 text-emerald-300" />
+              Đồng Hồ Nước ({waterLogs})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSourceFilter('ALL')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition ${
+                sourceFilter === 'ALL'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'bg-slate-800 text-slate-300 hover:text-white border border-slate-700'
+              }`}
+            >
+              Tất Cả ({readings.length})
+            </button>
+          </div>
+
+          <div
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold border ${
+              isAdmin
+                ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                : 'bg-slate-800 text-slate-400 border-slate-700'
+            }`}
+          >
+            {isAdmin ? (
+              <>
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Admin: Được phép Sửa / Xóa</span>
+              </>
+            ) : (
+              <>
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+                <span>Chỉ xem • Chỉ Admin được sửa/xóa</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 flex-1">
           <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -305,8 +418,10 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
             className="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="ALL">Tất cả nguồn ({readings.length})</option>
+            <option value="POWER_DAILY">⚡ Chỉ Điện Hàng Ngày (EVN + Solar)</option>
             <option value="EVN">⚡ Tủ Điện EVN</option>
             <option value="Solar">☀️ Tủ Điện Solar</option>
+            <option value="WATER_DAILY">💧 Tất cả Đồng Hồ Nước</option>
             <option value="Nước Sinh hoạt">💧 Nước Sinh hoạt</option>
             <option value="Nước Tái Sử Dụng">♻️ Nước Tái Sử Dụng / Thải</option>
             <option value="Khí Nén">💨 Khí Nén</option>
@@ -356,15 +471,46 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
             Xuất CSV
           </button>
         </div>
+        </div>
       </div>
 
-      {/* Main Table */}
+      {/* Main Table: Bảng Dữ Liệu Chi Tiết Điện Hàng Ngày */}
       <div className="rounded-2xl bg-slate-900 border border-slate-800 overflow-hidden shadow-xl">
+        <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90">
+          <div className="flex items-start gap-2.5">
+            <span className="p-2 rounded-xl bg-cyan-500/15 text-cyan-400 shrink-0">
+              <Table2 className="w-4 h-4" />
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-slate-100">
+                Bảng Dữ Liệu Chi Tiết Điện Hàng Ngày ({filteredReadings.length} Bản Ghi)
+              </h3>
+              <p className="text-xs text-slate-400">
+                {sourceFilter === 'WATER_DAILY' || sourceFilter === 'Nước Sinh hoạt' || sourceFilter === 'Nước Tái Sử Dụng'
+                  ? 'Chi tiết chỉ số đồng hồ nước hàng ngày kèm cảnh báo vượt ngưỡng'
+                  : 'Chi tiết chỉ số cũ, chỉ số mới, sản lượng tiêu thụ (kWh) các tủ điện EVN, Solar & đồng hồ hàng ngày'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono">
+            <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-cyan-300 font-bold">
+              EVN: {dailyPowerTotals.evnKwh.toLocaleString('vi-VN')} kWh
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-amber-300 font-bold">
+              Solar: {dailyPowerTotals.solarKwh.toLocaleString('vi-VN')} kWh
+            </span>
+            <span className="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-emerald-300 font-bold">
+              Tổng Điện: {dailyPowerTotals.totalPowerKwh.toLocaleString('vi-VN')} kWh
+            </span>
+          </div>
+        </div>
+
         <SmartHorizontalScroll>
           <table className="w-full text-left border-collapse text-xs">
             <thead>
               <tr className="border-b border-slate-800 bg-slate-800/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
-                <th className="py-3 px-4">Thời Gian & Ngày Chốt</th>
+                <th className="py-3 px-4">Thời Gian &amp; Ngày Chốt</th>
                 <th className="py-3 px-4">Nguồn</th>
                 <th className="py-3 px-4">Tên Tủ / Đồng Hồ</th>
                 <th className="py-3 px-4 text-right">Chỉ Số Cũ</th>
@@ -373,12 +519,13 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
                 <th className="py-3 px-4 text-center">Ngưỡng An Toàn</th>
                 <th className="py-3 px-4">Trạng Thái Đánh Giá</th>
                 <th className="py-3 px-4">Người Ghi Nhận</th>
+                <th className="py-3 px-4 text-right">Thao Tác (Admin)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800 text-slate-300">
               {filteredReadings.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-500">
+                  <td colSpan={10} className="py-8 text-center text-slate-500">
                     Không tìm thấy bản ghi số điện/nước nào phù hợp với bộ lọc.
                   </td>
                 </tr>
@@ -472,6 +619,39 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
                           <span>{r.nguoiGhi || 'Kỹ thuật viên'}</span>
                         </div>
                       </td>
+
+                      <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                        {isAdmin ? (
+                          <div className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingReading(r)}
+                              title="Chỉnh sửa bản ghi (Admin Only)"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-blue-600/30 text-blue-300 border border-slate-700 hover:border-blue-500/40 text-[11px] font-semibold transition"
+                            >
+                              <Pencil className="w-3 h-3" />
+                              Sửa
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteReading(r)}
+                              title="Xóa bản ghi (Admin Only)"
+                              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 hover:bg-rose-600/30 text-rose-300 border border-slate-700 hover:border-rose-500/40 text-[11px] font-semibold transition"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              Xóa
+                            </button>
+                          </div>
+                        ) : (
+                          <span
+                            title="Chỉ Admin mới có quyền chỉnh sửa hoặc xóa dữ liệu"
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800/70 text-slate-500 border border-slate-700/60 text-[10px] font-medium"
+                          >
+                            <Lock className="w-3 h-3" />
+                            Chỉ Admin
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })
@@ -480,6 +660,59 @@ export const DailyReadingsWithAlerts: React.FC<DailyReadingsWithAlertsProps> = (
           </table>
         </SmartHorizontalScroll>
       </div>
+
+      {/* Admin-only Edit Meter Reading Modal */}
+      <MeterReadingEditModal
+        isOpen={Boolean(editingReading)}
+        record={editingReading}
+        onClose={() => setEditingReading(null)}
+      />
+
+      {/* Admin-only Delete Confirmation Modal */}
+      {confirmDeleteReading && isAdmin && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl p-5 space-y-4">
+            <div className="flex items-start gap-3">
+              <span className="p-2 rounded-xl bg-rose-500/20 text-rose-400 shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </span>
+              <div>
+                <h4 className="text-sm font-bold text-slate-100">
+                  Xác Nhận Xóa Bản Ghi Hàng Ngày (Admin Only)
+                </h4>
+                <p className="text-xs text-slate-300 mt-1">
+                  Bạn có chắc muốn xóa bản ghi{' '}
+                  <strong className="text-cyan-300">{confirmDeleteReading.tenDongHo}</strong> ngày{' '}
+                  <strong className="font-mono">{confirmDeleteReading.ngayChot}</strong> (Tiêu thụ:{' '}
+                  <strong className="font-mono">
+                    {confirmDeleteReading.tieuThu.toLocaleString()} {confirmDeleteReading.donVi}
+                  </strong>
+                  )?
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setConfirmDeleteReading(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteMeterReading(confirmDeleteReading.id);
+                  setConfirmDeleteReading(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold shadow"
+              >
+                Xác Nhận Xóa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Threshold Configuration Modal */}
       {isConfigOpen && (
