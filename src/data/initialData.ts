@@ -9995,10 +9995,10 @@ export const INITIAL_EMPLOYEES: Employee[] = [
     "maNhanVien": "ID0344",
     "tenNhanVien": "Tuấn Lê",
     "date": "2026-11-13",
-    "chucVu": "Người quản lý",
+    "chucVu": "Director",
     "ngayVao": "2026-11-13",
     "soDienThoai": "0903 440 344",
-    "email": "tuanle@factory.com",
+    "email": " ",
     "username": "ID0344",
     "password": "0344@cmms",
     "quyenHan": [
