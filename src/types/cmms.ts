@@ -20,7 +20,7 @@ export type CostCategory = 'Bảo trì định kỳ' | 'Sửa chữa đột xu�
 
 export type CostStatus = 'Đã thanh toán' | 'Chờ duyệt' | 'Đã duyệt';
 
-export type UserRole = 'Owner' | 'Admin' | 'Quản trị viên' | 'Người quản lý' | 'Trưởng phòng Kỹ thuật' | 'Kỹ sư thiết bị' | 'Kỹ thuật viên' | 'Nhân viên vận hành';
+export type UserRole = 'Owner' | 'Admin' | 'Director' | 'Quản trị viên' | 'Người quản lý' | 'Trưởng phòng Kỹ thuật' | 'Kỹ sư thiết bị' | 'Kỹ thuật viên' | 'Nhân viên vận hành';
 
 // Sheet 1: Danh_sach_thiet_bi
 export interface Equipment {

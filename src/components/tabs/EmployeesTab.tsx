@@ -87,13 +87,14 @@ export const EmployeesTab: React.FC = () => {
       return APP_VIEW_OPTIONS.map((v) => v.id);
     }
     if (
+      role === 'Director' ||
       role === 'Người quản lý' ||
       role === 'Kỹ sư thiết bị' ||
       role === 'Trưởng phòng Kỹ thuật'
     ) {
       return APP_VIEW_OPTIONS.filter(
         (v) =>
-          (role === 'Người quản lý' || v.id !== 'employees') &&
+          (role === 'Director' || role === 'Người quản lý' || v.id !== 'employees') &&
           !(ADMIN_ONLY_VIEWS as readonly string[]).includes(v.id)
       ).map((v) => v.id);
     }
@@ -515,6 +516,7 @@ export const EmployeesTab: React.FC = () => {
                   >
                     <option value="Owner">Owner (Chủ hệ thống)</option>
                     <option value="Admin">Admin (Toàn quyền)</option>
+                    <option value="Director">Director</option>
                     <option value="Người quản lý">Người quản lý</option>
                     <option value="Kỹ sư thiết bị">Kỹ sư thiết bị</option>
                     <option value="Kỹ thuật viên">Kỹ thuật viên</option>
@@ -837,6 +839,7 @@ export const EmployeesTab: React.FC = () => {
                   >
                     <option value="Owner">Owner</option>
                     <option value="Admin">Admin</option>
+                    <option value="Director">Director</option>
                     <option value="Người quản lý">Người quản lý</option>
                     <option value="Kỹ sư thiết bị">Kỹ sư thiết bị</option>
                     <option value="Kỹ thuật viên">Kỹ thuật viên</option>

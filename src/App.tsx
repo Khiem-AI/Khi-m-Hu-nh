@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Component, ErrorInfo, ReactNode, useCallback, useEffect, useState } from 'react';
 import { CMMSProvider, useCMMS } from './context/CMMSContext';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
@@ -129,18 +129,33 @@ function CMMSApp() {
     }
   }, [hasBackupAccess, isBackupModalOpen]);
 
-  // If not authenticated, require username and password login
-  if (!isAuthenticated) {
-    return <LoginPage />;
-  }
+  const handleNavigateTab = useCallback(
+    (tab: string) => {
+      if (allowedViews.includes(tab)) {
+        setActiveTab(tab);
+      } else if (allowedViews.length > 0) {
+        setActiveTab(allowedViews[0]);
+      }
+    },
+    [allowedViews]
+  );
 
-  const handleNavigateTab = (tab: string) => {
-    if (allowedViews.includes(tab)) {
-      setActiveTab(tab);
-    } else if (allowedViews.length > 0) {
-      setActiveTab(allowedViews[0]);
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setIsMobileNavOpen(false);
+      setIsDesktopSidebarHoverOpen(false);
+      setIsBackupModalOpen(false);
+      setIsScannerOpen(false);
+      setSelectedQRForEquipment(null);
+      setEquipmentForMaintenance(null);
+      setIsEquipmentModalOpen(false);
+      setIsTicketModalOpen(false);
+      setIsStockModalOpen(false);
+      setIsPartModalOpen(false);
+      setIsMeterModalOpen(false);
+      setIsCostModalOpen(false);
     }
-  };
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const handleCustomNavigate = (event: Event) => {
@@ -151,7 +166,12 @@ function CMMSApp() {
     };
     window.addEventListener('fsm:navigate-tab', handleCustomNavigate);
     return () => window.removeEventListener('fsm:navigate-tab', handleCustomNavigate);
-  }, [allowedViews]);
+  }, [handleNavigateTab]);
+
+  // If not authenticated, require username and password login
+  if (!isAuthenticated) {
+    return <LoginPage />;
+  }
 
   // Handlers
   const handleOpenQR = (eq: Equipment) => {
@@ -430,10 +450,62 @@ function CMMSApp() {
   );
 }
 
+interface AppErrorBoundaryState {
+  hasError: boolean;
+  message: string;
+}
+
+class AppErrorBoundary extends Component<{ children: ReactNode }, AppErrorBoundaryState> {
+  state: AppErrorBoundaryState = { hasError: false, message: '' };
+
+  static getDerivedStateFromError(error: Error): AppErrorBoundaryState {
+    return {
+      hasError: true,
+      message: error?.message || 'Đã xảy ra lỗi hiển thị giao diện.',
+    };
+  }
+
+  componentDidCatch(error: Error, info: ErrorInfo) {
+    console.error('App render error:', error, info);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 p-6">
+          <div className="max-w-md w-full rounded-2xl bg-slate-900 border border-slate-800 p-6 space-y-4 text-center shadow-2xl">
+            <h2 className="text-lg font-bold text-rose-400">Giao diện vừa gặp sự cố tạm thời</h2>
+            <p className="text-xs text-slate-400 break-words">{this.state.message}</p>
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => this.setState({ hasError: false, message: '' })}
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition"
+              >
+                Thử khôi phục
+              </button>
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition"
+              >
+                Tải lại trang
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <CMMSProvider>
-      <CMMSApp />
-    </CMMSProvider>
+    <AppErrorBoundary>
+      <CMMSProvider>
+        <CMMSApp />
+      </CMMSProvider>
+    </AppErrorBoundary>
   );
 }

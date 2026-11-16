@@ -262,6 +262,7 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
     return allViewIds;
   }
   if (
+    user.chucVu === 'Director' ||
     user.chucVu === 'Người quản lý' ||
     user.chucVu === 'Trưởng phòng Kỹ thuật' ||
     user.chucVu === 'Kỹ sư thiết bị' ||
