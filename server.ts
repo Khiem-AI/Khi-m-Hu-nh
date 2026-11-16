@@ -211,11 +211,12 @@ async function dispatchViaSmtp(params: {
     host,
     port,
     secure,
+    family: 4,
     auth: { user, pass },
     connectionTimeout: 10000,
     greetingTimeout: 10000,
     socketTimeout: 15000,
-  });
+  } as Parameters<typeof nodemailer.createTransport>[0]);
 
   const info = await transporter.sendMail({
     from: params.senderName ? `"${params.senderName}" <${fromAddr}>` : fromAddr,
@@ -345,11 +346,14 @@ async function startServer() {
         return;
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Lỗi gửi qua SMTP';
+        const isTimeout = /timeout|ETIMEDOUT|ECONNREFUSED|ENETUNREACH/i.test(msg);
         if (!status.resendConfigured) {
           res.status(502).json({
             ok: false,
             channel: 'smtp',
-            message: `Lỗi SMTP: ${msg}`,
+            message: isTimeout
+              ? `Lỗi SMTP (${msg}): Gói miễn phí Render.com chặn cổng SMTP 465/587. Hãy dùng Google Apps Script Webhook (dán link /exec vào EMAIL_WEBHOOK_URL trên Render hoặc ô Webhook Endpoint — chạy qua HTTPS 443 hoàn toàn miễn phí).`
+              : `Lỗi SMTP: ${msg}`,
           });
           return;
         }
