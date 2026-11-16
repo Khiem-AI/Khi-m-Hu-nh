@@ -4,9 +4,11 @@ import { useCMMS } from '../../context/CMMSContext';
 import {
   buildGmailComposeUrl,
   buildMailtoUrl,
+  isAdminLevel,
   isPlaceholderEmail,
   isValidEmailFormat,
 } from '../../utils/cmmsLogic';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../../utils/firestoreSync';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import {
   Mail,
@@ -22,6 +24,7 @@ import {
 
 export const EmailDispatchModal: React.FC = () => {
   const {
+    currentUser,
     pendingEmailDispatch,
     closeEmailDispatchModal,
     markEmailDispatchStatus,
@@ -32,6 +35,7 @@ export const EmailDispatchModal: React.FC = () => {
     gmailUser,
     connectGmail,
   } = useCMMS();
+  const adminAuthorized = isAdminLevel(currentUser);
 
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
@@ -93,6 +97,12 @@ export const EmailDispatchModal: React.FC = () => {
 
     setDirectError(null);
     if (!isAutoSendReady) {
+      if (!adminAuthorized) {
+        setDirectError(
+          `Hệ thống dùng 1 tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) để gửi email qua SMTP/Webhook. Admin chưa kích hoạt kênh gửi tự động — vui lòng bấm "Mở Gmail Web" hoặc "Sao chép" bên dưới.`
+        );
+        return;
+      }
       setIsConnectingGmail(true);
       const authRes = await connectGmail(true);
       setIsConnectingGmail(false);
@@ -239,26 +249,35 @@ export const EmailDispatchModal: React.FC = () => {
           )}
 
           {!isAutoSendReady && !directSentMessage && (
-            <div className="p-3 rounded-xl bg-cyan-950/50 border border-cyan-500/30 text-cyan-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-              <div>
-                <span className="font-bold block text-white">Kết nối Gmail để gửi trực tiếp 1-chạm:</span>
-                <span className="text-[11px] text-cyan-200/80">
-                  Đăng nhập Google rồi bấm <strong>Gửi Tự Động Ngay</strong> không cần mở tab ngoài.
+            adminAuthorized ? (
+              <div className="p-3 rounded-xl bg-cyan-950/50 border border-cyan-500/30 text-cyan-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div>
+                  <span className="font-bold block text-white">Kết nối Gmail Admin ({BOOTSTRAPPED_ADMIN_EMAIL}) để gửi trực tiếp:</span>
+                  <span className="text-[11px] text-cyan-200/80">
+                    Hoặc cấu hình SMTP / Webhook 1 lần trong mục Thông Báo Email để toàn bộ nhân viên tự động gửi chung không cần đăng nhập Google.
+                  </span>
+                </div>
+                <GoogleSignInButton
+                  compact
+                  disabled={isConnectingGmail || isSendingAuto}
+                  label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
+                  onClick={async () => {
+                    setIsConnectingGmail(true);
+                    setDirectError(null);
+                    const res = await connectGmail(true);
+                    setIsConnectingGmail(false);
+                    if (!res.success) setDirectError(res.message);
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span>
+                  Hệ thống sử dụng 1 tài khoản Admin (<strong className="font-mono">{BOOTSTRAPPED_ADMIN_EMAIL}</strong>) qua SMTP/Webhook để gửi báo cáo. Hiện Admin chưa bật kênh tự động — bạn vẫn có thể dùng <strong>Mở Gmail Web</strong> hoặc <strong>Sao chép</strong> bên dưới.
                 </span>
               </div>
-              <GoogleSignInButton
-                compact
-                disabled={isConnectingGmail || isSendingAuto}
-                label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
-                onClick={async () => {
-                  setIsConnectingGmail(true);
-                  setDirectError(null);
-                  const res = await connectGmail(true);
-                  setIsConnectingGmail(false);
-                  if (!res.success) setDirectError(res.message);
-                }}
-              />
-            </div>
+            )
           )}
 
           {/* Placeholder email warning */}

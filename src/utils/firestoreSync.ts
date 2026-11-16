@@ -98,7 +98,15 @@ export function formatFirestoreSyncError(err: unknown): string {
     return 'Dự án Firebase đã vượt hạn mức đọc miễn phí trong ngày (Free tier quota). Vui lòng nâng cấp lên gói Blaze trong Firebase Console để tiếp tục đồng bộ.';
   }
   if (/permission-denied|Missing or insufficient permissions/i.test(raw)) {
-    return 'Tài khoản Google này chưa được cấp quyền truy cập dữ liệu Cloud của nhà máy. Hãy liên hệ Admin (khiemhuynhggs@gmail.com) để thêm Gmail của bạn vào danh sách Nhân sự.';
+    let rejectedEmail = auth.currentUser?.email || '';
+    try {
+      const parsed = JSON.parse(raw) as { authInfo?: { email?: string | null } };
+      if (parsed?.authInfo?.email) rejectedEmail = parsed.authInfo.email;
+    } catch {
+      // ignore
+    }
+    const who = rejectedEmail ? ` (${rejectedEmail})` : '';
+    return `Tài khoản Google${who} chưa được cấp quyền truy cập Cloud. Nếu dùng mô hình 1 tài khoản Admin, hãy ngắt kết nối tài khoản này và đăng nhập bằng Admin (${BOOTSTRAPPED_ADMIN_EMAIL}).`;
   }
   if (/unavailable|offline|network/i.test(raw)) {
     return 'Mất kết nối tới máy chủ Cloud Firestore. Dữ liệu vẫn được lưu tạm trên máy và sẽ đồng bộ khi có mạng.';
@@ -1024,11 +1032,13 @@ export async function propagateAllowedEmails(allowedEmails: string[]): Promise<v
     'meter_readings',
     'cost_records',
     'employees_public',
+    'employees_private',
     'documents',
     'projects',
     'safety_inspections',
     'tools',
     'tool_logs',
+    'email_logs',
     'audit_logs',
   ];
 
@@ -1060,4 +1070,58 @@ export async function propagateAllowedEmails(allowedEmails: string[]): Promise<v
       handleFirestoreError(error, OperationType.UPDATE, 'allowedEmails_sync');
     }
   }
+}
+
+export async function syncAllowedEmailsIfNeeded(
+  uid: string,
+  userEmail: string,
+  employees: Employee[],
+  knownCloudIds?: Set<string>
+): Promise<boolean> {
+  const normalizedUserEmail = userEmail.trim().toLowerCase();
+  if (normalizedUserEmail !== BOOTSTRAPPED_ADMIN_EMAIL) return false;
+
+  const targetAllowed = buildAllowedEmails(employees, userEmail);
+  const metaRef = doc(db, 'settings', 'workspace_meta');
+  let currentAllowed: string[] = [];
+  try {
+    const snap = await getDoc(metaRef);
+    if (!snap.exists()) return false;
+    const data = snap.data() as { allowedEmails?: unknown } | undefined;
+    if (Array.isArray(data?.allowedEmails)) {
+      currentAllowed = data.allowedEmails.map((v) => String(v).trim().toLowerCase());
+    }
+  } catch {
+    return false;
+  }
+
+  const currentSet = new Set(currentAllowed);
+  const hasNewEmails = targetAllowed.some((email) => !currentSet.has(email));
+  if (!hasNewEmails) return false;
+
+  // Also ensure employee public/private docs exist & reflect current emails
+  for (const emp of employees) {
+    const mail = (emp.email || '').trim().toLowerCase();
+    if (mail && isValidEmailFormat(mail) && !isPlaceholderEmail(mail)) {
+      await upsertCloudDoc(
+        'employees_public',
+        emp.maNhanVien,
+        sanitizeEmployeePublic(emp),
+        uid,
+        targetAllowed,
+        knownCloudIds
+      );
+      await upsertCloudDoc(
+        'employees_private',
+        emp.maNhanVien,
+        sanitizeEmployeePrivate(emp),
+        uid,
+        targetAllowed,
+        knownCloudIds
+      );
+    }
+  }
+
+  await propagateAllowedEmails(targetAllowed);
+  return true;
 }

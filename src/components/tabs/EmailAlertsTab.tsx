@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { EmailLog } from '../../types/cmms';
+import { isAdminLevel } from '../../utils/cmmsLogic';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../../utils/firestoreSync';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import { GoogleSignInButton } from '../common/GoogleSignInButton';
 import {
@@ -134,18 +136,19 @@ export const EmailAlertsTab: React.FC = () => {
     (p) => p.trangThai === 'Quá hạn' || p.trangThai === 'Tới hạn' || p.trangThai === 'Sắp tới'
   ).length;
 
+  const adminAuthorized = isAdminLevel(currentUser);
   const isDevAppsScript = Boolean(
     webhookUrl.trim().includes('script.google.com') && /\/dev(\?|$)/i.test(webhookUrl.trim())
   );
-
-  const isAutoSendReady = Boolean(
-    isGmailConnected ||
-      (webhookUrl.trim() && !isDevAppsScript) ||
-      (emailConfig.webhookUrl?.trim() && !/\/dev(\?|$)/i.test(emailConfig.webhookUrl)) ||
-      autoEmailServerStatus.smtpConfigured ||
+  const hasSharedServerChannel = Boolean(
+    autoEmailServerStatus.smtpConfigured ||
       autoEmailServerStatus.resendConfigured ||
-      autoEmailServerStatus.envWebhookConfigured
+      autoEmailServerStatus.envWebhookConfigured ||
+      (webhookUrl.trim() && !isDevAppsScript) ||
+      (emailConfig.webhookUrl?.trim() && !/\/dev(\?|$)/i.test(emailConfig.webhookUrl))
   );
+
+  const isAutoSendReady = Boolean(isGmailConnected || hasSharedServerChannel);
 
   const showToast = (msg: string, kind: 'success' | 'warning' = 'success') => {
     setToastType(kind);
@@ -309,10 +312,10 @@ export const EmailAlertsTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Direct Gmail Connection Card (1-Click Sign In) */}
+      {/* 1-Admin Email Channel Status Card */}
       <div
         className={`rounded-2xl border p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-          isGmailConnected
+          hasSharedServerChannel || isGmailConnected
             ? 'bg-emerald-950/30 border-emerald-500/40'
             : 'bg-cyan-950/25 border-cyan-500/40'
         }`}
@@ -320,7 +323,7 @@ export const EmailAlertsTab: React.FC = () => {
         <div className="flex items-start gap-3">
           <div
             className={`p-2.5 rounded-xl shrink-0 ${
-              isGmailConnected
+              hasSharedServerChannel || isGmailConnected
                 ? 'bg-emerald-500/20 text-emerald-400'
                 : 'bg-cyan-500/20 text-cyan-400'
             }`}
@@ -330,53 +333,61 @@ export const EmailAlertsTab: React.FC = () => {
           <div className="space-y-1">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-bold text-white">
-                {isGmailConnected
-                  ? `Đã kết nối Gmail: ${gmailUser?.email}`
-                  : 'Kết Nối Gmail Trực Tiếp (Gửi Mail Tự Động 1-Chạm)'}
+                {autoEmailServerStatus.smtpConfigured
+                  ? `Kênh Gửi Chung Toàn Nhà Máy: SMTP (${autoEmailServerStatus.smtpUser || BOOTSTRAPPED_ADMIN_EMAIL})`
+                  : autoEmailServerStatus.envWebhookConfigured || (webhookUrl.trim() && !isDevAppsScript)
+                  ? `Kênh Gửi Chung Toàn Nhà Máy: Webhook Admin (${BOOTSTRAPPED_ADMIN_EMAIL})`
+                  : isGmailConnected
+                  ? `Đã kết nối Gmail Admin: ${gmailUser?.email}`
+                  : `Cấu Hình 1 Tài Khoản Admin Gửi Mail Chung (${BOOTSTRAPPED_ADMIN_EMAIL})`}
               </h3>
               <span
                 className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
-                  isGmailConnected
+                  hasSharedServerChannel || isGmailConnected
                     ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
                     : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                 }`}
               >
-                {isGmailConnected ? 'Đang hoạt động' : 'Chưa kết nối'}
+                {hasSharedServerChannel
+                  ? 'Dùng chung mọi User • Đang hoạt động'
+                  : isGmailConnected
+                  ? 'Đang hoạt động (Phiên Admin)'
+                  : 'Chưa cấu hình kênh chung'}
               </span>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              {isGmailConnected
-                ? 'Khi bạn xác nhận giao việc hoặc gửi cảnh báo, hệ thống sẽ tự động gửi email trực tiếp bằng Gmail của bạn ngay lập tức mà không cần mở thêm cửa sổ mail.'
-                : gmailUser
-                ? `Phiên gửi Gmail của ${gmailUser.email} cần làm mới sau khi tải lại trang. Bấm nút bên cạnh để bật lại gửi mail tự động.`
-                : 'Đăng nhập bằng tài khoản Google của bạn để ứng dụng tự động gửi email giao việc và cảnh báo ngay khi bạn bấm Xác nhận.'}
+              {hasSharedServerChannel
+                ? 'Nhân viên đăng nhập bằng Mã NV & Mật khẩu không cần đăng nhập Gmail cá nhân; mọi thông báo Ticket / Bảo trì đều tự động gửi đi từ 1 tài khoản Admin duy nhất.'
+                : isGmailConnected
+                ? `Phiên Admin (${gmailUser?.email}) đang gửi mail trực tiếp. Để toàn bộ nhân viên cũng gửi tự động không cần đăng nhập Google, Admin nên cấu hình Render SMTP hoặc Webhook dùng chung bên dưới.`
+                : `Khuyến nghị cấu hình SMTP_USER=${BOOTSTRAPPED_ADMIN_EMAIL} + SMTP_PASS (Mật khẩu ứng dụng Gmail) trên Render.com hoặc dán Apps Script Webhook để chỉ dùng 1 tài khoản Admin gửi mail cho toàn bộ nhân viên.`}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 shrink-0">
-          {isGmailConnected ? (
-            <button
-              type="button"
-              onClick={() => void disconnectGmail()}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
-            >
-              Ngắt kết nối Gmail
-            </button>
-          ) : (
-            <GoogleSignInButton
-              disabled={isConnectingGmail}
-              label={
-                isConnectingGmail
-                  ? 'Đang kết nối...'
-                  : gmailUser
-                  ? `Kết nối lại (${gmailUser.email})`
-                  : 'Sign in with Google'
-              }
-              onClick={handleConnectGmail}
-            />
-          )}
-        </div>
+        {adminAuthorized && (
+          <div className="flex items-center gap-2.5 shrink-0">
+            {isGmailConnected ? (
+              <button
+                type="button"
+                onClick={() => void disconnectGmail()}
+                className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold border border-slate-700 transition"
+              >
+                Ngắt kết nối Gmail
+              </button>
+            ) : (
+              <GoogleSignInButton
+                disabled={isConnectingGmail}
+                label={
+                  isConnectingGmail
+                    ? 'Đang kết nối...'
+                    : 'Kết nối Gmail Admin (Dự phòng)'
+                }
+                onClick={handleConnectGmail}
+              />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Service Status KPI Cards */}
@@ -630,42 +641,26 @@ export const EmailAlertsTab: React.FC = () => {
               </div>
             </div>
 
-            {isGmailConnected && gmailUser?.email ? (
+            {isAutoSendReady ? (
               <div className="p-3 rounded-xl bg-emerald-950/35 border border-emerald-500/35 text-xs text-emerald-200 flex items-center justify-between gap-2">
                 <div className="flex items-start gap-2">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                   <span>
-                    <strong>Đã sẵn sàng gửi mail trực tiếp qua Gmail ({gmailUser.email}):</strong> Khi nhấn{' '}
-                    <strong className="text-white">"Xác Nhận Giao Việc &amp; Gửi Mail"</strong>, hệ thống tự động gửi thư trực tiếp từ Gmail của bạn mà không cần Webhook trung gian.
-                  </span>
-                </div>
-              </div>
-            ) : !isGmailConnected && webhookUrl.trim() ? (
-              <div className="p-3.5 rounded-xl bg-amber-950/35 border border-amber-500/40 text-xs text-amber-100 space-y-2">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Chưa đăng nhập Gmail — hệ thống đang dùng Webhook đã lưu:</strong> Nếu bạn thấy báo{' '}
-                    <em>"Đã gửi (Webhook)"</em> nhưng người nhận không nhận được mail, có thể Apps Script chưa Deploy phiên bản mới (<strong>New version</strong>) hoặc URL Webhook không thực hiện lệnh gửi mail.
-                    <br />• Khuyên dùng: Bấm <strong>Sign in with Google</strong> ở trên để gửi thẳng qua Gmail của bạn (nhận thư thật ngay lập tức), hoặc bấm <strong>Xóa Webhook</strong>.
-                  </span>
-                </div>
-              </div>
-            ) : isAutoSendReady ? (
-              <div className="p-3 rounded-xl bg-emerald-950/35 border border-emerald-500/35 text-xs text-emerald-200 flex items-center justify-between gap-2">
-                <div className="flex items-start gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
-                  <span>
-                    <strong>Đã sẵn sàng gửi mail tự động 1-chạm:</strong> Khi nhấn{' '}
-                    <strong className="text-white">"Xác Nhận Giao Việc &amp; Gửi Mail"</strong>, hệ thống tự động gửi thư ngầm qua{' '}
+                    <strong>Đã sẵn sàng gửi mail tự động 1-chạm:</strong> Hệ thống sẽ tự động gửi thư ngầm qua{' '}
                     <strong>
                       {autoEmailServerStatus.envWebhookConfigured
                         ? 'Webhook (Server Proxy)'
                         : autoEmailServerStatus.smtpConfigured
-                        ? `SMTP (${autoEmailServerStatus.smtpUser})`
+                        ? `SMTP Server (${autoEmailServerStatus.smtpUser || BOOTSTRAPPED_ADMIN_EMAIL})`
+                        : (webhookUrl.trim() && !isDevAppsScript)
+                        ? 'Google Apps Script Webhook (1 Gmail Admin dùng chung)'
+                        : isGmailConnected
+                        ? `Gmail OAuth (${gmailUser?.email})`
                         : 'Resend API'}
-                    </strong>{' '}
-                    mà không cần mở ứng dụng mail.
+                    </strong>
+                    {hasSharedServerChannel
+                      ? ' — mọi nhân viên đều gửi chung không cần đăng nhập Gmail.'
+                      : '.'}
                   </span>
                 </div>
               </div>
@@ -675,11 +670,13 @@ export const EmailAlertsTab: React.FC = () => {
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                     <span>
-                      <strong>Chưa kích hoạt kênh gửi tự động ngầm:</strong> Để khi nhấn{' '}
-                      <strong>"Xác Nhận Giao Việc &amp; Gửi Mail"</strong> là thư tự động bay đi luôn không tốn bước mở mail, hãy chọn 1 trong 3 cách miễn phí:
-                      <br />• <strong>Cách 1 (Nhanh nhất):</strong> Bấm nút <strong>Sign in with Google</strong> ở thẻ Kết Nối Gmail phía trên để cấp quyền gửi qua Gmail của bạn.
-                      <br />• <strong>Cách 2 (Google Apps Script):</strong> Dán link Web App vào ô <em>Webhook Endpoint</em> ở trên.
-                      <br />• <strong>Cách 3 (Server SMTP):</strong> Thêm <code className="text-amber-300">SMTP_USER</code> + <code className="text-amber-300">SMTP_PASS</code> (Gmail App Password) vào Secrets.
+                      <strong>Chưa kích hoạt kênh 1 tài khoản Admin dùng chung trên Render:</strong> Để nhân viên thông thường KHÔNG cần đăng nhập Gmail cá nhân mà vẫn gửi tự động, Admin chọn 1 trong 2 cách miễn phí:
+                      <br />• <strong>Cách 1 (Khuyên dùng trên Render.com — SMTP Gmail):</strong> Trong Render Dashboard → Environment Variables thêm{' '}
+                      <code className="text-amber-300">SMTP_HOST=smtp.gmail.com</code>,{' '}
+                      <code className="text-amber-300">SMTP_PORT=465</code>,{' '}
+                      <code className="text-amber-300">SMTP_USER={BOOTSTRAPPED_ADMIN_EMAIL}</code>,{' '}
+                      <code className="text-amber-300">SMTP_PASS=&lt;Mật khẩu ứng dụng Gmail 16 ký tự&gt;</code>.
+                      <br />• <strong>Cách 2 (Google Apps Script 30s):</strong> Tạo 1 Web App bằng Gmail Admin rồi dán link <code className="text-cyan-300">/exec</code> vào ô <em>Webhook Endpoint</em> ở trên.
                     </span>
                   </div>
                   <button
@@ -695,10 +692,10 @@ export const EmailAlertsTab: React.FC = () => {
                 {showAppsScriptGuide && (
                   <div className="pt-2 border-t border-amber-500/20 space-y-2 text-[11px] text-slate-300">
                     <p className="font-semibold text-white">
-                      Tạo Webhook gửi mail tự động 100% miễn phí bằng chính Gmail của bạn (không cần Google Cloud Billing):
+                      Tạo Webhook gửi mail tự động 100% miễn phí bằng 1 Gmail Admin ({BOOTSTRAPPED_ADMIN_EMAIL}):
                     </p>
                     <ol className="list-decimal list-inside space-y-1 text-slate-300">
-                      <li>Mở <strong>script.google.com</strong> bằng Gmail của bạn → bấm <strong>Dự án mới</strong>.</li>
+                      <li>Mở <strong>script.google.com</strong> bằng Gmail Admin → bấm <strong>Dự án mới</strong>.</li>
                       <li>Dán đoạn mã bên dưới vào file <code className="text-cyan-300">Code.gs</code> rồi bấm Lưu.</li>
                       <li>Bấm <strong>Triển khai (Deploy) → Tùy chọn triển khai mới → Ứng dụng web (Web App)</strong>, chọn Quyền truy cập: <strong>Bất kỳ ai (Anyone)</strong>.</li>
                       <li>Sao chép URL Web App (<code className="text-cyan-300">https://script.google.com/macros/s/.../exec</code>) dán vào ô <strong>Webhook Endpoint</strong> ở trên rồi bấm <strong>Lưu Cấu Hình Dịch Vụ</strong>.</li>

@@ -6,9 +6,11 @@ import {
   parseAssigneeNames,
   resolveAssigneeEmailDetails,
   buildGmailComposeUrl,
+  isAdminLevel,
   isPlaceholderEmail,
   isValidEmailFormat,
 } from '../../utils/cmmsLogic';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../../utils/firestoreSync';
 import { MultiAssigneePicker } from './MultiAssigneePicker';
 import { GoogleSignInButton } from './GoogleSignInButton';
 import {
@@ -102,6 +104,7 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
     emailConfig.primaryRecipient
   );
 
+  const adminAuthorized = isAdminLevel(currentUser);
   const isAutoSendReady = Boolean(
     isGmailConnected ||
       emailConfig.webhookUrl?.trim() ||
@@ -247,8 +250,8 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
         setError(emailErr);
         return;
       }
-      // If neither Gmail nor server/webhook is ready, trigger Google Sign-In directly from user click
-      if (!isAutoSendReady) {
+      // Only Admin may trigger direct Gmail OAuth fallback when no shared SMTP/Webhook is configured
+      if (!isAutoSendReady && adminAuthorized) {
         setIsConnectingGmail(true);
         setError('');
         const authRes = await connectGmail(true);
@@ -329,12 +332,12 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
             </div>
 
             <div className="flex flex-col gap-3 pt-2 border-t border-slate-800">
-              {(!isAutoSendReady || dispatchFailure.needsGmailAuth) && (
+              {(!isAutoSendReady || dispatchFailure.needsGmailAuth) && adminAuthorized && (
                 <div className="p-3 rounded-xl bg-slate-800/70 border border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                   <div className="text-xs text-slate-300">
-                    <strong className="text-white block">Kết nối Gmail &amp; gửi lại ngay:</strong>
+                    <strong className="text-white block">Kết nối Gmail Admin ({BOOTSTRAPPED_ADMIN_EMAIL}) &amp; gửi lại ngay:</strong>
                     <span className="text-[11px] text-slate-400">
-                      Đăng nhập Google (nhớ tích quyền gửi email) — hệ thống sẽ tự gửi ngay sau khi đăng nhập.
+                      Hoặc cấu hình SMTP / Webhook 1 lần để toàn bộ nhân viên tự động gửi chung không cần đăng nhập Google.
                     </span>
                   </div>
                   <GoogleSignInButton
@@ -506,40 +509,36 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
                   />
                 </div>
 
-                {!isGmailConnected && (
-                  <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-                      <div className="space-y-1">
+                {!isAutoSendReady && (
+                  adminAuthorized ? (
+                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-start gap-2">
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
                         <span>
-                          {emailConfig.webhookUrl?.trim()
-                            ? 'Chưa đăng nhập Gmail nên hệ thống đang dùng Webhook đã lưu. Khuyên dùng: bấm Sign in with Google để gửi trực tiếp qua Gmail thật.'
-                            : 'Chưa kết nối Gmail. Bạn có thể bấm Sign in with Google ngay, hoặc bấm Xác nhận để đăng nhập Google và gửi tự động luôn.'}
+                          Chưa có kênh SMTP/Webhook dùng chung. Admin có thể bấm Sign in with Google ({BOOTSTRAPPED_ADMIN_EMAIL}) để gửi trực tiếp, hoặc thiết lập SMTP/Webhook trong mục Thông Báo Email.
                         </span>
-                        {emailConfig.webhookUrl?.trim() && (
-                          <button
-                            type="button"
-                            onClick={() => updateEmailConfig({ webhookUrl: '' })}
-                            className="block text-[10px] font-bold text-rose-300 hover:text-rose-200 underline"
-                          >
-                            Xóa Webhook cũ để dùng Gmail trực tiếp
-                          </button>
-                        )}
                       </div>
+                      <GoogleSignInButton
+                        compact
+                        disabled={isConnectingGmail || isSubmitting}
+                        label={
+                          isConnectingGmail
+                            ? 'Đang kết nối...'
+                            : gmailUser
+                            ? 'Kết nối lại Gmail'
+                            : 'Sign in with Google'
+                        }
+                        onClick={() => void handleConnectGmail(false)}
+                      />
                     </div>
-                    <GoogleSignInButton
-                      compact
-                      disabled={isConnectingGmail || isSubmitting}
-                      label={
-                        isConnectingGmail
-                          ? 'Đang kết nối...'
-                          : gmailUser
-                          ? 'Kết nối lại Gmail'
-                          : 'Sign in with Google'
-                      }
-                      onClick={() => void handleConnectGmail(false)}
-                    />
-                  </div>
+                  ) : (
+                    <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[11px] text-amber-200 flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <span>
+                        Hệ thống dùng 1 tài khoản Admin (<strong className="font-mono">{BOOTSTRAPPED_ADMIN_EMAIL}</strong>) qua SMTP/Webhook để gửi email. Hiện Admin chưa bật kênh tự động — bạn vẫn có thể bấm lưu phân công bình thường.
+                      </span>
+                    </div>
+                  )
                 )}
 
                 {(emailDetails.placeholderEmployees.length > 0 ||

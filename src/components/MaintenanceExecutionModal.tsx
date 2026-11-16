@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Equipment, MaintenanceHistory, MaintenanceResult, MaintenanceWorkType } from '../types/cmms';
 import { useCMMS } from '../context/CMMSContext';
-import { calculateNextMaintenanceDate, formatDateVN, getHistoryWorkType, parseAssigneeNames } from '../utils/cmmsLogic';
+import { calculateNextMaintenanceDate, formatDateVN, getHistoryWorkType, isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../utils/firestoreSync';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
 import { GoogleSignInButton } from './common/GoogleSignInButton';
@@ -120,6 +121,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
 
   const calculatedNextDate = calculateNextMaintenanceDate(ngayThucHien, activeEquipment.tanSuat);
 
+  const adminAuthorized = isAdminLevel(currentUser);
   const isAutoSendReady = Boolean(
     isGmailConnected ||
       emailConfig.webhookUrl?.trim() ||
@@ -139,7 +141,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
       return;
     }
 
-    if (!isEditMode && sendCompletionEmail && !isAutoSendReady) {
+    if (!isEditMode && sendCompletionEmail && !isAutoSendReady && adminAuthorized) {
       setIsConnectingGmail(true);
       setError('');
       const authRes = await connectGmail(true);
@@ -538,25 +540,29 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
                 )}
               </div>
 
-              {sendCompletionEmail && !isGmailConnected && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
-                  <span>
-                    {emailConfig.webhookUrl?.trim()
-                      ? 'Chưa đăng nhập Gmail nên đang dùng Webhook cũ. Bấm Sign in with Google để gửi trực tiếp qua Gmail thật.'
-                      : 'Kết nối Gmail để tự động gửi báo cáo hoàn thành ngay khi lưu biên bản.'}
-                  </span>
-                  <GoogleSignInButton
-                    compact
-                    disabled={isConnectingGmail}
-                    label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
-                    onClick={async () => {
-                      setIsConnectingGmail(true);
-                      const res = await connectGmail(true);
-                      setIsConnectingGmail(false);
-                      if (!res.success) setError(res.message);
-                    }}
-                  />
-                </div>
+              {sendCompletionEmail && !isAutoSendReady && (
+                adminAuthorized ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
+                    <span>
+                      Chưa bật kênh SMTP/Webhook dùng chung. Admin có thể bấm Sign in with Google ({BOOTSTRAPPED_ADMIN_EMAIL}) để gửi trực tiếp qua Gmail.
+                    </span>
+                    <GoogleSignInButton
+                      compact
+                      disabled={isConnectingGmail}
+                      label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
+                      onClick={async () => {
+                        setIsConnectingGmail(true);
+                        const res = await connectGmail(true);
+                        setIsConnectingGmail(false);
+                        if (!res.success) setError(res.message);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200/90">
+                    Báo cáo hoàn thành gửi tự động qua 1 tài khoản Admin (<span className="font-mono">{BOOTSTRAPPED_ADMIN_EMAIL}</span>) khi Admin cấu hình SMTP/Webhook. Biên bản vẫn sẽ được lưu bình thường.
+                  </div>
+                )
               )}
             </div>
           )}

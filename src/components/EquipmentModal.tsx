@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Equipment, MaintenanceFrequency, RiskLevel, EquipmentStatus } from '../types/cmms';
-import { parseAssigneeNames, resolveAssigneeEmails, isPlaceholderEmail, isValidEmailFormat } from '../utils/cmmsLogic';
+import { parseAssigneeNames, resolveAssigneeEmails, isAdminLevel, isPlaceholderEmail, isValidEmailFormat } from '../utils/cmmsLogic';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../utils/firestoreSync';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
 import { GoogleSignInButton } from './common/GoogleSignInButton';
@@ -160,7 +161,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
         setError('Vui lòng nhập Gmail / email thực tế (không dùng @factory.com) để gửi thông báo.');
         return;
       }
-      if (!isAutoSendReady) {
+      if (!isAutoSendReady && isAdminLevel(currentUser)) {
         const authRes = await connectGmail(true);
         if (!authRes.success) {
           setError(authRes.message);
@@ -397,22 +398,26 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                 Gửi email giao việc tới người phụ trách ({email})
               </span>
             </label>
-            {sendAssignmentEmail && !isGmailConnected && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
-                <span>
-                  {emailConfig.webhookUrl?.trim()
-                    ? 'Chưa đăng nhập Gmail nên đang dùng Webhook cũ. Bấm Sign in with Google để gửi trực tiếp qua Gmail thật.'
-                    : 'Kết nối Gmail để tự động gửi email giao việc ngay khi bấm lưu.'}
-                </span>
-                <GoogleSignInButton
-                  compact
-                  label="Sign in with Google"
-                  onClick={async () => {
-                    const res = await connectGmail(true);
-                    if (!res.success) setError(res.message);
-                  }}
-                />
-              </div>
+            {sendAssignmentEmail && !isAutoSendReady && (
+              isAdminLevel(currentUser) ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
+                  <span>
+                    Chưa bật SMTP/Webhook dùng chung. Admin có thể bấm Sign in with Google ({BOOTSTRAPPED_ADMIN_EMAIL}) để gửi trực tiếp qua Gmail.
+                  </span>
+                  <GoogleSignInButton
+                    compact
+                    label="Sign in with Google"
+                    onClick={async () => {
+                      const res = await connectGmail(true);
+                      if (!res.success) setError(res.message);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200/90">
+                  Email gửi qua 1 tài khoản Admin (<span className="font-mono">{BOOTSTRAPPED_ADMIN_EMAIL}</span>) khi Admin bật SMTP/Webhook dùng chung.
+                </div>
+              )
             )}
           </div>
 
@@ -449,7 +454,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                {!isGmailConnected ? (
+                {!isAutoSendReady && isAdminLevel(currentUser) ? (
                   <GoogleSignInButton
                     compact
                     label="Sign in with Google & Gửi lại"

@@ -21,11 +21,13 @@ service cloud.firestore {
     }
 
     function isSignedIn() {
-      return request.auth != null && request.auth.token.email_verified == true;
+      return request.auth != null &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email is string;
     }
 
     function isBootstrappedAdmin() {
-      return isSignedIn() && request.auth.token.email == 'khiemhuynhggs@gmail.com';
+      return isSignedIn() && request.auth.token.email.lower() == 'khiemhuynhggs@gmail.com';
     }
 
     function isAdmin() {
@@ -35,7 +37,7 @@ service cloud.firestore {
     function isMemberOnDoc(data) {
       return isBootstrappedAdmin() ||
         data.ownerUid == request.auth.uid ||
-        (data.allowedEmails is list && data.allowedEmails.size() <= 50 && request.auth.token.email in data.allowedEmails);
+        (data.allowedEmails is list && data.allowedEmails.size() <= 50 && request.auth.token.email.lower() in data.allowedEmails);
     }
 
     function isValidMeta(data) {
@@ -559,19 +561,19 @@ service cloud.firestore {
         (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['tenNhanVien', 'date', 'chucVu', 'ngayVao', 'username', 'quyenHan', 'allowedViews', 'anhDaiDien', 'gioiTinh', 'phongBan', 'chuyenMon', 'loaiHopDong', 'caLamViec', 'ngayNghiPhepNam', 'ngayNghiPhepDaDung', 'ghiChuHoSo', 'allowedEmails', 'updatedAt'])) ||
         (isSignedIn() &&
           exists(/databases/$(database)/documents/employees_private/$(docId)) &&
-          get(/databases/$(database)/documents/employees_private/$(docId)).data.email == request.auth.token.email &&
+          get(/databases/$(database)/documents/employees_private/$(docId)).data.email == request.auth.token.email.lower() &&
           incoming().diff(existing()).affectedKeys().hasOnly(['tenNhanVien', 'anhDaiDien', 'gioiTinh', 'chuyenMon', 'ghiChuHoSo', 'updatedAt']))
       );
       allow delete: if isValidId(docId) && isAdmin();
     }
 
     match /employees_private/{docId} {
-      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email);
-      allow list: if isSignedIn() && (isBootstrappedAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email);
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email.lower());
+      allow list: if isSignedIn() && (isBootstrappedAdmin() || existing().ownerUid == request.auth.uid || existing().email == request.auth.token.email.lower());
       allow create: if isValidId(docId) && isAdmin() && isValidEmployeePrivate(incoming()) && isValidCreateMeta(incoming());
       allow update: if isValidId(docId) && isValidEmployeePrivate(incoming()) && isValidUpdateMeta() && (
         isAdmin() ||
-        (isSignedIn() && existing().email == request.auth.token.email && incoming().diff(existing()).affectedKeys().hasOnly(['soDienThoai', 'ngaySinh', 'queQuan', 'diaChiThuongTru', 'soCCCD', 'ngayCapCCCD', 'noiCapCCCD', 'trinhDoHocVan', 'tinhTrangHonNhan', 'nguoiLienHeKhanCap', 'sdtKhanCap', 'updatedAt']))
+        (isSignedIn() && existing().email == request.auth.token.email.lower() && incoming().diff(existing()).affectedKeys().hasOnly(['soDienThoai', 'ngaySinh', 'queQuan', 'diaChiThuongTru', 'soCCCD', 'ngayCapCCCD', 'noiCapCCCD', 'trinhDoHocVan', 'tinhTrangHonNhan', 'nguoiLienHeKhanCap', 'sdtKhanCap', 'updatedAt']))
       );
       allow delete: if isValidId(docId) && isAdmin();
     }

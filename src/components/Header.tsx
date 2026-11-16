@@ -72,6 +72,7 @@ export const Header: React.FC<HeaderProps> = ({
     cloudSyncError,
     lastSyncedAt,
     connectCloudWithGoogle,
+    disconnectCloud,
     forceSyncLocalToCloud,
   } = useCMMS();
 
@@ -282,8 +283,9 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
-          {/* Cloud Real-Time Sync Status Button & Popover */}
-          <div className="relative">
+          {/* Cloud Real-Time Sync Status Button & Popover (Admin / Backup Owner) */}
+          {(hasBackupAccess || cloudSyncStatus === 'synced') && (
+            <div className="relative">
             <button
               type="button"
               onClick={() => {
@@ -382,7 +384,7 @@ export const Header: React.FC<HeaderProps> = ({
                   </div>
                 ) : (
                   <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Hiện đang lưu dữ liệu trên trình duyệt này. Đăng nhập Google để tự động đồng bộ thời gian thực giữa mọi thiết bị và nhân sự.
+                    Chỉ cần tài khoản Admin (<span className="font-semibold text-slate-800 dark:text-slate-200">khiemhuynhggs@gmail.com</span>) đăng nhập Google để đồng bộ &amp; sao lưu dữ liệu Cloud.
                   </p>
                 )}
 
@@ -423,27 +425,29 @@ export const Header: React.FC<HeaderProps> = ({
                       ) : (
                         <Cloud className="w-4 h-4" />
                       )}
-                      <span>Kết nối Google Cloud Sync</span>
+                      <span>Kết nối Google Cloud (Admin)</span>
                     </button>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        disabled={isCloudActionLoading}
-                        onClick={async () => {
-                          setIsCloudActionLoading(true);
-                          setCloudActionNotice(null);
-                          const res = await forceSyncLocalToCloud();
-                          setIsCloudActionLoading(false);
-                          setCloudActionNotice({ ok: res.success, text: res.message });
-                        }}
-                        className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
-                      >
-                        <RefreshCw
-                          className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
-                        />
-                        <span>Đẩy lại toàn bộ dữ liệu lên Cloud</span>
-                      </button>
+                      {hasBackupAccess && (
+                        <button
+                          type="button"
+                          disabled={isCloudActionLoading}
+                          onClick={async () => {
+                            setIsCloudActionLoading(true);
+                            setCloudActionNotice(null);
+                            const res = await forceSyncLocalToCloud();
+                            setIsCloudActionLoading(false);
+                            setCloudActionNotice({ ok: res.success, text: res.message });
+                          }}
+                          className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
+                          />
+                          <span>Đẩy lại toàn bộ dữ liệu lên Cloud</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -459,12 +463,32 @@ export const Header: React.FC<HeaderProps> = ({
                       >
                         <span>Đổi tài khoản Google Cloud</span>
                       </button>
+
+                      <button
+                        type="button"
+                        disabled={isCloudActionLoading}
+                        onClick={async () => {
+                          setIsCloudActionLoading(true);
+                          setCloudActionNotice(null);
+                          await disconnectCloud();
+                          setIsCloudActionLoading(false);
+                          setCloudActionNotice({
+                            ok: true,
+                            text: 'Đã ngắt kết nối Google Cloud khỏi trình duyệt này.',
+                          });
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30 font-semibold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        <CloudOff className="w-3.5 h-3.5" />
+                        <span>Ngắt kết nối Google Cloud</span>
+                      </button>
                     </>
                   )}
                 </div>
               </div>
             )}
-          </div>
+            </div>
+          )}
 
           {/* Notifications Bell */}
           <div className="relative">

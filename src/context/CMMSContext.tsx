@@ -67,6 +67,7 @@ import {
   isPlaceholderEmail,
   isValidEmailFormat,
   isAdminLevel,
+  canAccessBackup,
 } from '../utils/cmmsLogic';
 import {
   GmailAccountInfo,
@@ -110,6 +111,7 @@ import {
   WATER_MONTHLY_SEED_VERSION,
   seedOrPushWorkspaceToFirestore,
   subscribeCloudCollection,
+  syncAllowedEmailsIfNeeded,
   syncWaterMonthlySeedToFirestoreIfNeeded,
   upsertCloudDoc,
 } from '../utils/firestoreSync';
@@ -330,6 +332,7 @@ interface CMMSContextType {
   cloudSyncError: string | null;
   lastSyncedAt: string | null;
   connectCloudWithGoogle: () => Promise<{ success: boolean; message: string }>;
+  disconnectCloud: () => Promise<void>;
   forceSyncLocalToCloud: () => Promise<{ success: boolean; message: string }>;
 
   // System Actions
@@ -510,7 +513,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsGmailConnected(Boolean(token));
       },
       (user) => {
-        if (user) {
+        const emailLower = (user?.email || '').trim().toLowerCase();
+        if (user && emailLower === BOOTSTRAPPED_ADMIN_EMAIL) {
           setGmailUser({
             email: user.email || '',
             displayName: user.displayName || user.email || 'Google User',
@@ -532,9 +536,24 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email?: string;
     message: string;
   }> => {
+    if (!isAdminLevel(currentUserRef.current)) {
+      return {
+        success: false,
+        message: `Hệ thống chỉ dùng 1 tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) để gửi email & sao lưu Cloud. Nhân viên không cần đăng nhập Gmail cá nhân; vui lòng nhờ Admin bật SMTP hoặc Webhook dùng chung.`,
+      };
+    }
     try {
       const { user, accessToken } = await signInWithGmail(forceConsent);
-      const email = user.email || '';
+      const email = (user.email || '').trim();
+      if (email.toLowerCase() !== BOOTSTRAPPED_ADMIN_EMAIL) {
+        await signOutGmail();
+        setGmailUser(null);
+        setIsGmailConnected(false);
+        return {
+          success: false,
+          message: `Hệ thống chỉ cho phép dùng 1 tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) để gửi email & sao lưu dữ liệu (tài khoản vừa chọn: ${email || 'Không rõ'}).`,
+        };
+      }
       setGmailUser({
         email,
         displayName: user.displayName || email || 'Google User',
@@ -544,7 +563,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return {
         success: true,
         email,
-        message: `Đã kết nối Gmail (${email}) sẵn sàng gửi email tự động!`,
+        message: `Đã kết nối Gmail Admin (${email}) sẵn sàng gửi email tự động!`,
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Không thể kết nối Gmail.';
@@ -758,37 +777,26 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const matchOrApplyCloudUser = (fbUser: User) => {
+  const matchOrApplyCloudUser = (fbUser: User): boolean => {
     const emailLower = (fbUser.email || '').trim().toLowerCase();
-    if (!emailLower) return;
+    if (!emailLower) return false;
 
     const list = employeesRef.current;
-    let matched =
+    const matched =
       list.find((e) => (e.email || '').trim().toLowerCase() === emailLower) ||
       (emailLower === BOOTSTRAPPED_ADMIN_EMAIL
         ? list.find((e) => e.maNhanVien === 'ID1460' || e.chucVu === 'Admin') || INITIAL_EMPLOYEES[0]
         : undefined);
 
-    if (matched) {
-      setCurrentUserState(matched);
-      saveStorage('currentUser', matched);
-    } else if (sessionStorage.getItem('cmms_authenticated') !== 'true') {
-      const guestMember: Employee = {
-        maNhanVien: `GG-${fbUser.uid.slice(0, 6).toUpperCase()}`,
-        tenNhanVien: fbUser.displayName || fbUser.email || 'Google User',
-        date: '',
-        chucVu: 'Kỹ thuật viên',
-        ngayVao: new Date().toISOString().slice(0, 10),
-        soDienThoai: '',
-        email: fbUser.email || '',
-        username: emailLower,
-        anhDaiDien: fbUser.photoURL || undefined,
-      };
-      setCurrentUserState(guestMember);
+    if (!matched) {
+      return false;
     }
 
+    setCurrentUserState(matched);
+    saveStorage('currentUser', matched);
     setIsAuthenticated(true);
     sessionStorage.setItem('cmms_authenticated', 'true');
+    return true;
   };
 
   useEffect(() => {
@@ -818,6 +826,30 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
+      const emailLower = fbUser.email.trim().toLowerCase();
+      const isBootAdmin = emailLower === BOOTSTRAPPED_ADMIN_EMAIL;
+      const isAuthorizedInList =
+        isBootAdmin ||
+        employeesRef.current.some((e) => (e.email || '').trim().toLowerCase() === emailLower);
+
+      if (!isAuthorizedInList) {
+        cloudUserRef.current = null;
+        workspaceReadyRef.current = false;
+        setCloudUser(null);
+        // Clear unauthorized cached Google session so internal users never get stuck with Cloud permission errors
+        void signOutGmail();
+        if (sessionStorage.getItem('cmms_authenticated') === 'true') {
+          setCloudSyncStatus('offline');
+          setCloudSyncError(null);
+        } else {
+          setCloudSyncStatus('error');
+          setCloudSyncError(
+            `Tài khoản Google (${fbUser.email}) chưa được cấp quyền Cloud. Chỉ tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) dùng để đồng bộ Cloud; nhân viên vui lòng đăng nhập bằng Mã nhân viên & Mật khẩu bên dưới.`
+          );
+        }
+        return;
+      }
+
       const info: CloudAccountInfo = {
         uid: fbUser.uid,
         email: fbUser.email,
@@ -828,16 +860,24 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCloudUser(info);
       setCloudSyncStatus('syncing');
       setCloudSyncError(null);
-      matchOrApplyCloudUser(fbUser);
 
-      const emailLower = fbUser.email.trim().toLowerCase();
-      if (emailLower === BOOTSTRAPPED_ADMIN_EMAIL) {
+      if (sessionStorage.getItem('cmms_authenticated') !== 'true' || isBootAdmin) {
+        matchOrApplyCloudUser(fbUser);
+      }
+
+      if (isBootAdmin) {
         try {
           await seedOrPushWorkspaceToFirestore(
             fbUser.uid,
             fbUser.email,
             latestSnapshotRef.current,
             { knownCloudIds: knownCloudIdsRef.current }
+          );
+          await syncAllowedEmailsIfNeeded(
+            fbUser.uid,
+            fbUser.email,
+            latestSnapshotRef.current.employees,
+            knownCloudIdsRef.current
           );
           const waterSeedUpdated = await syncWaterMonthlySeedToFirestoreIfNeeded(
             fbUser.uid,
@@ -861,7 +901,22 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (cancelled) return;
 
       const onSnapError = (err: Error) => {
-        setCloudSyncError(formatFirestoreSyncError(err));
+        const msg = formatFirestoreSyncError(err);
+        if (
+          !isBootAdmin &&
+          !canAccessBackup(currentUserRef.current) &&
+          /chưa được cấp quyền|permission-denied/i.test(msg)
+        ) {
+          // Regular employee using internal account should not be blocked by stale Google cache
+          cleanupListeners();
+          cloudUserRef.current = null;
+          setCloudUser(null);
+          setCloudSyncStatus('offline');
+          setCloudSyncError(null);
+          void signOutGmail();
+          return;
+        }
+        setCloudSyncError(msg);
         setCloudSyncStatus('error');
       };
 
@@ -1183,6 +1238,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCloudSyncError(null);
     try {
       const { user } = await signInWithGoogleAccount();
+      const emailLower = (user.email || '').trim().toLowerCase();
+      const isAuthorized =
+        emailLower === BOOTSTRAPPED_ADMIN_EMAIL ||
+        employeesRef.current.some((e) => (e.email || '').trim().toLowerCase() === emailLower);
+      if (!isAuthorized) {
+        await signOutGmail();
+        const msg = `Tài khoản Google (${user.email || ''}) không phải Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) và chưa được cấp quyền Cloud. Vui lòng đăng nhập bằng tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}).`;
+        setCloudSyncStatus('error');
+        setCloudSyncError(msg);
+        return { success: false, message: msg };
+      }
       return {
         success: true,
         message: `Đã kết nối đồng bộ Cloud (${user.email}) thành công!`,
@@ -1193,6 +1259,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCloudSyncStatus(cloudUserRef.current ? 'error' : 'offline');
       return { success: false, message: msg };
     }
+  };
+
+  const disconnectCloud = async (): Promise<void> => {
+    await signOutGmail();
+    cloudUserRef.current = null;
+    workspaceReadyRef.current = false;
+    setCloudUser(null);
+    setCloudSyncStatus('offline');
+    setCloudSyncError(null);
   };
 
   const forceSyncLocalToCloud = async (): Promise<{ success: boolean; message: string }> => {
@@ -3225,6 +3300,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cloudSyncError,
         lastSyncedAt,
         connectCloudWithGoogle,
+        disconnectCloud,
         forceSyncLocalToCloud,
       }}
     >

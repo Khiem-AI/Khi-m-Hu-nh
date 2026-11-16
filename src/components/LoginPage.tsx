@@ -243,28 +243,33 @@ export const LoginPage: React.FC = () => {
 
             {mode === 'login' ? (
               <div className="space-y-4">
-                <button
-                  type="button"
-                  onClick={handleGoogleLogin}
-                  disabled={isGoogleLoading || cloudSyncStatus === 'connecting'}
-                  className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-sm shadow-md transition flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 border border-slate-800 dark:border-slate-200"
-                >
-                  {isGoogleLoading || cloudSyncStatus === 'connecting' ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Cloud className="w-4 h-4 text-cyan-400 dark:text-cyan-600" />
-                  )}
-                  <span>
-                    {isGoogleLoading || cloudSyncStatus === 'connecting'
-                      ? 'Đang kết nối Google Cloud...'
-                      : 'Đăng nhập bằng Google (Đồng bộ Đám mây)'}
-                  </span>
-                </button>
+                <div className="space-y-1.5">
+                  <button
+                    type="button"
+                    onClick={handleGoogleLogin}
+                    disabled={isGoogleLoading || cloudSyncStatus === 'connecting'}
+                    className="w-full py-2.5 px-4 rounded-xl bg-slate-900 dark:bg-white hover:bg-slate-800 dark:hover:bg-slate-100 text-white dark:text-slate-900 font-bold text-sm shadow-md transition flex items-center justify-center gap-2.5 cursor-pointer disabled:opacity-50 border border-slate-800 dark:border-slate-200"
+                  >
+                    {isGoogleLoading || cloudSyncStatus === 'connecting' ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Cloud className="w-4 h-4 text-cyan-400 dark:text-cyan-600" />
+                    )}
+                    <span>
+                      {isGoogleLoading || cloudSyncStatus === 'connecting'
+                        ? 'Đang kết nối Google Cloud...'
+                        : 'Đăng nhập Admin Google (Cloud Sync & Backup)'}
+                    </span>
+                  </button>
+                  <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">
+                    Dành riêng cho tài khoản Admin (<span className="font-mono">khiemhuynhggs@gmail.com</span>)
+                  </p>
+                </div>
 
                 <div className="relative flex items-center py-1">
                   <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
-                  <span className="shrink-0 mx-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                    Hoặc đăng nhập nội bộ
+                  <span className="shrink-0 mx-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 text-center">
+                    Nhân viên đăng nhập nội bộ (không cần Gmail)
                   </span>
                   <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
                 </div>

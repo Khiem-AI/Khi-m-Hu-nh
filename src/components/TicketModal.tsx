@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Ticket, TicketPriority, TicketStatus } from '../types/cmms';
-import { parseAssigneeNames } from '../utils/cmmsLogic';
+import { isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
+import { BOOTSTRAPPED_ADMIN_EMAIL } from '../utils/firestoreSync';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
 import { GoogleSignInButton } from './common/GoogleSignInButton';
@@ -95,6 +96,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({
 
   if (!isOpen) return null;
 
+  const adminAuthorized = isAdminLevel(currentUser);
   const isAutoSendReady = Boolean(
     isGmailConnected ||
       emailConfig.webhookUrl?.trim() ||
@@ -114,7 +116,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({
       return;
     }
 
-    if (sendEmail && !isAutoSendReady) {
+    if (sendEmail && !isAutoSendReady && adminAuthorized) {
       setIsConnectingGmail(true);
       setError('');
       const authRes = await connectGmail(true);
@@ -381,25 +383,29 @@ export const TicketModal: React.FC<TicketModalProps> = ({
               )}
             </div>
 
-            {sendEmail && !isGmailConnected && (
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
-                <span>
-                  {emailConfig.webhookUrl?.trim()
-                    ? 'Chưa đăng nhập Gmail nên đang dùng Webhook cũ. Bấm Sign in with Google để gửi trực tiếp qua Gmail thật.'
-                    : 'Kết nối Gmail để tự động gửi email thông báo ngay khi bấm lưu Ticket.'}
-                </span>
-                <GoogleSignInButton
-                  compact
-                  disabled={isConnectingGmail}
-                  label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
-                  onClick={async () => {
-                    setIsConnectingGmail(true);
-                    const res = await connectGmail(true);
-                    setIsConnectingGmail(false);
-                    if (!res.success) setError(res.message);
-                  }}
-                />
-              </div>
+            {sendEmail && !isAutoSendReady && (
+              adminAuthorized ? (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
+                  <span>
+                    Chưa bật kênh SMTP/Webhook dùng chung. Admin có thể bấm Sign in with Google ({BOOTSTRAPPED_ADMIN_EMAIL}) để gửi trực tiếp qua Gmail.
+                  </span>
+                  <GoogleSignInButton
+                    compact
+                    disabled={isConnectingGmail}
+                    label={isConnectingGmail ? 'Đang kết nối...' : 'Sign in with Google'}
+                    onClick={async () => {
+                      setIsConnectingGmail(true);
+                      const res = await connectGmail(true);
+                      setIsConnectingGmail(false);
+                      if (!res.success) setError(res.message);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200/90">
+                  Thông báo tự động dùng 1 tài khoản Admin (<span className="font-mono">{BOOTSTRAPPED_ADMIN_EMAIL}</span>) qua SMTP/Webhook. Ticket vẫn được lưu bình thường.
+                </div>
+              )
             )}
           </div>
 
