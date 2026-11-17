@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Power10Days } from '../../types/cmms';
 import { useCMMS } from '../../context/CMMSContext';
-import { formatVND, isAdminLevel } from '../../utils/cmmsLogic';
+import { canViewCosts, formatVND, isAdminLevel } from '../../utils/cmmsLogic';
 import { TariffConfigModal } from './TariffConfigModal';
 import { Power10DaysModal } from './Power10DaysModal';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
@@ -163,6 +163,7 @@ function getOperatingHours(r: Power10Days): number {
 export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ powerRecords }) => {
   const { tariffConfig, currentUser, deletePower10DaysRecord } = useCMMS();
   const isAdmin = isAdminLevel(currentUser);
+  const showCosts = canViewCosts(currentUser);
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
   const [editingPowerRecord, setEditingPowerRecord] = useState<Power10Days | null>(null);
   const [confirmDeleteRecord, setConfirmDeleteRecord] = useState<Power10Days | null>(null);
@@ -592,10 +593,14 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       'Solar CĐ',
       'Tổng Tiêu Thụ (kWh)',
       'Tỷ lệ Solar (%)',
-      'Tiền điện EVN (VNĐ)',
-      'Tiền điện Solar theo giá EVN (VNĐ)',
-      'Tổng chi phí năng lượng EVN+Solar (VNĐ)',
-      'Chi phí / 1h vận hành (VNĐ/h)',
+      ...(showCosts
+        ? [
+            'Tiền điện EVN (VNĐ)',
+            'Tiền điện Solar theo giá EVN (VNĐ)',
+            'Tổng chi phí năng lượng EVN+Solar (VNĐ)',
+            'Chi phí / 1h vận hành (VNĐ/h)',
+          ]
+        : []),
       'U_Chiller',
       'U_Comp',
       'U_Pump',
@@ -636,10 +641,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
         r.solarCD,
         grand,
         `"${pct}%"`,
-        evnCost,
-        solarCost,
-        totalCost,
-        costHour,
+        ...(showCosts ? [evnCost, solarCost, totalCost, costHour] : []),
         r.uChiller,
         r.uComp,
         r.uPump,
@@ -678,7 +680,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
             Dashboard Phân Tích & So Sánh Tiêu Thụ Điện Năng
           </h3>
           <p className="text-xs text-slate-400">
-            Công cụ so sánh đa chiều giữa các chu kỳ 10 ngày, so sánh liên năm (YoY), phân tích tỷ lệ phụ tải và cơ cấu chi phí
+            {showCosts
+              ? 'Công cụ so sánh đa chiều giữa các chu kỳ 10 ngày, so sánh liên năm (YoY), phân tích tỷ lệ phụ tải và cơ cấu chi phí'
+              : 'Công cụ so sánh đa chiều giữa các chu kỳ 10 ngày, so sánh liên năm (YoY), phân tích tỷ lệ phụ tải và hiệu suất theo ca'}
           </p>
         </div>
 
@@ -693,7 +697,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
             }`}
           >
             <PieChart className="w-3.5 h-3.5 text-amber-300" />
-            Đồ Thị Donut & Chi Phí Giờ / Ca
+            {showCosts ? 'Đồ Thị Donut & Chi Phí Giờ / Ca' : 'Đồ Thị Donut & Phân Tích Ca'}
           </button>
           <button
             onClick={() => setCompareMode('period_vs_period')}
@@ -728,14 +732,16 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
             <Filter className="w-3.5 h-3.5" />
             Lọc Đa Chiều ({filteredList.length})
           </button>
-          <button
-            onClick={() => setIsTariffModalOpen(true)}
-            className="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm cursor-pointer ml-1"
-            title="Điều chỉnh giá điện EVN, Solar, Nước và Tỷ giá USD/VNĐ"
-          >
-            <Settings className="w-3.5 h-3.5 text-blue-400" />
-            Cài Đặt Đơn Giá
-          </button>
+          {showCosts && (
+            <button
+              onClick={() => setIsTariffModalOpen(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 shadow-sm cursor-pointer ml-1"
+              title="Điều chỉnh giá điện EVN, Solar, Nước và Tỷ giá USD/VNĐ"
+            >
+              <Settings className="w-3.5 h-3.5 text-blue-400" />
+              Cài Đặt Đơn Giá
+            </button>
+          )}
         </div>
       </div>
 
@@ -874,8 +880,8 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       {/* MODE 0: ĐỒ THỊ DONUT & PHÂN TÍCH CHI PHÍ GIỜ / CA */}
       {compareMode === 'donut_and_cost' && (
         <div className="space-y-6">
-          {/* Top 4 Executive Summary KPI Cards (incl. Per-Hour Output & Cost) */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          {/* Top Executive Summary KPI Cards */}
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${showCosts ? 'xl:grid-cols-4' : 'xl:grid-cols-2'} gap-4`}>
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-lg flex flex-col justify-between gap-2">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span className="font-semibold">Tổng Sản Lượng (EVN + Solar)</span>
@@ -910,52 +916,56 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
               </div>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/30 shadow-lg flex flex-col justify-between gap-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span className="font-semibold text-emerald-300">Tổng Chi Phí Năng Lượng</span>
-                <span className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400">
-                  <DollarSign className="w-3.5 h-3.5" />
-                </span>
-              </div>
-              <div className="text-xl font-black text-emerald-400 font-mono">
-                {formatVND(filteredStats.totalCost)}
-              </div>
-              <div className="text-[11px] text-slate-400 flex items-center justify-between pt-2 border-t border-slate-800 font-mono truncate">
-                <span>EVN: {formatVND(filteredStats.totalEvnCost)}</span>
-                <span className="text-amber-400">+Solar: {formatVND(filteredStats.totalSolarCost)}</span>
-              </div>
-            </div>
+            {showCosts && (
+              <>
+                <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/30 shadow-lg flex flex-col justify-between gap-2">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span className="font-semibold text-emerald-300">Tổng Chi Phí Năng Lượng</span>
+                    <span className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-400">
+                      <DollarSign className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                  <div className="text-xl font-black text-emerald-400 font-mono">
+                    {formatVND(filteredStats.totalCost)}
+                  </div>
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between pt-2 border-t border-slate-800 font-mono truncate">
+                    <span>EVN: {formatVND(filteredStats.totalEvnCost)}</span>
+                    <span className="text-amber-400">+Solar: {formatVND(filteredStats.totalSolarCost)}</span>
+                  </div>
+                </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/30 shadow-lg flex flex-col justify-between gap-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span className="font-semibold text-amber-300">Chi Phí / 1 Giờ Vận Hành</span>
-                <span className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400">
-                  <TrendingUp className="w-3.5 h-3.5" />
-                </span>
-              </div>
-              <div className="text-xl font-black text-amber-400 font-mono">
-                {formatVND(filteredStats.costPerHourVND)}
-                <span className="text-xs font-semibold text-slate-400">/giờ</span>
-              </div>
-              <div className="text-[11px] text-slate-400 flex items-center justify-between pt-2 border-t border-slate-800 font-mono">
-                <span>~${filteredStats.costPerHourUSD.toFixed(2)} USD/h</span>
-                <span className="text-slate-300">{Math.round(filteredStats.avgCostPerKwh).toLocaleString()} đ/kWh</span>
-              </div>
-            </div>
+                <div className="p-4 rounded-2xl bg-slate-900 border border-amber-500/30 shadow-lg flex flex-col justify-between gap-2">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span className="font-semibold text-amber-300">Chi Phí / 1 Giờ Vận Hành</span>
+                    <span className="p-1.5 rounded-lg bg-amber-500/15 text-amber-400">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                    </span>
+                  </div>
+                  <div className="text-xl font-black text-amber-400 font-mono">
+                    {formatVND(filteredStats.costPerHourVND)}
+                    <span className="text-xs font-semibold text-slate-400">/giờ</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between pt-2 border-t border-slate-800 font-mono">
+                    <span>~${filteredStats.costPerHourUSD.toFixed(2)} USD/h</span>
+                    <span className="text-slate-300">{Math.round(filteredStats.avgCostPerKwh).toLocaleString()} đ/kWh</span>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
 
           {/* 3 Balanced Donut Charts Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-stretch">
-            {/* Donut 1: Nguồn Năng Lượng & Chi Phí (EVN + Solar tính theo giá EVN) */}
+            {/* Donut 1: Nguồn Năng Lượng */}
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col justify-between gap-4 h-full">
               <div className="flex items-center justify-between border-b border-slate-800 pb-3 gap-2">
                 <div className="space-y-0.5 min-w-0">
                   <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5 uppercase tracking-wider">
                     <Sun className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                    <span className="truncate">Nguồn Điện & Chi Phí (EVN + Solar)</span>
+                    <span className="truncate">{showCosts ? 'Nguồn Điện & Chi Phí (EVN + Solar)' : 'Nguồn Điện (EVN + Solar)'}</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 truncate">
-                    Solar hạch toán theo đơn giá EVN (BT & CĐ)
+                    {showCosts ? 'Solar hạch toán theo đơn giá EVN (BT & CĐ)' : 'Tỷ trọng điện lưới EVN & năng lượng mặt trời'}
                   </p>
                 </div>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 font-mono shrink-0">
@@ -971,14 +981,14 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       value: filteredStats.totalEVN,
                       color: '#3b82f6',
                       formattedValue: `${filteredStats.totalEVN.toLocaleString('vi-VN')} kWh`,
-                      subLabel: `Chi phí EVN: ${formatVND(filteredStats.totalEvnCost)}`,
+                      subLabel: showCosts ? `Chi phí EVN: ${formatVND(filteredStats.totalEvnCost)}` : undefined,
                     },
                     {
                       label: 'Mặt Trời Solar',
                       value: filteredStats.totalSolar,
                       color: '#f59e0b',
                       formattedValue: `${filteredStats.totalSolar.toLocaleString('vi-VN')} kWh`,
-                      subLabel: `Chi phí Solar (giá EVN): ${formatVND(filteredStats.totalSolarCost)}`,
+                      subLabel: showCosts ? `Chi phí Solar (giá EVN): ${formatVND(filteredStats.totalSolarCost)}` : undefined,
                     },
                   ]}
                   centerLabel={`${filteredStats.solarRatio.toFixed(1)}%`}
@@ -986,10 +996,17 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                 />
               </div>
 
-              <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
-                <span>Tổng chi phí (EVN + Solar):</span>
-                <strong className="text-emerald-400 font-bold">{formatVND(filteredStats.totalCost)}</strong>
-              </div>
+              {showCosts ? (
+                <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
+                  <span>Tổng chi phí (EVN + Solar):</span>
+                  <strong className="text-emerald-400 font-bold">{formatVND(filteredStats.totalCost)}</strong>
+                </div>
+              ) : (
+                <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
+                  <span>Tổng sản lượng (EVN + Solar):</span>
+                  <strong className="text-cyan-400 font-bold">{filteredStats.grandTotal.toLocaleString('vi-VN')} kWh</strong>
+                </div>
+              )}
             </div>
 
             {/* Donut 2: Phụ Tải 3 Vùng (Utility vs Production vs Office) */}
@@ -1076,21 +1093,27 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       value: filteredStats.totalAll_BT,
                       color: '#38bdf8',
                       formattedValue: `${filteredStats.totalAll_BT.toLocaleString('vi-VN')} kWh`,
-                      subLabel: `Tiền: ${formatVND(filteredStats.costAll_BT)} (${tariffConfig.evnBT.toLocaleString()}đ/kWh)`,
+                      subLabel: showCosts
+                        ? `Tiền: ${formatVND(filteredStats.costAll_BT)} (${tariffConfig.evnBT.toLocaleString()}đ/kWh)`
+                        : undefined,
                     },
                     {
                       label: 'Cao Điểm (CĐ)',
                       value: filteredStats.totalAll_CD,
                       color: '#f97316',
                       formattedValue: `${filteredStats.totalAll_CD.toLocaleString('vi-VN')} kWh`,
-                      subLabel: `Tiền: ${formatVND(filteredStats.costAll_CD)} (${tariffConfig.evnCD.toLocaleString()}đ/kWh)`,
+                      subLabel: showCosts
+                        ? `Tiền: ${formatVND(filteredStats.costAll_CD)} (${tariffConfig.evnCD.toLocaleString()}đ/kWh)`
+                        : undefined,
                     },
                     {
                       label: 'Thấp Điểm (TĐ)',
                       value: filteredStats.totalAll_TD,
                       color: '#10b981',
                       formattedValue: `${filteredStats.totalAll_TD.toLocaleString('vi-VN')} kWh`,
-                      subLabel: `Tiền: ${formatVND(filteredStats.costAll_TD)} (${tariffConfig.evnTD.toLocaleString()}đ/kWh)`,
+                      subLabel: showCosts
+                        ? `Tiền: ${formatVND(filteredStats.costAll_TD)} (${tariffConfig.evnTD.toLocaleString()}đ/kWh)`
+                        : undefined,
                     },
                   ]}
                   centerLabel={`${filteredStats.kwhPerHour.toFixed(0)}`}
@@ -1098,14 +1121,22 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                 />
               </div>
 
-              <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
-                <span>Chi phí / 1 giờ vận hành:</span>
-                <strong className="text-cyan-400 font-bold">{formatVND(filteredStats.costPerHourVND)}/h</strong>
-              </div>
+              {showCosts ? (
+                <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
+                  <span>Chi phí / 1 giờ vận hành:</span>
+                  <strong className="text-cyan-400 font-bold">{formatVND(filteredStats.costPerHourVND)}/h</strong>
+                </div>
+              ) : (
+                <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
+                  <span>Sản lượng / 1 giờ vận hành:</span>
+                  <strong className="text-cyan-400 font-bold">{filteredStats.kwhPerHour.toFixed(1)} kWh/h</strong>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Section: Phân Tích Chi Phí Khung Giờ (EVN + Solar theo giá EVN) & Chi Tiết / 1 Giờ */}
+          {showCosts && (
           <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div>
@@ -1341,17 +1372,22 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
               </table>
             </SmartHorizontalScroll>
           </div>
+          )}
 
-          {/* Section: Phân Tích Chi Phí & Hiệu Suất Theo Ca Làm Việc */}
+          {/* Section: Phân Tích Hiệu Suất Theo Ca Làm Việc */}
           <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-3">
               <div>
                 <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                   <Factory className="w-4 h-4 text-indigo-400" />
-                  Phân Tích Chi Phí & Sản Lượng Theo Ca & 1 Giờ Vận Hành (Ca 2 vs Ca 3)
+                  {showCosts
+                    ? 'Phân Tích Chi Phí & Sản Lượng Theo Ca & 1 Giờ Vận Hành (Ca 2 vs Ca 3)'
+                    : 'Phân Tích Sản Lượng Theo Ca & 1 Giờ Vận Hành (Ca 2 vs Ca 3)'}
                 </h4>
                 <p className="text-xs text-slate-400">
-                  So sánh sản lượng & tổng chi phí năng lượng (EVN + Solar) theo ngày và trung bình trên 1 giờ vận hành giữa Ca 2 (16h/ngày) và Ca 3 (24h/ngày)
+                  {showCosts
+                    ? 'So sánh sản lượng & tổng chi phí năng lượng (EVN + Solar) theo ngày và trung bình trên 1 giờ vận hành giữa Ca 2 (16h/ngày) và Ca 3 (24h/ngày)'
+                    : 'So sánh sản lượng điện tiêu thụ (EVN + Solar) theo ngày và trung bình trên 1 giờ vận hành giữa Ca 2 (16h/ngày) và Ca 3 (24h/ngày)'}
                 </p>
               </div>
             </div>
@@ -1370,7 +1406,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className={`grid ${showCosts ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'} gap-3 pt-1`}>
                   <div>
                     <span className="text-[11px] text-slate-400 block">TB / Ngày:</span>
                     <span className="text-base font-mono font-extrabold text-cyan-400">
@@ -1383,18 +1419,22 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       {filteredStats.shift2.kwhPerHour.toFixed(1)} <span className="text-[10px] text-slate-400">kWh/h</span>
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">Chi Phí / Ngày:</span>
-                    <span className="text-base font-mono font-extrabold text-emerald-400">
-                      {formatVND(filteredStats.shift2.dailyCost)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">Chi Phí / 1 Giờ:</span>
-                    <span className="text-base font-mono font-extrabold text-amber-400">
-                      {formatVND(filteredStats.shift2.costPerHour)}<span className="text-[10px] text-slate-400">/h</span>
-                    </span>
-                  </div>
+                  {showCosts && (
+                    <>
+                      <div>
+                        <span className="text-[11px] text-slate-400 block">Chi Phí / Ngày:</span>
+                        <span className="text-base font-mono font-extrabold text-emerald-400">
+                          {formatVND(filteredStats.shift2.dailyCost)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-slate-400 block">Chi Phí / 1 Giờ:</span>
+                        <span className="text-base font-mono font-extrabold text-amber-400">
+                          {formatVND(filteredStats.shift2.costPerHour)}<span className="text-[10px] text-slate-400">/h</span>
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-slate-700/60 text-xs text-slate-300 space-y-1">
@@ -1402,10 +1442,12 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                     <span className="text-slate-400">Tổng điện tiêu thụ ({filteredStats.shift2.workDays} ngày):</span>
                     <strong>{filteredStats.shift2.totalKwh.toLocaleString('vi-VN')} kWh</strong>
                   </div>
-                  <div className="flex justify-between font-mono text-[11px]">
-                    <span className="text-slate-400">Tổng chi phí (EVN + Solar):</span>
-                    <strong className="text-emerald-400">{formatVND(filteredStats.shift2.cost)}</strong>
-                  </div>
+                  {showCosts && (
+                    <div className="flex justify-between font-mono text-[11px]">
+                      <span className="text-slate-400">Tổng chi phí (EVN + Solar):</span>
+                      <strong className="text-emerald-400">{formatVND(filteredStats.shift2.cost)}</strong>
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
@@ -1425,7 +1467,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                <div className={`grid ${showCosts ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2'} gap-3 pt-1`}>
                   <div>
                     <span className="text-[11px] text-slate-400 block">TB / Ngày:</span>
                     <span className="text-base font-mono font-extrabold text-cyan-400">
@@ -1438,18 +1480,22 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       {filteredStats.shift3.kwhPerHour.toFixed(1)} <span className="text-[10px] text-slate-400">kWh/h</span>
                     </span>
                   </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">Chi Phí / Ngày:</span>
-                    <span className="text-base font-mono font-extrabold text-emerald-400">
-                      {formatVND(filteredStats.shift3.dailyCost)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[11px] text-slate-400 block">Chi Phí / 1 Giờ:</span>
-                    <span className="text-base font-mono font-extrabold text-amber-400">
-                      {formatVND(filteredStats.shift3.costPerHour)}<span className="text-[10px] text-slate-400">/h</span>
-                    </span>
-                  </div>
+                  {showCosts && (
+                    <>
+                      <div>
+                        <span className="text-[11px] text-slate-400 block">Chi Phí / Ngày:</span>
+                        <span className="text-base font-mono font-extrabold text-emerald-400">
+                          {formatVND(filteredStats.shift3.dailyCost)}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] text-slate-400 block">Chi Phí / 1 Giờ:</span>
+                        <span className="text-base font-mono font-extrabold text-amber-400">
+                          {formatVND(filteredStats.shift3.costPerHour)}<span className="text-[10px] text-slate-400">/h</span>
+                        </span>
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="pt-2 border-t border-slate-700/60 text-xs text-slate-300 space-y-1">
@@ -1457,14 +1503,24 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                     <span className="text-slate-400">Tổng điện tiêu thụ ({filteredStats.shift3.workDays} ngày):</span>
                     <strong>{filteredStats.shift3.totalKwh.toLocaleString('vi-VN')} kWh</strong>
                   </div>
-                  <div className="flex justify-between font-mono text-[11px]">
-                    <span className="text-slate-400">Tổng chi phí (EVN + Solar):</span>
-                    <strong className="text-emerald-400">{formatVND(filteredStats.shift3.cost)}</strong>
-                  </div>
+                  {showCosts && (
+                    <div className="flex justify-between font-mono text-[11px]">
+                      <span className="text-slate-400">Tổng chi phí (EVN + Solar):</span>
+                      <strong className="text-emerald-400">{formatVND(filteredStats.shift3.cost)}</strong>
+                    </div>
+                  )}
                 </div>
 
                 <p className="text-[11px] text-slate-400 bg-slate-900/60 p-2.5 rounded-lg border border-slate-800">
-                  <strong>Đặc điểm Ca 3:</strong> Vận hành liên tục 24h/ngày, tận dụng 6h thấp điểm (00h00-06h00) chỉ {tariffConfig.evnTD.toLocaleString()} đ/kWh giúp tối ưu chi phí năng lượng bình quân trên mỗi giờ vận hành.
+                  {showCosts ? (
+                    <>
+                      <strong>Đặc điểm Ca 3:</strong> Vận hành liên tục 24h/ngày, tận dụng 6h thấp điểm (00h00-06h00) chỉ {tariffConfig.evnTD.toLocaleString()} đ/kWh giúp tối ưu chi phí năng lượng bình quân trên mỗi giờ vận hành.
+                    </>
+                  ) : (
+                    <>
+                      <strong>Đặc điểm Ca 3:</strong> Vận hành liên tục 24h/ngày, tận dụng khung 6h thấp điểm ban đêm (00h00-06h00) giúp cân bằng phụ tải trên mỗi giờ vận hành.
+                    </>
+                  )}
                 </p>
               </div>
             </div>
@@ -1474,27 +1530,35 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
               <div className="p-4 rounded-xl bg-gradient-to-r from-slate-900 via-indigo-950/30 to-slate-900 border border-indigo-500/20 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-1">
                   <span className="font-bold text-indigo-300 uppercase tracking-wide block">
-                    So Sánh Hiệu Suất & Chi Phí Giữa Ca 3 (24h) và Ca 2 (16h):
+                    {showCosts
+                      ? 'So Sánh Hiệu Suất & Chi Phí Giữa Ca 3 (24h) và Ca 2 (16h):'
+                      : 'So Sánh Hiệu Suất Giữa Ca 3 (24h) và Ca 2 (16h):'}
                   </span>
                   <p className="text-slate-300">
                     Chuyển từ 2 ca sang 3 ca làm tiêu thụ ngày tăng{' '}
                     <strong className="text-cyan-400 font-mono">
                       +{(filteredStats.shift3.dailyKwh - filteredStats.shift2.dailyKwh).toFixed(1)} kWh/ngày
                     </strong>{' '}
-                    ({(((filteredStats.shift3.dailyKwh - filteredStats.shift2.dailyKwh) / filteredStats.shift2.dailyKwh) * 100).toFixed(1)}%),
-                    còn chi phí/giờ vận hành thay đổi{' '}
-                    <strong className="text-amber-400 font-mono">
-                      {filteredStats.shift3.costPerHour - filteredStats.shift2.costPerHour >= 0 ? '+' : ''}
-                      {formatVND(filteredStats.shift3.costPerHour - filteredStats.shift2.costPerHour)}/giờ
-                    </strong>.
+                    ({(((filteredStats.shift3.dailyKwh - filteredStats.shift2.dailyKwh) / filteredStats.shift2.dailyKwh) * 100).toFixed(1)}%)
+                    {showCosts && (
+                      <>
+                        , còn chi phí/giờ vận hành thay đổi{' '}
+                        <strong className="text-amber-400 font-mono">
+                          {filteredStats.shift3.costPerHour - filteredStats.shift2.costPerHour >= 0 ? '+' : ''}
+                          {formatVND(filteredStats.shift3.costPerHour - filteredStats.shift2.costPerHour)}/giờ
+                        </strong>
+                      </>
+                    )}.
                   </p>
                 </div>
-                <div className="text-right shrink-0">
-                  <span className="text-[11px] text-slate-400 block">Đơn giá điện bình quân Ca 3:</span>
-                  <span className="font-mono font-bold text-cyan-300 text-sm">
-                    {Math.round(filteredStats.shift3.cost / (filteredStats.shift3.totalKwh || 1)).toLocaleString()} đ/kWh
-                  </span>
-                </div>
+                {showCosts && (
+                  <div className="text-right shrink-0">
+                    <span className="text-[11px] text-slate-400 block">Đơn giá điện bình quân Ca 3:</span>
+                    <span className="font-mono font-bold text-cyan-300 text-sm">
+                      {Math.round(filteredStats.shift3.cost / (filteredStats.shift3.totalKwh || 1)).toLocaleString()} đ/kWh
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1556,7 +1620,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
           </div>
 
           {/* Comparative KPI Cards Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${showCosts ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
             {/* Card 1: Tổng Tiêu Thụ */}
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400">
@@ -1613,7 +1677,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
             {/* Card 3: Năng Lượng Mặt Trời Solar */}
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Sản Lượng Solar (Giá EVN)</span>
+                <span>{showCosts ? 'Sản Lượng Solar (Giá EVN)' : 'Sản Lượng Solar'}</span>
                 <Sun className="w-4 h-4 text-amber-400" />
               </div>
               <div className="flex items-baseline justify-between gap-2">
@@ -1632,36 +1696,47 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                   </div>
                 )}
               </div>
-              <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
-                Chi phí Solar Kỳ A:{' '}
-                <strong className="text-amber-400">
-                  {statsA ? formatVND(statsA.solarCost) : '0 đ'}
-                </strong>
-              </div>
+              {showCosts ? (
+                <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                  Chi phí Solar Kỳ A:{' '}
+                  <strong className="text-amber-400">
+                    {statsA ? formatVND(statsA.solarCost) : '0 đ'}
+                  </strong>
+                </div>
+              ) : (
+                <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                  Chênh lệch:{' '}
+                  <strong className={deltaAB && deltaAB.solarDiff >= 0 ? 'text-emerald-400' : 'text-amber-400'}>
+                    {deltaAB && deltaAB.solarDiff > 0 ? '+' : ''}{deltaAB?.solarDiff.toLocaleString('vi-VN')} kWh
+                  </strong>
+                </div>
+              )}
             </div>
 
             {/* Card 4: Tổng Chi Phí EVN + Solar & Chi Phí / 1 Giờ */}
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Tổng Chi Phí (EVN + Solar)</span>
-                <DollarSign className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div>
-                <div className="text-xs text-blue-400 font-bold">
-                  Kỳ A: {statsA ? formatVND(statsA.cost) : '0'} ({statsA ? formatVND(statsA.costPerHour) : '0'}/h)
+            {showCosts && (
+              <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>Tổng Chi Phí (EVN + Solar)</span>
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
                 </div>
-                <div className="text-xs text-cyan-400 font-bold">
-                  Kỳ B: {statsB ? formatVND(statsB.cost) : '0'} ({statsB ? formatVND(statsB.costPerHour) : '0'}/h)
+                <div>
+                  <div className="text-xs text-blue-400 font-bold">
+                    Kỳ A: {statsA ? formatVND(statsA.cost) : '0'} ({statsA ? formatVND(statsA.costPerHour) : '0'}/h)
+                  </div>
+                  <div className="text-xs text-cyan-400 font-bold">
+                    Kỳ B: {statsB ? formatVND(statsB.cost) : '0'} ({statsB ? formatVND(statsB.costPerHour) : '0'}/h)
+                  </div>
+                </div>
+                <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
+                  Chênh lệch / 1 giờ:{' '}
+                  <strong className={deltaAB && deltaAB.costHourDiff > 0 ? 'text-rose-400' : 'text-emerald-400'}>
+                    {deltaAB && deltaAB.costHourDiff > 0 ? '+' : ''}
+                    {deltaAB ? formatVND(deltaAB.costHourDiff) : '0 đ'}/h
+                  </strong>
                 </div>
               </div>
-              <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
-                Chênh lệch / 1 giờ:{' '}
-                <strong className={deltaAB && deltaAB.costHourDiff > 0 ? 'text-rose-400' : 'text-emerald-400'}>
-                  {deltaAB && deltaAB.costHourDiff > 0 ? '+' : ''}
-                  {deltaAB ? formatVND(deltaAB.costHourDiff) : '0 đ'}/h
-                </strong>
-              </div>
-            </div>
+            )}
           </div>
 
           {/* Card Hàng 2: So Sánh 3 Khu Vực (Utility, Production, Office) Kỳ A vs Kỳ B */}
@@ -1779,7 +1854,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                 {/* EVN Cao Điểm */}
                 <div className="space-y-1">
                   <div className="flex justify-between font-semibold">
-                    <span className="text-rose-400">2. Giờ Cao Điểm (EVN CĐ - {tariffConfig.evnCD.toLocaleString()} đ/kWh)</span>
+                    <span className="text-rose-400">
+                      2. Giờ Cao Điểm (EVN CĐ{showCosts ? ` - ${tariffConfig.evnCD.toLocaleString()} đ/kWh` : ''})
+                    </span>
                     <span className="font-mono">
                       <span className="text-blue-400">{periodA?.evnCD.toLocaleString('vi-VN')}</span> vs{' '}
                       <span className="text-cyan-400">{periodB?.evnCD.toLocaleString('vi-VN')}</span>
@@ -1801,7 +1878,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                 {/* EVN Thấp Điểm */}
                 <div className="space-y-1">
                   <div className="flex justify-between font-semibold">
-                    <span className="text-emerald-400">3. Giờ Thấp Điểm (EVN TĐ - {tariffConfig.evnTD.toLocaleString()} đ/kWh)</span>
+                    <span className="text-emerald-400">
+                      3. Giờ Thấp Điểm (EVN TĐ{showCosts ? ` - ${tariffConfig.evnTD.toLocaleString()} đ/kWh` : ''})
+                    </span>
                     <span className="font-mono">
                       <span className="text-blue-400">{periodA?.evnTD.toLocaleString('vi-VN')}</span> vs{' '}
                       <span className="text-cyan-400">{periodB?.evnTD.toLocaleString('vi-VN')}</span>
@@ -2015,18 +2094,22 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                 </div>
 
                 <div className="pt-2 border-t border-slate-800 space-y-1.5 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Tổng Chi Phí (EVN + Solar):</span>
-                    <strong className="text-emerald-400 font-mono">{formatVND(yr.totalCost)}</strong>
-                  </div>
+                  {showCosts && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Tổng Chi Phí (EVN + Solar):</span>
+                      <strong className="text-emerald-400 font-mono">{formatVND(yr.totalCost)}</strong>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Sản Lượng / 1 Giờ:</span>
                     <strong className="text-cyan-400 font-mono">{yr.kwhPerHour.toFixed(1)} kWh/h</strong>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-slate-400">Chi Phí / 1 Giờ:</span>
-                    <strong className="text-amber-400 font-mono">{formatVND(yr.costPerHour)}/h</strong>
-                  </div>
+                  {showCosts && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Chi Phí / 1 Giờ:</span>
+                      <strong className="text-amber-400 font-mono">{formatVND(yr.costPerHour)}/h</strong>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">TB Ngày / Tỷ lệ Solar:</span>
                     <strong className="text-indigo-400 font-mono">
@@ -2243,8 +2326,12 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
               <span className="text-slate-300">
                 Tìm thấy <strong className="text-cyan-400">{filteredStats.count}</strong> chu kỳ |
                 Tổng: <strong className="text-amber-400 font-mono">{filteredStats.grandTotal.toLocaleString('vi-VN')} kWh</strong> |
-                Hiệu suất: <strong className="text-cyan-400 font-mono">{filteredStats.kwhPerHour.toFixed(1)} kWh/h</strong> |
-                Chi phí (EVN+Solar): <strong className="text-emerald-400 font-mono">{formatVND(filteredStats.totalCost)} ({formatVND(filteredStats.costPerHourVND)}/h)</strong>
+                Hiệu suất: <strong className="text-cyan-400 font-mono">{filteredStats.kwhPerHour.toFixed(1)} kWh/h</strong>
+                {showCosts && (
+                  <>
+                    {' '}| Chi phí (EVN+Solar): <strong className="text-emerald-400 font-mono">{formatVND(filteredStats.totalCost)} ({formatVND(filteredStats.costPerHourVND)}/h)</strong>
+                  </>
+                )}
               </span>
 
               <button
@@ -2268,7 +2355,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                     Bảng Dữ Liệu Chi Tiết Chu Kỳ 10 Ngày ({filteredList.length} Kỳ)
                   </h4>
                   <p className="text-[11px] text-slate-400">
-                    Đối soát sản lượng EVN, Solar, hiệu suất kWh/giờ và chi phí từng chu kỳ 10 ngày
+                    {showCosts
+                      ? 'Đối soát sản lượng EVN, Solar, hiệu suất kWh/giờ và chi phí từng chu kỳ 10 ngày'
+                      : 'Đối soát sản lượng EVN, Solar và hiệu suất kWh/giờ từng chu kỳ 10 ngày'}
                   </p>
                 </div>
               </div>
@@ -2304,8 +2393,12 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                     <th className="py-3 px-3.5 text-right">Tổng EVN</th>
                     <th className="py-3 px-3.5 text-right">Tổng Solar</th>
                     <th className="py-3 px-3.5 text-right">Tổng kWh</th>
-                    <th className="py-3 px-3.5 text-right">Tổng Chi Phí (EVN+Solar)</th>
-                    <th className="py-3 px-3.5 text-right">Chi Phí / 1 Giờ</th>
+                    {showCosts && (
+                      <>
+                        <th className="py-3 px-3.5 text-right">Tổng Chi Phí (EVN+Solar)</th>
+                        <th className="py-3 px-3.5 text-right">Chi Phí / 1 Giờ</th>
+                      </>
+                    )}
                     <th className="py-3 px-3.5">Người Chốt</th>
                     <th className="py-3 px-3.5 text-right">Thao Tác (Admin)</th>
                   </tr>
@@ -2345,12 +2438,16 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                         <td className="py-3 px-3.5 text-right font-mono font-bold text-slate-100 whitespace-nowrap">
                           {grand.toLocaleString('vi-VN')}
                         </td>
-                        <td className="py-3 px-3.5 text-right font-mono text-emerald-400 font-bold whitespace-nowrap">
-                          {formatVND(totalPeriodCost)}
-                        </td>
-                        <td className="py-3 px-3.5 text-right font-mono text-amber-300 font-bold whitespace-nowrap">
-                          {formatVND(costPerHr)}/h
-                        </td>
+                        {showCosts && (
+                          <>
+                            <td className="py-3 px-3.5 text-right font-mono text-emerald-400 font-bold whitespace-nowrap">
+                              {formatVND(totalPeriodCost)}
+                            </td>
+                            <td className="py-3 px-3.5 text-right font-mono text-amber-300 font-bold whitespace-nowrap">
+                              {formatVND(costPerHr)}/h
+                            </td>
+                          </>
+                        )}
                         <td className="py-3 px-3.5 text-slate-400 whitespace-nowrap text-[11px]">
                           {r.nguoiChot}
                         </td>
@@ -2386,7 +2483,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                   })}
                   {filteredList.length === 0 && (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-slate-500 text-xs">
+                      <td colSpan={showCosts ? 11 : 9} className="py-8 text-center text-slate-500 text-xs">
                         Không tìm thấy dữ liệu chu kỳ phù hợp với bộ lọc đã chọn.
                       </td>
                     </tr>
@@ -2399,10 +2496,12 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       )}
 
       {/* Modal Cài Đặt Đơn Giá & Tỷ Giá */}
-      <TariffConfigModal
-        isOpen={isTariffModalOpen}
-        onClose={() => setIsTariffModalOpen(false)}
-      />
+      {showCosts && (
+        <TariffConfigModal
+          isOpen={isTariffModalOpen}
+          onClose={() => setIsTariffModalOpen(false)}
+        />
+      )}
 
       {/* Modal Chỉnh Sửa Chu Kỳ 10 Ngày (Admin Only) */}
       <Power10DaysModal

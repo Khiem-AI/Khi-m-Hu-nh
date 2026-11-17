@@ -1,7 +1,13 @@
 import React from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { UI_TEXTS } from '../config/uiTexts';
-import { getEffectiveAllowedViews, isAdminLevel, matchesAssignee, getInspectionStatus } from '../utils/cmmsLogic';
+import {
+  getEffectiveAllowedViews,
+  isAdminLevel,
+  canViewCosts,
+  matchesAssignee,
+  getInspectionStatus,
+} from '../utils/cmmsLogic';
 import {
   LayoutDashboard,
   ClipboardCheck,
@@ -264,8 +270,12 @@ export const Navigation: React.FC<NavigationProps> = ({
 
   const allowedViewIds = getEffectiveAllowedViews(currentUser);
   const adminAccess = isAdminLevel(currentUser);
+  const costAccess = canViewCosts(currentUser);
   const visibleNavItems = navItems.filter(
-    (item) => allowedViewIds.includes(item.id) && (!item.adminOnly || adminAccess)
+    (item) =>
+      allowedViewIds.includes(item.id) &&
+      (!item.adminOnly || adminAccess) &&
+      (item.id !== 'costs' || costAccess)
   );
 
   const handleItemSelect = (tabId: string) => {

@@ -6,6 +6,7 @@ export interface ExcelExportMeta {
   exportedBy?: string;
   includePrintLayout?: boolean;
   filterNote?: string;
+  includeCosts?: boolean;
 }
 
 type CellValue = string | number | boolean | null | undefined;
@@ -153,6 +154,7 @@ function buildHistorySheet(
   equipmentMap: Map<string, Equipment>,
   meta: ExcelExportMeta
 ): XLSX.WorkSheet {
+  const includeCosts = meta.includeCosts !== false;
   const headers = [
     'STT',
     'Mã Biên Bản',
@@ -167,7 +169,7 @@ function buildHistorySheet(
     'Mô Tả Công Việc',
     'Dừng Máy (Phút)',
     'Kết Quả',
-    'Chi Phí Ước Tính (VNĐ)',
+    ...(includeCosts ? ['Chi Phí Ước Tính (VNĐ)'] : []),
     'Người Lập Báo Cáo',
   ];
 
@@ -195,7 +197,7 @@ function buildHistorySheet(
       h.moTaCongViec,
       downtime,
       h.ketQua,
-      cost,
+      ...(includeCosts ? [cost] : []),
       h.nguoiLapBaoCao,
     ];
   });
@@ -214,7 +216,7 @@ function buildHistorySheet(
     '',
     totalDowntime,
     '',
-    totalCost,
+    ...(includeCosts ? [totalCost] : []),
     '',
   ];
 
@@ -403,6 +405,7 @@ function buildSummaryOverviewSheet(params: {
     (t) => t.trangThai !== 'Hoàn thành' && t.trangThai !== 'Hủy'
   ).length;
 
+  const includeCosts = meta.includeCosts !== false;
   const headers = ['Hạng Mục Thống Kê', 'Giá Trị', 'Đơn Vị / Ghi Chú'];
   const dataRows: CellValue[][] = [
     ['Tổng số thiết bị quản lý', equipment.length, 'Thiết bị'],
@@ -414,7 +417,9 @@ function buildSummaryOverviewSheet(params: {
     ['Tổng số biên bản lịch sử bảo trì / sửa chữa', history.length, 'Biên bản'],
     ['  • Biên bản đạt chuẩn / hoàn thành', passedHistory, 'Biên bản'],
     ['  • Tổng thời gian dừng máy tích lũy', totalDowntime, 'Phút'],
-    ['  • Tổng chi phí bảo trì ước tính', totalEstimatedCost, 'VNĐ'],
+    ...(includeCosts
+      ? ([['  • Tổng chi phí bảo trì ước tính', totalEstimatedCost, 'VNĐ']] as CellValue[][])
+      : []),
     ['Tổng số Tickets sửa chữa / sự cố', tickets.length, 'Phiếu'],
     ['  • Tickets đã hoàn thành', completedTickets, 'Phiếu'],
     ['  • Tickets đang xử lý / chờ xử lý', openTickets, 'Phiếu'],
@@ -499,6 +504,7 @@ export function exportProjectsWorkbook(
   meta: ExcelExportMeta = {}
 ): void {
   const wb = XLSX.utils.book_new();
+  const includeCosts = meta.includeCosts !== false;
 
   // Sheet 1: Danh mục Dự án
   const projectHeaders = [
@@ -514,8 +520,7 @@ export function exportProjectsWorkbook(
     'Hạn Hoàn Thành',
     'Tiến Độ (%)',
     'Số Đầu Việc (Xong/Tổng)',
-    'Ngân Sách Dự Kiến (VNĐ)',
-    'Chi Phí Thực Tế (VNĐ)',
+    ...(includeCosts ? ['Ngân Sách Dự Kiến (VNĐ)', 'Chi Phí Thực Tế (VNĐ)'] : []),
     'Thiết Bị Liên Quan',
   ];
 
@@ -535,8 +540,7 @@ export function exportProjectsWorkbook(
       formatDateVN(p.ngayKetThucDuKien),
       progress,
       `${doneTasks}/${p.congViec.length}`,
-      p.nganSachDuKien,
-      p.chiPhiThucTe,
+      ...(includeCosts ? [p.nganSachDuKien, p.chiPhiThucTe] : []),
       (p.maThietBiLienQuan || []).join(', '),
     ];
   });
@@ -561,8 +565,7 @@ export function exportProjectsWorkbook(
       '',
       '',
       '',
-      totalBudget,
-      totalSpent,
+      ...(includeCosts ? [totalBudget, totalSpent] : []),
       '',
     ],
     exportedBy: meta.exportedBy,
@@ -620,7 +623,7 @@ export function exportProjectsWorkbook(
     filterNote: meta.filterNote,
   });
 
-  // Sheet 3: Cột mốc, Rủi ro & Chi phí
+  // Sheet 3: Cột mốc, Rủi ro (& Chi phí nếu có quyền)
   const detailHeaders = [
     'STT',
     'Mã Dự Án',
@@ -629,7 +632,7 @@ export function exportProjectsWorkbook(
     'Ngày / Hạn',
     'Mức Độ / Trạng Thái',
     'Phụ Trách / NCC',
-    'Giá Trị (VNĐ) / Giải Pháp',
+    includeCosts ? 'Giá Trị (VNĐ) / Giải Pháp' : 'Ghi Chú / Giải Pháp',
   ];
 
   const detailRows: CellValue[][] = [];
@@ -647,18 +650,20 @@ export function exportProjectsWorkbook(
         m.ghiChu || '',
       ]);
     });
-    p.khoanChi.forEach((e) => {
-      detailRows.push([
-        detailIdx++,
-        p.maDuAn,
-        'Khoản chi phí',
-        e.hangMuc,
-        formatDateVN(e.ngay),
-        e.trangThai,
-        e.nhaCungCap || '-',
-        e.soTienVND,
-      ]);
-    });
+    if (includeCosts) {
+      p.khoanChi.forEach((e) => {
+        detailRows.push([
+          detailIdx++,
+          p.maDuAn,
+          'Khoản chi phí',
+          e.hangMuc,
+          formatDateVN(e.ngay),
+          e.trangThai,
+          e.nhaCungCap || '-',
+          e.soTienVND,
+        ]);
+      });
+    }
     p.ruiRo.forEach((r) => {
       detailRows.push([
         detailIdx++,
@@ -674,7 +679,9 @@ export function exportProjectsWorkbook(
   });
 
   const wsDetails = buildStyledSheet({
-    title: 'Cột Mốc, Chi Phí & Quản Lý Rủi Ro Dự Án',
+    title: includeCosts
+      ? 'Cột Mốc, Chi Phí & Quản Lý Rủi Ro Dự Án'
+      : 'Cột Mốc & Quản Lý Rủi Ro Dự Án',
     headers: detailHeaders,
     dataRows: detailRows,
     exportedBy: meta.exportedBy,
@@ -684,7 +691,11 @@ export function exportProjectsWorkbook(
 
   XLSX.utils.book_append_sheet(wb, wsProjects, 'Danh_Muc_Du_An');
   XLSX.utils.book_append_sheet(wb, wsTasks, 'Cong_Viec_WBS');
-  XLSX.utils.book_append_sheet(wb, wsDetails, 'Cot_Moc_Rui_Ro_Chi_Phi');
+  XLSX.utils.book_append_sheet(
+    wb,
+    wsDetails,
+    includeCosts ? 'Cot_Moc_Rui_Ro_Chi_Phi' : 'Cot_Moc_Rui_Ro'
+  );
 
   const { fileDate } = getNowFormatted();
   XLSX.writeFile(wb, `Quan_ly_Du_an_FSM_${fileDate}.xlsx`);

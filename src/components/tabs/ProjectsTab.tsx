@@ -15,6 +15,7 @@ import {
 } from '../../types/cmms';
 import {
   calculateProjectProgress,
+  canViewCosts,
   formatDateVN,
   formatVND,
   matchesAssignee,
@@ -149,6 +150,7 @@ export const ProjectsTab: React.FC = () => {
     deleteProject,
     sendEmailNotification,
   } = useCMMS();
+  const showCosts = canViewCosts(currentUser);
 
   // Portfolio Filters & View State
   const [searchTerm, setSearchTerm] = useState('');
@@ -359,20 +361,31 @@ export const ProjectsTab: React.FC = () => {
     e.preventDefault();
     if (!prjForm.maDuAn.trim() || !prjForm.tenDuAn.trim()) return;
 
+    const plannedBudget = showCosts
+      ? Number(prjForm.nganSachDuKien) || 0
+      : editingProject
+      ? editingProject.nganSachDuKien
+      : 0;
+    const actualSpent = showCosts
+      ? Number(prjForm.chiPhiThucTe) || 0
+      : editingProject
+      ? editingProject.chiPhiThucTe
+      : 0;
+
     if (editingProject) {
       updateProject({
         ...editingProject,
         ...prjForm,
-        nganSachDuKien: Number(prjForm.nganSachDuKien) || 0,
-        chiPhiThucTe: Number(prjForm.chiPhiThucTe) || 0,
+        nganSachDuKien: plannedBudget,
+        chiPhiThucTe: actualSpent,
         ngayCapNhat: TODAY_REF,
       });
       showToast(`Đã cập nhật dự án ${prjForm.maDuAn}.`);
     } else {
       addProject({
         ...prjForm,
-        nganSachDuKien: Number(prjForm.nganSachDuKien) || 0,
-        chiPhiThucTe: Number(prjForm.chiPhiThucTe) || 0,
+        nganSachDuKien: plannedBudget,
+        chiPhiThucTe: actualSpent,
         congViec: [],
         cotMoc: [],
         ruiRo: [],
@@ -407,8 +420,7 @@ export const ProjectsTab: React.FC = () => {
       'Ngày Bắt Đầu',
       'Hạn Hoàn Thành',
       'Tiến Độ (%)',
-      'Ngân Sách (VNĐ)',
-      'Thực Chi (VNĐ)',
+      ...(showCosts ? ['Ngân Sách (VNĐ)', 'Thực Chi (VNĐ)'] : []),
     ];
     const rows = filteredProjects.map((p) => [
       p.maDuAn,
@@ -421,8 +433,7 @@ export const ProjectsTab: React.FC = () => {
       p.ngayBatDau,
       p.ngayKetThucDuKien,
       calculateProjectProgress(p),
-      p.nganSachDuKien,
-      p.chiPhiThucTe,
+      ...(showCosts ? [p.nganSachDuKien, p.chiPhiThucTe] : []),
     ]);
     const csv = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -446,6 +457,7 @@ export const ProjectsTab: React.FC = () => {
     exportProjectsWorkbook(filteredProjects, {
       exportedBy: currentUser.tenNhanVien,
       includePrintLayout: true,
+      includeCosts: showCosts,
       filterNote: activeFilters || undefined,
     });
     showToast(`Đã xuất file Excel (${filteredProjects.length} dự án).`);
@@ -845,7 +857,7 @@ export const ProjectsTab: React.FC = () => {
         </div>
 
         {/* Project Summary Strip */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className={`grid ${showCosts ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'} gap-3`}>
           <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between text-xs text-slate-400">
               <span>Tiến Độ Hoàn Thành</span>
@@ -881,18 +893,20 @@ export const ProjectsTab: React.FC = () => {
             </div>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1">
-            <div className="text-xs text-slate-400 flex items-center gap-1.5">
-              <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Thực Chi / Ngân Sách</span>
+          {showCosts && (
+            <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1">
+              <div className="text-xs text-slate-400 flex items-center gap-1.5">
+                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Thực Chi / Ngân Sách</span>
+              </div>
+              <div className="text-sm font-bold text-slate-100 tabular-nums">
+                {formatVND(budgetSpent)}
+              </div>
+              <div className="text-[11px] text-slate-400 tabular-nums">
+                Dự toán: {formatVND(budgetPlanned)} ({budgetPct}%)
+              </div>
             </div>
-            <div className="text-sm font-bold text-slate-100 tabular-nums">
-              {formatVND(budgetSpent)}
-            </div>
-            <div className="text-[11px] text-slate-400 tabular-nums">
-              Dự toán: {formatVND(budgetPlanned)} ({budgetPct}%)
-            </div>
-          </div>
+          )}
 
           <div className="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1">
             <div className="text-xs text-slate-400 flex items-center gap-1.5">
@@ -918,11 +932,15 @@ export const ProjectsTab: React.FC = () => {
               icon: Kanban,
             },
             { id: 'gantt', label: 'Timeline / Gantt', icon: GanttChartSquare },
-            {
-              id: 'budget',
-              label: `Ngân Sách & Chi Phí (${project.khoanChi.length})`,
-              icon: DollarSign,
-            },
+            ...(showCosts
+              ? [
+                  {
+                    id: 'budget',
+                    label: `Ngân Sách & Chi Phí (${project.khoanChi.length})`,
+                    icon: DollarSign,
+                  },
+                ]
+              : []),
             {
               id: 'risks',
               label: `Rủi Ro RAID (${openRisks}/${project.ruiRo.length})`,
@@ -1705,7 +1723,7 @@ export const ProjectsTab: React.FC = () => {
         )}
 
         {/* SUB-TAB 4: BUDGET & EXPENSES */}
-        {workspaceTab === 'budget' && (
+        {workspaceTab === 'budget' && showCosts && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800">
@@ -2077,8 +2095,8 @@ export const ProjectsTab: React.FC = () => {
         renderProjectWorkspace(selectedProject)
       ) : (
         <>
-          {/* 4 Portfolio KPI Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5">
+          {/* Portfolio KPI Cards */}
+          <div className={`grid ${showCosts ? 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4' : 'grid-cols-1 sm:grid-cols-3'} gap-3.5`}>
             <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span>Danh Mục Dự Án</span>
@@ -2105,18 +2123,20 @@ export const ProjectsTab: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Ngân Sách vs Thực Chi</span>
-                <DollarSign className="w-4 h-4 text-emerald-400" />
+            {showCosts && (
+              <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
+                <div className="flex items-center justify-between text-xs text-slate-400">
+                  <span>Ngân Sách vs Thực Chi</span>
+                  <DollarSign className="w-4 h-4 text-emerald-400" />
+                </div>
+                <div className="text-xl font-bold text-emerald-300 tabular-nums">
+                  {formatVND(portfolioStats.totalSpent)}
+                </div>
+                <div className="text-[11px] text-slate-400 tabular-nums">
+                  Dự toán: {formatVND(portfolioStats.totalBudget)} ({portfolioStats.budgetRatio}%)
+                </div>
               </div>
-              <div className="text-xl font-bold text-emerald-300 tabular-nums">
-                {formatVND(portfolioStats.totalSpent)}
-              </div>
-              <div className="text-[11px] text-slate-400 tabular-nums">
-                Dự toán: {formatVND(portfolioStats.totalBudget)} ({portfolioStats.budgetRatio}%)
-              </div>
-            </div>
+            )}
 
             <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-1.5">
               <div className="flex items-center justify-between text-xs text-slate-400">
@@ -2254,7 +2274,7 @@ export const ProjectsTab: React.FC = () => {
                   }`}
                 >
                   <BarChart3 className="w-3.5 h-3.5" />
-                  <span>Biểu Đồ Ngân Sách</span>
+                  <span>{showCosts ? 'Biểu Đồ Ngân Sách' : 'Biểu Đồ Tiến Độ'}</span>
                 </button>
               </div>
             </div>
@@ -2281,8 +2301,9 @@ export const ProjectsTab: React.FC = () => {
               </button>
             </div>
           ) : portfolioView === 'charts' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className={`grid ${showCosts ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'} gap-4`}>
               {/* Progress vs Budget Chart */}
+              {showCosts && (
               <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-4">
                 <h3 className="text-sm font-bold text-slate-100">
                   So Sánh Ngân Sách Dự Toán vs Thực Chi
@@ -2346,6 +2367,7 @@ export const ProjectsTab: React.FC = () => {
                   </span>
                 </div>
               </div>
+              )}
 
               {/* Progress Overview */}
               <div className="p-4 rounded-xl bg-slate-900/70 border border-slate-800 space-y-4">
@@ -2450,7 +2472,7 @@ export const ProjectsTab: React.FC = () => {
                         <th className="py-3 px-3">Ưu Tiên</th>
                         <th className="py-3 px-3">Thời Gian</th>
                         <th className="py-3 px-3">Tiến Độ</th>
-                        <th className="py-3 px-3">Thực Chi / Dự Toán</th>
+                        {showCosts && <th className="py-3 px-3">Thực Chi / Dự Toán</th>}
                         <th className="py-3 px-3 text-right">Thao Tác</th>
                       </tr>
                     </thead>
@@ -2514,14 +2536,16 @@ export const ProjectsTab: React.FC = () => {
                                 </span>
                               </div>
                             </td>
-                            <td className="py-3 px-3 tabular-nums">
-                              <div className="font-semibold text-emerald-300">
-                                {formatVND(p.chiPhiThucTe)}
-                              </div>
-                              <div className="text-[11px] text-slate-400">
-                                / {formatVND(p.nganSachDuKien)}
-                              </div>
-                            </td>
+                            {showCosts && (
+                              <td className="py-3 px-3 tabular-nums">
+                                <div className="font-semibold text-emerald-300">
+                                  {formatVND(p.chiPhiThucTe)}
+                                </div>
+                                <div className="text-[11px] text-slate-400">
+                                  / {formatVND(p.nganSachDuKien)}
+                                </div>
+                              </td>
+                            )}
                             <td
                               className="py-3 px-3 text-right"
                               onClick={(e) => e.stopPropagation()}
@@ -2635,13 +2659,15 @@ export const ProjectsTab: React.FC = () => {
                             {formatDateVN(p.ngayKetThucDuKien)}
                           </span>
                         </div>
-                        <div className="text-slate-400">
-                          Thực chi:{' '}
-                          <span className="text-emerald-300 font-semibold">
-                            {formatVND(p.chiPhiThucTe)}
-                          </span>{' '}
-                          ({budgetPct}%)
-                        </div>
+                        {showCosts && (
+                          <div className="text-slate-400">
+                            Thực chi:{' '}
+                            <span className="text-emerald-300 font-semibold">
+                              {formatVND(p.chiPhiThucTe)}
+                            </span>{' '}
+                            ({budgetPct}%)
+                          </div>
+                        )}
                         <div className="text-slate-400 text-right">
                           Rủi ro mở:{' '}
                           <span
@@ -2843,38 +2869,40 @@ export const ProjectsTab: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Ngân Sách Dự Kiến (VNĐ)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={100000}
-                    value={prjForm.nganSachDuKien}
-                    onChange={(e) =>
-                      setPrjForm({ ...prjForm, nganSachDuKien: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 tabular-nums"
-                  />
+              {showCosts && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      Ngân Sách Dự Kiến (VNĐ)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={100000}
+                      value={prjForm.nganSachDuKien}
+                      onChange={(e) =>
+                        setPrjForm({ ...prjForm, nganSachDuKien: Number(e.target.value) })
+                      }
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 tabular-nums"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      Chi Phí Thực Tế Ban Đầu (VNĐ)
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      step={100000}
+                      value={prjForm.chiPhiThucTe}
+                      onChange={(e) =>
+                        setPrjForm({ ...prjForm, chiPhiThucTe: Number(e.target.value) })
+                      }
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 tabular-nums"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">
-                    Chi Phí Thực Tế Ban Đầu (VNĐ)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    step={100000}
-                    value={prjForm.chiPhiThucTe}
-                    onChange={(e) =>
-                      setPrjForm({ ...prjForm, chiPhiThucTe: Number(e.target.value) })
-                    }
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 tabular-nums"
-                  />
-                </div>
-              </div>
+              )}
 
               <MultiAssigneePicker
                 employees={employees}

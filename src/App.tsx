@@ -2,7 +2,7 @@ import React, { Component, ErrorInfo, ReactNode, useCallback, useEffect, useStat
 import { CMMSProvider, useCMMS } from './context/CMMSContext';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
-import { canAccessBackup, getEffectiveAllowedViews, isAdminLevel } from './utils/cmmsLogic';
+import { canAccessBackup, canViewCosts, getEffectiveAllowedViews, isAdminLevel } from './utils/cmmsLogic';
 
 // Tabs
 import { DashboardTab } from './components/tabs/DashboardTab';
@@ -346,7 +346,7 @@ function CMMSApp() {
             <EnergyTab onOpenMeterModal={() => setIsMeterModalOpen(true)} />
           )}
 
-          {activeTab === 'costs' && (
+          {activeTab === 'costs' && canViewCosts(currentUser) && (
             <CostTab
               onOpenAddCost={() => {
                 setCostToEdit(null);
@@ -431,11 +431,13 @@ function CMMSApp() {
       />
 
       {/* 9. Cost Add / Edit Modal */}
-      <CostModal
-        isOpen={isCostModalOpen}
-        onClose={() => setIsCostModalOpen(false)}
-        costToEdit={costToEdit}
-      />
+      {canViewCosts(currentUser) && (
+        <CostModal
+          isOpen={isCostModalOpen}
+          onClose={() => setIsCostModalOpen(false)}
+          costToEdit={costToEdit}
+        />
+      )}
 
       {/* 10. Backup & Restore Modal - Restricted to ID1460 or Owner */}
       {hasBackupAccess && (

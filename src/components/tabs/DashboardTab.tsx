@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenanceD3Summary } from '../dashboard/MaintenanceD3Summary';
-import { formatVND, formatDateVN, matchesAssignee } from '../../utils/cmmsLogic';
+import { canViewCosts, formatVND, formatDateVN, getHistoryWorkType, matchesAssignee } from '../../utils/cmmsLogic';
 import {
   Cpu,
   Wrench,
@@ -22,8 +22,9 @@ import {
   CheckCircle2,
   ClipboardCheck,
   User,
+  Download,
 } from 'lucide-react';
-import { Equipment, MaintenancePlan } from '../../types/cmms';
+import { Equipment, MaintenancePlan, TicketStatus } from '../../types/cmms';
 
 const APP_TODAY = '2026-11-10';
 
@@ -98,12 +99,14 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     currentUser,
     equipment,
     maintenancePlans,
+    maintenanceHistory,
     tickets,
     spareParts,
     power10Days,
     costRecords,
     auditLogs,
   } = useCMMS();
+  const showCosts = canViewCosts(currentUser);
 
   // Metrics calculation
   const totalEquipment = equipment.length;
@@ -223,6 +226,244 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     [maintenancePlans, tickets, currentUser]
   );
 
+  const handleDownloadMonthlyCSV = () => {
+    const monthStr = String(calendarMonth.month + 1).padStart(2, '0');
+    const targetYearMonth = `${calendarMonth.year}-${monthStr}`;
+    const targetMonthDisplay = `${monthStr}/${calendarMonth.year}`;
+
+    const escapeCsvCell = (value: string | number | null | undefined): string => {
+      const str = String(value ?? '');
+      if (/[",\n\r]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rowToCsv = (cells: Array<string | number | null | undefined>): string =>
+      cells.map(escapeCsvCell).join(',');
+
+    // Monthly Maintenance Plans (scheduled in target month)
+    const monthlyPlans = maintenancePlans
+      .filter((p) => (p.ngayBaoTriTiepTheo || '').startsWith(targetYearMonth))
+      .sort((a, b) => a.ngayBaoTriTiepTheo.localeCompare(b.ngayBaoTriTiepTheo));
+
+    const planStatusOrder: MaintenancePlan['trangThai'][] = [
+      'Quá hạn',
+      'Tới hạn',
+      'Sắp tới',
+      'Đúng hạn',
+    ];
+
+    // Monthly Executed Maintenance History
+    const monthlyHistory = maintenanceHistory
+      .filter((h) => (h.ngayThucHien || '').startsWith(targetYearMonth))
+      .sort((a, b) => a.ngayThucHien.localeCompare(b.ngayThucHien));
+
+    const monthlyPmCount = monthlyHistory.filter(
+      (h) => getHistoryWorkType(h) === 'Bảo trì theo kế hoạch'
+    ).length;
+    const monthlyRepairCount = monthlyHistory.filter(
+      (h) => getHistoryWorkType(h) === 'Sửa chữa'
+    ).length;
+    const monthlyPassCount = monthlyHistory.filter(
+      (h) => h.ketQua === 'Đạt' || h.ketQua === 'Hoàn thành'
+    ).length;
+    const monthlyFollowUpCount = monthlyHistory.filter(
+      (h) => h.ketQua === 'Cần theo dõi' || h.ketQua === 'Chưa đạt'
+    ).length;
+    const monthlyDowntimeMinutes = monthlyHistory.reduce(
+      (sum, h) => sum + (Number(h.thoiGianDungMay) || 0),
+      0
+    );
+
+    // Monthly Tickets (created or completed in target month)
+    const monthlyTickets = tickets
+      .filter(
+        (t) =>
+          (t.ngayTao || '').startsWith(targetYearMonth) ||
+          (t.ngayHoanThanh || '').startsWith(targetYearMonth)
+      )
+      .sort((a, b) => a.ngayTao.localeCompare(b.ngayTao));
+
+    const ticketStatusOrder: TicketStatus[] = [
+      'Mới tiếp nhận',
+      'Chờ xử lý',
+      'Đang thực hiện',
+      'Đang xử lý',
+      'Hoàn thành',
+      'Hủy',
+    ];
+
+    const lines: string[] = [];
+    lines.push(
+      rowToCsv([
+        `BÁO CÁO TỔNG HỢP CÔNG VIỆC BẢO TRÌ & TRẠNG THÁI TICKET - THÁNG ${targetMonthDisplay}`,
+      ])
+    );
+    lines.push(
+      rowToCsv([
+        'Tháng báo cáo',
+        targetMonthDisplay,
+        'Ngày xuất',
+        formatDateVN(formatYMD(new Date())),
+        'Người xuất',
+        currentUser.tenNhanVien,
+      ])
+    );
+    lines.push('');
+
+    // Section 1: Maintenance Summary
+    lines.push(rowToCsv([`1. TỔNG HỢP CÔNG VIỆC BẢO TRÌ (THÁNG ${targetMonthDisplay})`]));
+    lines.push(rowToCsv(['Hạng mục', `Trong tháng ${targetMonthDisplay}`, 'Toàn hệ thống hiện tại']));
+    lines.push(rowToCsv(['Tổng kế hoạch bảo trì đến lịch', monthlyPlans.length, maintenancePlans.length]));
+    planStatusOrder.forEach((status) => {
+      lines.push(
+        rowToCsv([
+          `Kế hoạch - ${status}`,
+          monthlyPlans.filter((p) => p.trangThai === status).length,
+          maintenancePlans.filter((p) => p.trangThai === status).length,
+        ])
+      );
+    });
+    lines.push(rowToCsv(['Công việc bảo trì đã thực hiện (Tổng lượt)', monthlyHistory.length, maintenanceHistory.length]));
+    lines.push(rowToCsv(['- Bảo trì theo kế hoạch (PM)', monthlyPmCount, maintenanceHistory.filter((h) => getHistoryWorkType(h) === 'Bảo trì theo kế hoạch').length]));
+    lines.push(rowToCsv(['- Sửa chữa khắc phục (CM)', monthlyRepairCount, maintenanceHistory.filter((h) => getHistoryWorkType(h) === 'Sửa chữa').length]));
+    lines.push(rowToCsv(['- Kết quả Đạt / Hoàn thành', monthlyPassCount, maintenanceHistory.filter((h) => h.ketQua === 'Đạt' || h.ketQua === 'Hoàn thành').length]));
+    lines.push(rowToCsv(['- Kết quả Cần theo dõi / Chưa đạt', monthlyFollowUpCount, maintenanceHistory.filter((h) => h.ketQua === 'Cần theo dõi' || h.ketQua === 'Chưa đạt').length]));
+    lines.push(
+      rowToCsv([
+        '- Tổng thời gian dừng máy (Phút)',
+        monthlyDowntimeMinutes,
+        maintenanceHistory.reduce((sum, h) => sum + (Number(h.thoiGianDungMay) || 0), 0),
+      ])
+    );
+    lines.push('');
+
+    // Section 2: Ticket Status Summary
+    lines.push(rowToCsv([`2. TỔNG HỢP TRẠNG THÁI TICKET (THÁNG ${targetMonthDisplay})`]));
+    lines.push(rowToCsv(['Trạng thái / Mức độ ưu tiên', `Trong tháng ${targetMonthDisplay}`, 'Toàn hệ thống hiện tại']));
+    lines.push(rowToCsv(['Tổng số Ticket', monthlyTickets.length, tickets.length]));
+    ticketStatusOrder.forEach((status) => {
+      lines.push(
+        rowToCsv([
+          `Trạng thái - ${status}`,
+          monthlyTickets.filter((t) => t.trangThai === status).length,
+          tickets.filter((t) => t.trangThai === status).length,
+        ])
+      );
+    });
+    lines.push(
+      rowToCsv([
+        'Ticket Khẩn cấp',
+        monthlyTickets.filter((t) => t.mucDoUuTien === 'Khẩn cấp').length,
+        tickets.filter((t) => t.mucDoUuTien === 'Khẩn cấp').length,
+      ])
+    );
+    lines.push('');
+
+    // Section 3: Detailed Monthly Maintenance Plans
+    lines.push(rowToCsv([`3. CHI TIẾT KẾ HOẠCH BẢO TRÌ TRONG THÁNG ${targetMonthDisplay} (${monthlyPlans.length} mục)`]));
+    lines.push(
+      rowToCsv([
+        'Mã Kế Hoạch',
+        'Mã Thiết Bị',
+        'Tên Thiết Bị',
+        'Loại Bảo Trì',
+        'Tần Suất',
+        'Ngày Bảo Trì Tiếp Theo',
+        'Trạng Thái',
+        'Người Phụ Trách',
+      ])
+    );
+    monthlyPlans.forEach((p) => {
+      lines.push(
+        rowToCsv([
+          p.id,
+          p.maThietBi,
+          p.tenThietBi,
+          p.loaiBaoTri,
+          p.tanSuat,
+          p.ngayBaoTriTiepTheo,
+          p.trangThai,
+          p.nguoiPhuTrach,
+        ])
+      );
+    });
+    lines.push('');
+
+    // Section 4: Detailed Monthly Maintenance History
+    lines.push(rowToCsv([`4. CHI TIẾT CÔNG VIỆC BẢO TRÌ ĐÃ THỰC HIỆN TRONG THÁNG ${targetMonthDisplay} (${monthlyHistory.length} mục)`]));
+    lines.push(
+      rowToCsv([
+        'Mã Lịch Sử',
+        'Mã Thiết Bị',
+        'Tên Thiết Bị',
+        'Loại Công Việc',
+        'Ngày Thực Hiện',
+        'Người Thực Hiện',
+        'Thời Gian Dừng Máy (Phút)',
+        'Kết Quả',
+        'Mô Tả Công Việc',
+      ])
+    );
+    monthlyHistory.forEach((h) => {
+      lines.push(
+        rowToCsv([
+          h.id,
+          h.maThietBi,
+          h.tenThietBi,
+          getHistoryWorkType(h),
+          h.ngayThucHien,
+          h.nguoiThucHien,
+          h.thoiGianDungMay,
+          h.ketQua,
+          h.moTaCongViec,
+        ])
+      );
+    });
+    lines.push('');
+
+    // Section 5: Detailed Monthly Tickets
+    lines.push(rowToCsv([`5. CHI TIẾT TICKET TRONG THÁNG ${targetMonthDisplay} (${monthlyTickets.length} mục)`]));
+    lines.push(
+      rowToCsv([
+        'Mã Ticket',
+        'Tiêu Đề',
+        'Mã Thiết Bị',
+        'Mức Độ Ưu Tiên',
+        'Trạng Thái',
+        'Ngày Tạo',
+        'Ngày Hoàn Thành',
+        'Người Phụ Trách',
+        'Người Lập',
+      ])
+    );
+    monthlyTickets.forEach((t) => {
+      lines.push(
+        rowToCsv([
+          t.maTicket,
+          t.tieuDe,
+          t.maThietBi || '',
+          t.mucDoUuTien,
+          t.trangThai,
+          t.ngayTao,
+          t.ngayHoanThanh || '',
+          t.nguoiPhuTrach,
+          t.nguoiLap,
+        ])
+      );
+    });
+
+    const csvContent = '\uFEFF' + lines.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Dashboard_BaoTri_Ticket_Thang_${monthStr}_${calendarMonth.year}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner / Hero with Quick Actions */}
@@ -276,6 +517,15 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             >
               <Gauge className="w-4 h-4" />
               Chốt Đồng Hồ
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadMonthlyCSV}
+              title={`Tải xuống báo cáo CSV tổng hợp bảo trì & ticket tháng ${String(calendarMonth.month + 1).padStart(2, '0')}/${calendarMonth.year}`}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-900/30 transition border border-indigo-400/40 whitespace-nowrap"
+            >
+              <Download className="w-4 h-4" />
+              Download CSV
             </button>
           </div>
         </div>
@@ -512,7 +762,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       </div>
 
       {/* Energy & Cost Quick Highlights */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className={showCosts ? 'grid grid-cols-1 md:grid-cols-2 gap-4' : 'grid grid-cols-1 gap-4'}>
         {/* Power Card */}
         <div
           onClick={() => onNavigateTab('energy')}
@@ -556,58 +806,60 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         </div>
 
         {/* Cost Card */}
-        <div
-          onClick={() => onNavigateTab('costs')}
-          className="cursor-pointer rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/50 p-5 transition space-y-4"
-        >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
-                <DollarSign className="w-5 h-5" />
+        {showCosts && (
+          <div
+            onClick={() => onNavigateTab('costs')}
+            className="cursor-pointer rounded-2xl bg-slate-900/80 border border-slate-800 hover:border-emerald-500/50 p-5 transition space-y-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+                  <DollarSign className="w-5 h-5" />
+                </span>
+                <div>
+                  <h4 className="text-sm font-bold text-slate-100">Chi Phí Bảo Trì & Mua Sắm</h4>
+                  <p className="text-xs text-slate-400">{costRecords.length} giao dịch ghi nhận</p>
+                </div>
+              </div>
+              <span className="font-mono font-extrabold text-emerald-400 text-lg">
+                {formatVND(totalCost)}
               </span>
-              <div>
-                <h4 className="text-sm font-bold text-slate-100">Chi Phí Bảo Trì & Mua Sắm</h4>
-                <p className="text-xs text-slate-400">{costRecords.length} giao dịch ghi nhận</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Định Kỳ</span>
+                <span className="font-mono font-bold text-xs text-slate-200">
+                  {formatVND(
+                    costRecords
+                      .filter((c) => c.phanLoai === 'Bảo trì định kỳ')
+                      .reduce((a, b) => a + b.soTienVND, 0)
+                  )}
+                </span>
+              </div>
+              <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Đột Xuất</span>
+                <span className="font-mono font-bold text-xs text-amber-300">
+                  {formatVND(
+                    costRecords
+                      .filter((c) => c.phanLoai === 'Sửa chữa đột xuất')
+                      .reduce((a, b) => a + b.soTienVND, 0)
+                  )}
+                </span>
+              </div>
+              <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-800">
+                <span className="text-[11px] text-slate-400 block">Mua Phụ Tùng</span>
+                <span className="font-mono font-bold text-xs text-cyan-300">
+                  {formatVND(
+                    costRecords
+                      .filter((c) => c.phanLoai === 'Mua vật tư thay thế')
+                      .reduce((a, b) => a + b.soTienVND, 0)
+                  )}
+                </span>
               </div>
             </div>
-            <span className="font-mono font-extrabold text-emerald-400 text-lg">
-              {formatVND(totalCost)}
-            </span>
           </div>
-
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-800">
-              <span className="text-[11px] text-slate-400 block">Định Kỳ</span>
-              <span className="font-mono font-bold text-xs text-slate-200">
-                {formatVND(
-                  costRecords
-                    .filter((c) => c.phanLoai === 'Bảo trì định kỳ')
-                    .reduce((a, b) => a + b.soTienVND, 0)
-                )}
-              </span>
-            </div>
-            <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-800">
-              <span className="text-[11px] text-slate-400 block">Đột Xuất</span>
-              <span className="font-mono font-bold text-xs text-amber-300">
-                {formatVND(
-                  costRecords
-                    .filter((c) => c.phanLoai === 'Sửa chữa đột xuất')
-                    .reduce((a, b) => a + b.soTienVND, 0)
-                )}
-              </span>
-            </div>
-            <div className="bg-slate-800/50 p-3 rounded-xl border border-slate-800">
-              <span className="text-[11px] text-slate-400 block">Mua Phụ Tùng</span>
-              <span className="font-mono font-bold text-xs text-cyan-300">
-                {formatVND(
-                  costRecords
-                    .filter((c) => c.phanLoai === 'Mua vật tư thay thế')
-                    .reduce((a, b) => a + b.soTienVND, 0)
-                )}
-              </span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Visual Summary View: Overdue & Critical Upcoming Schedules (D3) */}

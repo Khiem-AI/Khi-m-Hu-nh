@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenancePlan, MaintenanceHistory, Equipment, MaintenanceWorkType } from '../../types/cmms';
-import { formatDateVN, formatVND, getHistoryWorkType, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { canViewCosts, formatDateVN, formatVND, getHistoryWorkType, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import {
   exportMaintenanceHistoryExcel,
@@ -379,6 +379,8 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
     return parts.length > 0 ? parts.join(', ') : 'Toàn bộ dữ liệu đang hiển thị';
   };
 
+  const showCosts = canViewCosts(currentUser);
+
   const handleRunExcelExport = (mode: 'combined' | 'history' | 'plans' | 'tickets') => {
     const targetPlans = excelOnlyFiltered ? filteredPlans : maintenancePlans;
     const targetHistory = excelOnlyFiltered ? filteredHistory : maintenanceHistory;
@@ -386,6 +388,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
       exportedBy: currentUser.tenNhanVien,
       includePrintLayout: excelIncludePrintLayout,
       filterNote: buildFilterSummary(),
+      includeCosts: showCosts,
     };
 
     if (mode === 'combined') {
@@ -1212,7 +1215,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                         </div>
                         <div className="flex items-center gap-1.5 text-slate-500 truncate">
                           <span>Báo cáo: {item.nguoiLapBaoCao}</span>
-                          {item.chiPhiUocTinh ? (
+                          {showCosts && item.chiPhiUocTinh ? (
                             <>
                               <span aria-hidden="true">·</span>
                               <span className="text-emerald-400 font-mono tabular-nums font-semibold">

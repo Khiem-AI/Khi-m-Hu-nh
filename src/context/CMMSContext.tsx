@@ -280,6 +280,7 @@ interface CMMSContextType {
     interactiveFallback?: boolean;
     webhookUrlOverride?: string;
     userConfirmed?: boolean;
+    allowDuplicate?: boolean;
   }) => Promise<EmailSendResult>;
   triggerMaintenanceDueAlerts: (options?: { userConfirmed?: boolean }) => Promise<{
     sentCount: number;
@@ -649,6 +650,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const cloudEmpPublicRef = useRef<Record<string, Partial<Employee>>>({});
   const cloudEmpPrivateRef = useRef<Record<string, Partial<Employee>>>({});
   const workspaceReadyRef = useRef<boolean>(false);
+  const inFlightEmailSignaturesRef = useRef<Set<string>>(new Set());
+  const autoInspectionCheckedDateRef = useRef<string>('');
 
   useEffect(() => {
     employeesRef.current = employees;
@@ -2557,6 +2560,82 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setActiveWebToast(null);
   };
 
+  const getVietnamTodayYMD = (): string => {
+    try {
+      return new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date());
+    } catch {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+  };
+
+  const hashEmailSignature = (str: string): string => {
+    let h1 = 0xdeadbeef;
+    let h2 = 0x41c6ce57;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str.charCodeAt(i);
+      h1 = Math.imul(h1 ^ ch, 2654435761);
+      h2 = Math.imul(h2 ^ ch, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+  };
+
+  const normalizeDedupField = (raw: string): string =>
+    raw.replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ').trim();
+
+  const buildClientEmailDedupSignature = (params: {
+    dayYMD: string;
+    toList: string[];
+    ccList: string[];
+    subject: string;
+    body: string;
+  }): string => {
+    const sortedTo = [...params.toList].map((e) => e.toLowerCase()).sort().join(',');
+    const sortedCc = [...params.ccList].map((e) => e.toLowerCase()).sort().join(',');
+    return `${params.dayYMD}|${sortedTo}|${sortedCc}|${normalizeDedupField(params.subject)}|${normalizeDedupField(params.body)}`;
+  };
+
+  const getDailyDedupStorageKey = (dayYMD: string) => `cmms_daily_email_dedup_${dayYMD}`;
+
+  const hasDailyDedupHashInStorage = (dayYMD: string, hash: string): boolean => {
+    try {
+      const raw = localStorage.getItem(getDailyDedupStorageKey(dayYMD));
+      if (!raw) return false;
+      const arr = JSON.parse(raw) as unknown;
+      return Array.isArray(arr) && arr.includes(hash);
+    } catch {
+      return false;
+    }
+  };
+
+  const recordDailyDedupHashInStorage = (dayYMD: string, hash: string) => {
+    try {
+      const activeKey = getDailyDedupStorageKey(dayYMD);
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('cmms_daily_email_dedup_') && k !== activeKey) {
+          localStorage.removeItem(k);
+        }
+      }
+      const raw = localStorage.getItem(activeKey);
+      const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+      const arr = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
+      if (!arr.includes(hash)) {
+        arr.push(hash);
+        localStorage.setItem(activeKey, JSON.stringify(arr.slice(-100)));
+      }
+    } catch {
+      // ignore storage errors
+    }
+  };
+
   const sendEmailNotification = async (params: {
     type: EmailLog['type'];
     subject: string;
@@ -2567,6 +2646,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     interactiveFallback?: boolean;
     webhookUrlOverride?: string;
     userConfirmed?: boolean;
+    allowDuplicate?: boolean;
   }): Promise<EmailSendResult> => {
     const rawRecipient = (params.recipient || emailConfig.primaryRecipient || '').trim();
     const rawCc = (params.cc !== undefined ? params.cc : emailConfig.ccRecipients || '').trim();
@@ -2592,6 +2672,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const targetRecipient = deliverableTo.join(', ') || rawRecipient;
     const targetCc = deliverableCc.join(', ');
     const now = new Date();
+    const todayYMD = getVietnamTodayYMD();
     const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     const logId = nextUniqueId('EML');
     const webhookUrl = (
@@ -2602,6 +2683,67 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const deliveryMode = emailConfig.notificationMode || 'both';
     const shouldNotifyWeb = deliveryMode === 'web_only' || deliveryMode === 'both';
+
+    const dedupSignature = buildClientEmailDedupSignature({
+      dayYMD: todayYMD,
+      toList: deliverableTo,
+      ccList: deliverableCc,
+      subject: params.subject,
+      body: params.body,
+    });
+    const dedupHash = hashEmailSignature(dedupSignature);
+    const shouldCheckDedup =
+      deliveryMode !== 'web_only' && !params.allowDuplicate && deliverableTo.length > 0;
+
+    if (shouldCheckDedup) {
+      const normalizedSubj = normalizeDedupField(params.subject);
+      const normalizedBody = normalizeDedupField(params.body);
+      const sortedTargetTo = [...deliverableTo].map((e) => e.toLowerCase()).sort().join(',');
+
+      const alreadySentInLogs = latestSnapshotRef.current.emailLogs.some((log) => {
+        if (!log.timestamp || !log.timestamp.startsWith(todayYMD)) return false;
+        if (
+          log.status === 'Thất bại' ||
+          log.status === 'Chờ người dùng gửi' ||
+          log.status === 'Thông báo Web'
+        ) {
+          return false;
+        }
+        if (
+          params.relatedId === 'AUTO-INSPECTION-REMINDER' &&
+          log.relatedId === 'AUTO-INSPECTION-REMINDER'
+        ) {
+          return true;
+        }
+        const logTo = log.recipient
+          .split(/[,;]+/)
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean)
+          .sort()
+          .join(',');
+        return (
+          logTo === sortedTargetTo &&
+          normalizeDedupField(log.subject || '') === normalizedSubj &&
+          normalizeDedupField(log.fullContent || '') === normalizedBody
+        );
+      });
+
+      if (
+        inFlightEmailSignaturesRef.current.has(dedupSignature) ||
+        hasDailyDedupHashInStorage(todayYMD, dedupHash) ||
+        alreadySentInLogs
+      ) {
+        return {
+          success: true,
+          method: 'auto',
+          deduplicated: true,
+          webNotified: false,
+          recipient: targetRecipient,
+          logId: '',
+          message: 'Email cùng nội dung đã được gửi trong ngày hôm nay (hệ thống tự động chặn gửi trùng).',
+        };
+      }
+    }
 
     // Trigger instant 0đ Web Notification when enabled
     let webNotified = false;
@@ -2660,94 +2802,103 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     let sentSuccess = false;
     let sentChannel: 'gmail' | 'smtp' | 'resend' | 'webhook' | undefined;
+    let serverDeduplicated = false;
     let notConfigured = false;
     let needsGmailAuth = false;
     let errorMessage = '';
 
-    if (parsedTo.length === 0) {
-      errorMessage = 'Địa chỉ email người nhận đang trống hoặc sai định dạng.';
-    } else if (deliverableTo.length === 0) {
-      errorMessage = `Địa chỉ người nhận (${parsedTo.join(', ')}) đang là email mẫu (@factory.com). Vui lòng sửa thành Gmail / email thật trước khi gửi.`;
-    } else {
-      // 1. User-confirmed direct Gmail API dispatch (if signed in with Google)
-      const gmailToken = getGmailAccessToken();
-      if (params.userConfirmed && gmailToken) {
-        try {
-          await sendViaGmailApi({
-            to: targetRecipient,
-            cc: targetCc,
-            subject: params.subject,
-            body: params.body,
-            html: htmlBody,
-            senderName: emailConfig.senderName,
-            fromEmail: gmailUser?.email,
-          });
-          sentSuccess = true;
-          sentChannel = 'gmail';
-        } catch (gmailErr) {
-          const gMsg = gmailErr instanceof Error ? gmailErr.message : '';
-          if (
-            gMsg === '__GMAIL_TOKEN_EXPIRED__' ||
-            gMsg === '__GMAIL_NOT_AUTHENTICATED__' ||
-            gMsg === '__GMAIL_INSUFFICIENT_SCOPE__'
-          ) {
-            clearGmailAccessToken();
-            setIsGmailConnected(false);
-            needsGmailAuth = true;
-            errorMessage =
-              gMsg === '__GMAIL_INSUFFICIENT_SCOPE__'
-                ? 'Tài khoản Google chưa được cấp quyền gửi Gmail (gmail.send). Hãy bấm "Sign in with Google" và tích chọn ô cấp quyền gửi email.'
-                : 'Phiên kết nối Gmail đã hết hạn. Vui lòng bấm "Sign in with Google" để kết nối lại Gmail.';
-          } else if (gMsg.startsWith('__GMAIL_API_DISABLED__:')) {
-            errorMessage =
-              'Gmail API chưa được bật trên Google Cloud Project của ứng dụng. Bạn vẫn có thể dán Webhook Google Apps Script (miễn phí 30s) hoặc bật Gmail API trong Cloud Console.';
-          } else {
-            errorMessage = `Lỗi Gmail API: ${gMsg || 'Không thể gửi qua Gmail'}`;
-          }
-        }
-      }
+    if (shouldCheckDedup) {
+      inFlightEmailSignaturesRef.current.add(dedupSignature);
+    }
 
-      // 2. Fallback to backend dispatch (Webhook / Server SMTP / Resend) if Gmail API was not used or failed
-      if (!sentSuccess) {
-        try {
-          const apiRes = await fetch('/api/send-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+    try {
+      if (parsedTo.length === 0) {
+        errorMessage = 'Địa chỉ email người nhận đang trống hoặc sai định dạng.';
+      } else if (deliverableTo.length === 0) {
+        errorMessage = `Địa chỉ người nhận (${parsedTo.join(', ')}) đang là email mẫu (@factory.com). Vui lòng sửa thành Gmail / email thật trước khi gửi.`;
+      } else {
+        // 1. User-confirmed direct Gmail API dispatch (if signed in with Google)
+        const gmailToken = getGmailAccessToken();
+        if (params.userConfirmed && gmailToken) {
+          try {
+            await sendViaGmailApi({
               to: targetRecipient,
               cc: targetCc,
               subject: params.subject,
               body: params.body,
               html: htmlBody,
               senderName: emailConfig.senderName,
-              webhookUrl,
-              type: params.type,
-              relatedId: params.relatedId || '',
-              timestamp: timeStr,
-            }),
-          });
-
-          const contentType = apiRes.headers.get('content-type') || '';
-          if (apiRes.status === 404 || !contentType.includes('application/json')) {
-            throw new Error('__API_UNAVAILABLE__');
-          }
-
-          const data = (await apiRes.json()) as {
-            ok?: boolean;
-            channel?: 'smtp' | 'resend' | 'webhook';
-            notConfigured?: boolean;
-            message?: string;
-          };
-
-          if (apiRes.ok && data.ok) {
+              fromEmail: gmailUser?.email,
+            });
             sentSuccess = true;
-            sentChannel = data.channel || 'smtp';
-          } else {
-            notConfigured = Boolean(data.notConfigured);
-            if (!errorMessage || !data.notConfigured) {
-              errorMessage = data.message || `Không thể gửi email (HTTP ${apiRes.status})`;
+            sentChannel = 'gmail';
+          } catch (gmailErr) {
+            const gMsg = gmailErr instanceof Error ? gmailErr.message : '';
+            if (
+              gMsg === '__GMAIL_TOKEN_EXPIRED__' ||
+              gMsg === '__GMAIL_NOT_AUTHENTICATED__' ||
+              gMsg === '__GMAIL_INSUFFICIENT_SCOPE__'
+            ) {
+              clearGmailAccessToken();
+              setIsGmailConnected(false);
+              needsGmailAuth = true;
+              errorMessage =
+                gMsg === '__GMAIL_INSUFFICIENT_SCOPE__'
+                  ? 'Tài khoản Google chưa được cấp quyền gửi Gmail (gmail.send). Hãy bấm "Sign in with Google" và tích chọn ô cấp quyền gửi email.'
+                  : 'Phiên kết nối Gmail đã hết hạn. Vui lòng bấm "Sign in with Google" để kết nối lại Gmail.';
+            } else if (gMsg.startsWith('__GMAIL_API_DISABLED__:')) {
+              errorMessage =
+                'Gmail API chưa được bật trên Google Cloud Project của ứng dụng. Bạn vẫn có thể dán Webhook Google Apps Script (miễn phí 30s) hoặc bật Gmail API trong Cloud Console.';
+            } else {
+              errorMessage = `Lỗi Gmail API: ${gMsg || 'Không thể gửi qua Gmail'}`;
             }
           }
+        }
+
+        // 2. Fallback to backend dispatch (Webhook / Server SMTP / Resend) if Gmail API was not used or failed
+        if (!sentSuccess) {
+          try {
+            const apiRes = await fetch('/api/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: targetRecipient,
+                cc: targetCc,
+                subject: params.subject,
+                body: params.body,
+                html: htmlBody,
+                senderName: emailConfig.senderName,
+                webhookUrl,
+                type: params.type,
+                relatedId: params.relatedId || '',
+                timestamp: timeStr,
+                allowDuplicate: Boolean(params.allowDuplicate),
+              }),
+            });
+
+            const contentType = apiRes.headers.get('content-type') || '';
+            if (apiRes.status === 404 || !contentType.includes('application/json')) {
+              throw new Error('__API_UNAVAILABLE__');
+            }
+
+            const data = (await apiRes.json()) as {
+              ok?: boolean;
+              deduplicated?: boolean;
+              channel?: 'smtp' | 'resend' | 'webhook';
+              notConfigured?: boolean;
+              message?: string;
+            };
+
+            if (apiRes.ok && data.ok) {
+              sentSuccess = true;
+              serverDeduplicated = Boolean(data.deduplicated);
+              sentChannel = data.channel || 'smtp';
+            } else {
+              notConfigured = Boolean(data.notConfigured);
+              if (!errorMessage || !data.notConfigured) {
+                errorMessage = data.message || `Không thể gửi email (HTTP ${apiRes.status})`;
+              }
+            }
         } catch (err) {
           const msg = err instanceof Error ? err.message : '';
           if (msg === '__API_UNAVAILABLE__' && webhookUrl && /^https?:\/\//i.test(webhookUrl)) {
@@ -2836,6 +2987,23 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     if (sentSuccess) {
+      if (shouldCheckDedup && !params.allowDuplicate) {
+        recordDailyDedupHashInStorage(todayYMD, dedupHash);
+      }
+      if (serverDeduplicated) {
+        return {
+          success: true,
+          method: sentChannel === 'webhook' ? 'webhook' : 'auto',
+          channel: sentChannel,
+          deduplicated: true,
+          webNotified,
+          recipient: targetRecipient,
+          logId: '',
+          message:
+            'Email cùng nội dung đã được gửi trong ngày hôm nay (máy chủ tự động chặn gửi trùng).',
+        };
+      }
+
       const logStatus: EmailLog['status'] = shouldNotifyWeb
         ? 'Đã gửi Web + Email'
         : sentChannel === 'gmail'
@@ -2928,6 +3096,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       logId,
       message: finalErrorMsg,
     };
+    } finally {
+      if (shouldCheckDedup) {
+        inFlightEmailSignaturesRef.current.delete(dedupSignature);
+      }
+    }
   };
 
   const assignWorkAndNotify = async (params: {
@@ -3230,34 +3403,70 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!emailConfig.enabled || emailConfig.notifyOnInspectionDue === false) return;
-    const autoKey = 'cmms_auto_inspection_reminder_2026-11-10';
-    if (sessionStorage.getItem(autoKey) === 'sent') return;
+    if (cloudSyncStatus === 'syncing') return;
 
-    const alreadyLoggedAuto = emailLogs.some(
-      (log) =>
-        log.type === 'KIEM_DINH_DEN_HAN' &&
-        log.relatedId === 'AUTO-INSPECTION-REMINDER' &&
-        log.timestamp.startsWith('2026-11-10')
-    );
-    if (alreadyLoggedAuto) {
-      sessionStorage.setItem(autoKey, 'sent');
-      return;
+    const todayYMD = getVietnamTodayYMD();
+    if (autoInspectionCheckedDateRef.current === todayYMD) return;
+
+    const autoKey = `cmms_auto_inspection_reminder_${todayYMD}`;
+    try {
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('cmms_auto_inspection_reminder_') && k !== autoKey) {
+          localStorage.removeItem(k);
+        }
+      }
+      if (localStorage.getItem(autoKey) === 'sent') {
+        autoInspectionCheckedDateRef.current = todayYMD;
+        return;
+      }
+    } catch {
+      // ignore storage errors
     }
 
-    const dueItems = safetyInspections.filter((item) => {
-      const status = getInspectionStatus(
-        item.ngayHetHan,
-        item.nhacTruocNgay ?? 30,
-        item.trangThai === 'Đang kiểm định'
+    const checkAndTrigger = () => {
+      if (autoInspectionCheckedDateRef.current === todayYMD) return;
+      autoInspectionCheckedDateRef.current = todayYMD;
+
+      const alreadyLoggedAuto = latestSnapshotRef.current.emailLogs.some(
+        (log) =>
+          log.type === 'KIEM_DINH_DEN_HAN' &&
+          log.relatedId === 'AUTO-INSPECTION-REMINDER' &&
+          log.timestamp.startsWith(todayYMD) &&
+          log.status !== 'Thất bại'
       );
-      return status === 'Quá hạn' || status === 'Sắp đến hạn';
-    });
+      if (alreadyLoggedAuto) {
+        try {
+          localStorage.setItem(autoKey, 'sent');
+        } catch {
+          // ignore
+        }
+        return;
+      }
 
-    if (dueItems.length > 0) {
-      sessionStorage.setItem(autoKey, 'sent');
-      void triggerInspectionDueAlerts(true);
-    }
-  }, [isAuthenticated, emailConfig.enabled, emailConfig.notifyOnInspectionDue]);
+      const dueItems = latestSnapshotRef.current.safetyInspections.filter((item) => {
+        const status = getInspectionStatus(
+          item.ngayHetHan,
+          item.nhacTruocNgay ?? 30,
+          item.trangThai === 'Đang kiểm định'
+        );
+        return status === 'Quá hạn' || status === 'Sắp đến hạn';
+      });
+
+      if (dueItems.length > 0) {
+        try {
+          localStorage.setItem(autoKey, 'sent');
+        } catch {
+          // ignore
+        }
+        void triggerInspectionDueAlerts(true);
+      }
+    };
+
+    const delayMs = cloudUserRef.current ? 1500 : 100;
+    const timer = window.setTimeout(checkAndTrigger, delayMs);
+    return () => window.clearTimeout(timer);
+  }, [isAuthenticated, emailConfig.enabled, emailConfig.notifyOnInspectionDue, cloudSyncStatus]);
 
   const deleteEmailLog = (id: string) => {
     setEmailLogs((prev) => prev.filter((l) => l.id !== id));

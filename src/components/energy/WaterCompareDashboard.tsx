@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import { WaterMonthly, MeterReading, WATER_DAILY_METERS } from '../../types/cmms';
 import { useCMMS } from '../../context/CMMSContext';
-import { formatVND } from '../../utils/cmmsLogic';
+import { canViewCosts, formatVND } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Droplet,
@@ -166,8 +166,9 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
   onOpenWaterModal,
   onGoToWaterTable,
 }) => {
-  const { theme, tariffConfig } = useCMMS();
+  const { theme, tariffConfig, currentUser } = useCMMS();
   const isDark = theme === 'dark';
+  const showCosts = canViewCosts(currentUser);
 
   const [viewMode, setViewMode] = useState<
     'overview_cost' | 'month_vs_month' | 'yearly_yoy' | 'daily_meters'
@@ -312,7 +313,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
     if (!monthA || !monthB) return [];
     const totalA = monthA.waterVND + monthA.sewageVND;
     const totalB = monthB.waterVND + monthB.sewageVND;
-    return [
+    const volumeRows = [
       {
         metric: 'Nước Cấp (m³)',
         A: monthA.waterM3,
@@ -323,6 +324,10 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
         A: Math.round(monthA.waterM3 * 0.8),
         B: Math.round(monthB.waterM3 * 0.8),
       },
+    ];
+    if (!showCosts) return volumeRows;
+    return [
+      ...volumeRows,
       {
         metric: 'Tiền Nước (Tr.đ)',
         A: Math.round((monthA.waterVND / 1_000_000) * 10) / 10,
@@ -339,7 +344,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
         B: Math.round((totalB / 1_000_000) * 10) / 10,
       },
     ];
-  }, [monthA, monthB]);
+  }, [monthA, monthB, showCosts]);
 
   // Yearly YoY (Month 01..12 overlaid for 2024, 2025, 2026)
   const { yoyChartData, yearlySummary } = useMemo(() => {
@@ -395,7 +400,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
         const rec = lookup.get(`${y}-${mm}`);
         if (!rec) {
           row[`y${y}`] = null;
-        } else if (yoyMetric === 'waterM3') {
+        } else if (!showCosts || yoyMetric === 'waterM3') {
           row[`y${y}`] = rec.waterM3;
         } else if (yoyMetric === 'totalCostVND') {
           row[`y${y}`] = Math.round(((rec.waterVND + rec.sewageVND) / 1_000_000) * 100) / 100;
@@ -423,7 +428,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
     });
 
     return { yoyChartData: yoyData, yearlySummary: summaries.reverse() };
-  }, [waterMonthly, yoyMetric]);
+  }, [waterMonthly, yoyMetric, showCosts]);
 
   // Daily water meters (P1 - P8) from meterReadings
   const waterDailyReadings = useMemo(
@@ -520,23 +525,31 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
       'Thang',
       'Nuoc Cap (m3)',
       'Nuoc Thai 80% (m3)',
-      'Tien Nuoc (VND)',
-      'Tien Nuoc (USD)',
-      'Phi Thai (VND)',
-      'Phi Thai (USD)',
-      'Tong Chi Phi (VND)',
-      'Tong Chi Phi (USD)',
+      ...(showCosts
+        ? [
+            'Tien Nuoc (VND)',
+            'Tien Nuoc (USD)',
+            'Phi Thai (VND)',
+            'Phi Thai (USD)',
+            'Tong Chi Phi (VND)',
+            'Tong Chi Phi (USD)',
+          ]
+        : []),
     ];
     const rows = filteredAsc.map((w) => [
       w.month,
       w.waterM3,
       Math.round(w.waterM3 * 0.8 * 10) / 10,
-      w.waterVND,
-      w.waterUSD,
-      w.sewageVND,
-      w.sewageUSD,
-      w.waterVND + w.sewageVND,
-      w.waterUSD + w.sewageUSD,
+      ...(showCosts
+        ? [
+            w.waterVND,
+            w.waterUSD,
+            w.sewageVND,
+            w.sewageUSD,
+            w.waterVND + w.sewageVND,
+            w.waterUSD + w.sewageUSD,
+          ]
+        : []),
     ]);
     const csv = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -573,11 +586,15 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
             <span>Sheet Nuoc_month: {waterMonthly.length} tháng</span>
             <span aria-hidden="true">·</span>
             <span>Nhật ký P1–P8: {waterDailyReadings.length} bản ghi</span>
-            <span aria-hidden="true">·</span>
-            <span>
-              Đơn giá cấp {formatVND(tariffConfig.waterVNDPerM3)}/m³ · thải{' '}
-              {formatVND(tariffConfig.sewageVNDPerM3)}/m³ (80%)
-            </span>
+            {showCosts && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>
+                  Đơn giá cấp {formatVND(tariffConfig.waterVNDPerM3)}/m³ · thải{' '}
+                  {formatVND(tariffConfig.sewageVNDPerM3)}/m³ (80%)
+                </span>
+              </>
+            )}
           </div>
         </div>
 
@@ -617,8 +634,8 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
         </div>
       </div>
 
-      {/* 4 KPI Strip (Single-Elevation, Tabular Numerals) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI Strip (Single-Elevation, Tabular Numerals) */}
+      <div className={`grid grid-cols-1 ${showCosts ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'} gap-4`}>
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-xs font-medium text-slate-400">
             Tổng Nước Cấp ({kpi.count} tháng)
@@ -642,25 +659,27 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
             <span className="text-xs font-normal text-slate-400">m³</span>
           </div>
           <div className="text-[11px] text-slate-400 font-mono tabular-nums">
-            Suất chi phí: {formatVND(kpi.avgCostPerM3VND)}/m³ cấp
+            {showCosts ? `Suất chi phí: ${formatVND(kpi.avgCostPerM3VND)}/m³ cấp` : 'Tính theo 80% lượng nước cấp'}
           </div>
         </div>
 
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-          <span className="text-xs font-medium text-slate-400">
-            Tổng Chi Phí Nước &amp; Thải
-          </span>
-          <div className="text-xl font-extrabold text-emerald-400 font-mono tabular-nums">
-            {formatVND(kpi.totalCombinedVND)}
+        {showCosts && (
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+            <span className="text-xs font-medium text-slate-400">
+              Tổng Chi Phí Nước &amp; Thải
+            </span>
+            <div className="text-xl font-extrabold text-emerald-400 font-mono tabular-nums">
+              {formatVND(kpi.totalCombinedVND)}
+            </div>
+            <div className="text-[11px] text-slate-400 font-mono tabular-nums">
+              ${kpi.totalCombinedUSD.toLocaleString('vi-VN')} USD · Cấp{' '}
+              {kpi.totalCombinedVND > 0
+                ? ((kpi.totalWaterVND / kpi.totalCombinedVND) * 100).toFixed(1)
+                : '0.0'}
+              %
+            </div>
           </div>
-          <div className="text-[11px] text-slate-400 font-mono tabular-nums">
-            ${kpi.totalCombinedUSD.toLocaleString('vi-VN')} USD · Cấp{' '}
-            {kpi.totalCombinedVND > 0
-              ? ((kpi.totalWaterVND / kpi.totalCombinedVND) * 100).toFixed(1)
-              : '0.0'}
-            %
-          </div>
-        </div>
+        )}
 
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
           <span className="text-xs font-medium text-slate-400">
@@ -692,9 +711,11 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
           </div>
           <div className="text-[11px] text-slate-400 font-mono tabular-nums">
             {kpi.latest
-              ? `${formatVND(kpi.latest.waterVND + kpi.latest.sewageVND)} ($${(
-                  kpi.latest.waterUSD + kpi.latest.sewageUSD
-                ).toLocaleString()} USD)`
+              ? showCosts
+                ? `${formatVND(kpi.latest.waterVND + kpi.latest.sewageVND)} ($${(
+                    kpi.latest.waterUSD + kpi.latest.sewageUSD
+                  ).toLocaleString()} USD)`
+                : `Nước thải 80%: ${Math.round(kpi.latest.waterM3 * 0.8).toLocaleString('vi-VN')} m³`
               : 'Chưa có bản ghi'}
           </div>
         </div>
@@ -713,7 +734,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
             }`}
           >
             <BarChart3 className="w-3.5 h-3.5" />
-            Tổng Quan &amp; Chi Phí
+            {showCosts ? 'Tổng Quan & Chi Phí' : 'Tổng Quan Sản Lượng'}
           </button>
           <button
             type="button"
@@ -797,7 +818,9 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                   Biểu Đồ So Sánh Nước Cấp &amp; Nước Thải Theo Tháng ({overviewChartData.length} Tháng)
                 </h4>
                 <p className="text-xs text-slate-400">
-                  So sánh trực quan sản lượng cấp/thải (m³) hoặc cơ cấu chi phí VNĐ / USD từng tháng
+                  {showCosts
+                    ? 'So sánh trực quan sản lượng cấp/thải (m³) hoặc cơ cấu chi phí VNĐ / USD từng tháng'
+                    : 'So sánh trực quan sản lượng nước cấp và nước thải 80% (m³) từng tháng'}
                 </p>
               </div>
               <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-800/80 border border-slate-700 self-start sm:self-auto">
@@ -805,35 +828,39 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                   type="button"
                   onClick={() => setOverviewMetric('volume')}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
-                    overviewMetric === 'volume'
+                    !showCosts || overviewMetric === 'volume'
                       ? 'bg-cyan-600 text-white'
                       : 'text-slate-400 hover:text-slate-100'
                   }`}
                 >
                   Thể Tích (m³)
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setOverviewMetric('costVND')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
-                    overviewMetric === 'costVND'
-                      ? 'bg-emerald-600 text-white'
-                      : 'text-slate-400 hover:text-slate-100'
-                  }`}
-                >
-                  Chi Phí (Tr. VNĐ)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOverviewMetric('costUSD')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
-                    overviewMetric === 'costUSD'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:text-slate-100'
-                  }`}
-                >
-                  Chi Phí (USD)
-                </button>
+                {showCosts && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setOverviewMetric('costVND')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
+                        overviewMetric === 'costVND'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-slate-400 hover:text-slate-100'
+                      }`}
+                    >
+                      Chi Phí (Tr. VNĐ)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOverviewMetric('costUSD')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
+                        overviewMetric === 'costUSD'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-400 hover:text-slate-100'
+                      }`}
+                    >
+                      Chi Phí (USD)
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -851,7 +878,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
             ) : (
               <div className="w-full h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  {overviewMetric === 'volume' ? (
+                  {!showCosts || overviewMetric === 'volume' ? (
                     <ComposedChart
                       data={overviewChartData}
                       margin={{ top: 10, right: 16, left: 4, bottom: 5 }}
@@ -967,39 +994,41 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
             )}
           </div>
 
-          {/* 2 Donut Breakdown Cards */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
-                <h4 className="text-sm font-bold text-slate-100">
-                  Tỷ Trọng Chi Phí Nước Cấp vs Phí Xử Lý Nước Thải
-                </h4>
-                <span className="text-xs text-slate-400 font-mono">
-                  {yearFilter === 'ALL' ? 'Toàn kỳ' : `Năm ${yearFilter}`}
-                </span>
-              </div>
+          {/* Donut Breakdown Cards */}
+          <div className={`grid grid-cols-1 ${showCosts ? 'lg:grid-cols-2' : ''} gap-6`}>
+            {showCosts && (
+              <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
+                  <h4 className="text-sm font-bold text-slate-100">
+                    Tỷ Trọng Chi Phí Nước Cấp vs Phí Xử Lý Nước Thải
+                  </h4>
+                  <span className="text-xs text-slate-400 font-mono">
+                    {yearFilter === 'ALL' ? 'Toàn kỳ' : `Năm ${yearFilter}`}
+                  </span>
+                </div>
 
-              <WaterDonutChart
-                centerLabel={`${Math.round(kpi.totalCombinedVND / 1_000_000).toLocaleString()} Tr`}
-                centerSub={`$${kpi.totalCombinedUSD.toLocaleString()} USD`}
-                slices={[
-                  {
-                    label: 'Tiền Nước Cấp',
-                    value: kpi.totalWaterVND,
-                    color: '#10b981',
-                    formattedValue: `${(kpi.totalWaterVND / 1_000_000).toFixed(1)} Tr`,
-                    subLabel: `${formatVND(kpi.totalWaterVND)} · $${kpi.totalWaterUSD.toLocaleString()} USD`,
-                  },
-                  {
-                    label: 'Phí Nước Thải (80%)',
-                    value: kpi.totalSewageVND,
-                    color: '#f59e0b',
-                    formattedValue: `${(kpi.totalSewageVND / 1_000_000).toFixed(1)} Tr`,
-                    subLabel: `${formatVND(kpi.totalSewageVND)} · $${kpi.totalSewageUSD.toLocaleString()} USD`,
-                  },
-                ]}
-              />
-            </div>
+                <WaterDonutChart
+                  centerLabel={`${Math.round(kpi.totalCombinedVND / 1_000_000).toLocaleString()} Tr`}
+                  centerSub={`$${kpi.totalCombinedUSD.toLocaleString()} USD`}
+                  slices={[
+                    {
+                      label: 'Tiền Nước Cấp',
+                      value: kpi.totalWaterVND,
+                      color: '#10b981',
+                      formattedValue: `${(kpi.totalWaterVND / 1_000_000).toFixed(1)} Tr`,
+                      subLabel: `${formatVND(kpi.totalWaterVND)} · $${kpi.totalWaterUSD.toLocaleString()} USD`,
+                    },
+                    {
+                      label: 'Phí Nước Thải (80%)',
+                      value: kpi.totalSewageVND,
+                      color: '#f59e0b',
+                      formattedValue: `${(kpi.totalSewageVND / 1_000_000).toFixed(1)} Tr`,
+                      subLabel: `${formatVND(kpi.totalSewageVND)} · $${kpi.totalSewageUSD.toLocaleString()} USD`,
+                    },
+                  ]}
+                />
+              </div>
+            )}
 
             <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
               <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
@@ -1073,7 +1102,9 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                   So Sánh Trực Tiếp Hai Tháng Bất Kỳ (Tháng A vs Tháng B)
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Chọn nhanh hoặc chọn 2 tháng để đối chiếu chênh lệch lượng nước cấp, nước thải 80% và chi phí VNĐ/USD
+                  {showCosts
+                    ? 'Chọn nhanh hoặc chọn 2 tháng để đối chiếu chênh lệch lượng nước cấp, nước thải 80% và chi phí VNĐ/USD'
+                    : 'Chọn nhanh hoặc chọn 2 tháng để đối chiếu chênh lệch lượng nước cấp và nước thải 80% (m³)'}
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1111,7 +1142,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                 >
                   {sortedDesc.map((w) => (
                     <option key={w.month} value={w.month}>
-                      {w.month} — {w.waterM3.toLocaleString()} m³ ({formatVND(w.waterVND + w.sewageVND)})
+                      {w.month} — {w.waterM3.toLocaleString()} m³{showCosts ? ` (${formatVND(w.waterVND + w.sewageVND)})` : ''}
                     </option>
                   ))}
                 </select>
@@ -1126,7 +1157,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                 >
                   {sortedDesc.map((w) => (
                     <option key={w.month} value={w.month}>
-                      {w.month} — {w.waterM3.toLocaleString()} m³ ({formatVND(w.waterVND + w.sewageVND)})
+                      {w.month} — {w.waterM3.toLocaleString()} m³{showCosts ? ` (${formatVND(w.waterVND + w.sewageVND)})` : ''}
                     </option>
                   ))}
                 </select>
@@ -1135,7 +1166,7 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
 
             {monthA && monthB && (
               <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+                <div className={`grid grid-cols-1 sm:grid-cols-2 ${showCosts ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-4 pt-2`}>
                   {[
                     {
                       title: 'Nước Cấp (m³)',
@@ -1149,24 +1180,28 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                       bVal: `${(Math.round(monthB.waterM3 * 0.8 * 10) / 10).toLocaleString()} m³`,
                       delta: formatDeltaBadge(monthA.waterM3 * 0.8, monthB.waterM3 * 0.8),
                     },
-                    {
-                      title: 'Tổng Chi Phí (VNĐ)',
-                      aVal: formatVND(monthA.waterVND + monthA.sewageVND),
-                      bVal: formatVND(monthB.waterVND + monthB.sewageVND),
-                      delta: formatDeltaBadge(
-                        monthA.waterVND + monthA.sewageVND,
-                        monthB.waterVND + monthB.sewageVND
-                      ),
-                    },
-                    {
-                      title: 'Tổng Quy Đổi (USD)',
-                      aVal: `$${(monthA.waterUSD + monthA.sewageUSD).toLocaleString()} USD`,
-                      bVal: `$${(monthB.waterUSD + monthB.sewageUSD).toLocaleString()} USD`,
-                      delta: formatDeltaBadge(
-                        monthA.waterUSD + monthA.sewageUSD,
-                        monthB.waterUSD + monthB.sewageUSD
-                      ),
-                    },
+                    ...(showCosts
+                      ? [
+                          {
+                            title: 'Tổng Chi Phí (VNĐ)',
+                            aVal: formatVND(monthA.waterVND + monthA.sewageVND),
+                            bVal: formatVND(monthB.waterVND + monthB.sewageVND),
+                            delta: formatDeltaBadge(
+                              monthA.waterVND + monthA.sewageVND,
+                              monthB.waterVND + monthB.sewageVND
+                            ),
+                          },
+                          {
+                            title: 'Tổng Quy Đổi (USD)',
+                            aVal: `$${(monthA.waterUSD + monthA.sewageUSD).toLocaleString()} USD`,
+                            bVal: `$${(monthB.waterUSD + monthB.sewageUSD).toLocaleString()} USD`,
+                            delta: formatDeltaBadge(
+                              monthA.waterUSD + monthA.sewageUSD,
+                              monthB.waterUSD + monthB.sewageUSD
+                            ),
+                          },
+                        ]
+                      : []),
                   ].map((item, idx) => (
                     <div
                       key={idx}
@@ -1263,35 +1298,39 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                   type="button"
                   onClick={() => setYoyMetric('waterM3')}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
-                    yoyMetric === 'waterM3'
+                    !showCosts || yoyMetric === 'waterM3'
                       ? 'bg-cyan-600 text-white'
                       : 'text-slate-400 hover:text-slate-100'
                   }`}
                 >
                   Nước Cấp (m³)
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setYoyMetric('totalCostVND')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
-                    yoyMetric === 'totalCostVND'
-                      ? 'bg-emerald-600 text-white'
-                      : 'text-slate-400 hover:text-slate-100'
-                  }`}
-                >
-                  Tổng Tiền (Tr. VNĐ)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setYoyMetric('totalCostUSD')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
-                    yoyMetric === 'totalCostUSD'
-                      ? 'bg-blue-600 text-white'
-                      : 'text-slate-400 hover:text-slate-100'
-                  }`}
-                >
-                  Tổng Tiền (USD)
-                </button>
+                {showCosts && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setYoyMetric('totalCostVND')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
+                        yoyMetric === 'totalCostVND'
+                          ? 'bg-emerald-600 text-white'
+                          : 'text-slate-400 hover:text-slate-100'
+                      }`}
+                    >
+                      Tổng Tiền (Tr. VNĐ)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setYoyMetric('totalCostUSD')}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold transition whitespace-nowrap shrink-0 ${
+                        yoyMetric === 'totalCostUSD'
+                          ? 'bg-blue-600 text-white'
+                          : 'text-slate-400 hover:text-slate-100'
+                      }`}
+                    >
+                      Tổng Tiền (USD)
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -1371,8 +1410,12 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                     <th className="py-3 px-4 text-right">TB / Tháng (m³)</th>
                     <th className="py-3 px-4 text-right">So Với Năm Trước</th>
                     <th className="py-3 px-4 text-right">Tháng Cao Điểm</th>
-                    <th className="py-3 px-4 text-right">Tổng Tiền Nước + Thải (VNĐ)</th>
-                    <th className="py-3 px-4 text-right">Tổng (USD)</th>
+                    {showCosts && (
+                      <>
+                        <th className="py-3 px-4 text-right">Tổng Tiền Nước + Thải (VNĐ)</th>
+                        <th className="py-3 px-4 text-right">Tổng (USD)</th>
+                      </>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 text-slate-200 font-mono tabular-nums">
@@ -1409,12 +1452,16 @@ export const WaterCompareDashboard: React.FC<WaterCompareDashboardProps> = ({
                           ? `${row.peak.month} (${row.peak.waterM3.toLocaleString()} m³)`
                           : '—'}
                       </td>
-                      <td className="py-3.5 px-4 text-right font-bold text-emerald-400">
-                        {formatVND(row.combinedVND)}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-bold text-slate-200">
-                        ${row.combinedUSD.toLocaleString('vi-VN')}
-                      </td>
+                      {showCosts && (
+                        <>
+                          <td className="py-3.5 px-4 text-right font-bold text-emerald-400">
+                            {formatVND(row.combinedVND)}
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-bold text-slate-200">
+                            ${row.combinedUSD.toLocaleString('vi-VN')}
+                          </td>
+                        </>
+                      )}
                     </tr>
                   ))}
                 </tbody>

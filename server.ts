@@ -41,6 +41,61 @@ function isPlaceholderEmail(email: string): boolean {
   return PLACEHOLDER_DOMAINS.some((domain) => lower.endsWith(domain));
 }
 
+function getVietnamTodayYMD(): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  } catch {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+}
+
+function normalizeDedupText(raw: string): string {
+  return raw
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+}
+
+function buildEmailDedupKey(params: {
+  day: string;
+  toList: string[];
+  ccList: string[];
+  subject: string;
+  body: string;
+}): string {
+  const sortedTo = [...params.toList].map((e) => e.toLowerCase()).sort().join(',');
+  const sortedCc = [...params.ccList].map((e) => e.toLowerCase()).sort().join(',');
+  return `${params.day}|${sortedTo}|${sortedCc}|${normalizeDedupText(params.subject)}|${normalizeDedupText(params.body)}`;
+}
+
+interface DailySentCacheEntry {
+  day: string;
+  channel: string;
+  recipient: string;
+  messageId?: string;
+  sentAt: string;
+}
+
+const sentEmailDailyCache = new Map<string, DailySentCacheEntry>();
+const inFlightEmailMap = new Map<
+  string,
+  Promise<{ status: number; payload: Record<string, unknown> }>
+>();
+
+function pruneStaleDailyCache(todayYMD: string) {
+  for (const [key, entry] of sentEmailDailyCache.entries()) {
+    if (entry.day !== todayYMD) {
+      sentEmailDailyCache.delete(key);
+    }
+  }
+}
+
 function splitEmails(raw?: string): string[] {
   if (!raw || typeof raw !== 'string') return [];
   return Array.from(
@@ -254,6 +309,7 @@ async function startServer() {
       type?: string;
       relatedId?: string;
       timestamp?: string;
+      allowDuplicate?: boolean;
     };
 
     const rawToList = splitEmails(bodyData.to);
@@ -297,114 +353,207 @@ async function startServer() {
       return;
     }
 
+    const todayYMD = getVietnamTodayYMD();
+    pruneStaleDailyCache(todayYMD);
+    const allowDuplicate = Boolean(bodyData.allowDuplicate);
+    const dedupKey = buildEmailDedupKey({
+      day: todayYMD,
+      toList,
+      ccList,
+      subject,
+      body,
+    });
+
+    if (!allowDuplicate) {
+      const cached = sentEmailDailyCache.get(dedupKey);
+      if (cached) {
+        res.json({
+          ok: true,
+          deduplicated: true,
+          channel: cached.channel,
+          recipient: cached.recipient,
+          messageId: cached.messageId,
+          message:
+            'Email có nội dung giống hệt đã được gửi trong ngày hôm nay nên hệ thống tự động bỏ qua gửi trùng.',
+        });
+        return;
+      }
+
+      const existingInFlight = inFlightEmailMap.get(dedupKey);
+      if (existingInFlight) {
+        const result = await existingInFlight;
+        res.status(result.status).json(result.payload);
+        return;
+      }
+    }
+
     const status = getEmailChannelStatus();
 
-    // Priority 1: Configured Webhook (Google Apps Script / Make / Zapier / n8n)
-    if (effectiveWebhook) {
-      try {
-        await dispatchViaWebhook(effectiveWebhook, {
-          to: toList.join(', '),
-          cc: ccList.join(', '),
-          subject,
-          body,
-          htmlBody: html,
-          sender: senderName,
-          timestamp: bodyData.timestamp || new Date().toISOString(),
-          type: bodyData.type,
-          relatedId: bodyData.relatedId,
-        });
-        res.json({
-          ok: true,
-          channel: 'webhook',
-          recipient: toList.join(', '),
-          message: `Đã tự động gửi email qua Webhook tới ${toList.join(', ')}`,
-        });
-        return;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Lỗi gửi qua Webhook';
-        // Fall through to SMTP / Resend if configured on server; otherwise return error
-        if (!status.smtpConfigured && !status.resendConfigured) {
-          res.status(502).json({
-            ok: false,
-            channel: 'webhook',
-            message: msg,
+    const executeDispatch = async (): Promise<{
+      status: number;
+      payload: Record<string, unknown>;
+    }> => {
+      // Priority 1: Configured Webhook (Google Apps Script / Make / Zapier / n8n)
+      if (effectiveWebhook) {
+        try {
+          await dispatchViaWebhook(effectiveWebhook, {
+            to: toList.join(', '),
+            cc: ccList.join(', '),
+            subject,
+            body,
+            htmlBody: html,
+            sender: senderName,
+            timestamp: bodyData.timestamp || new Date().toISOString(),
+            type: bodyData.type,
+            relatedId: bodyData.relatedId,
           });
-          return;
+          if (!allowDuplicate) {
+            sentEmailDailyCache.set(dedupKey, {
+              day: todayYMD,
+              channel: 'webhook',
+              recipient: toList.join(', '),
+              sentAt: new Date().toISOString(),
+            });
+          }
+          return {
+            status: 200,
+            payload: {
+              ok: true,
+              channel: 'webhook',
+              recipient: toList.join(', '),
+              message: `Đã tự động gửi email qua Webhook tới ${toList.join(', ')}`,
+            },
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Lỗi gửi qua Webhook';
+          // Fall through to SMTP / Resend if configured on server; otherwise return error
+          if (!status.smtpConfigured && !status.resendConfigured) {
+            return {
+              status: 502,
+              payload: {
+                ok: false,
+                channel: 'webhook',
+                message: msg,
+              },
+            };
+          }
         }
       }
-    }
 
-    // Priority 2: Server SMTP (Gmail App Password / Custom SMTP)
-    if (status.smtpConfigured) {
-      try {
-        const messageId = await dispatchViaSmtp({
-          toList,
-          ccList,
-          subject,
-          body,
-          html,
-          senderName,
-        });
-        res.json({
-          ok: true,
-          channel: 'smtp',
-          messageId,
-          recipient: toList.join(', '),
-          message: `Đã tự động gửi email qua SMTP tới ${toList.join(', ')}`,
-        });
-        return;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Lỗi gửi qua SMTP';
-        const isTimeout = /timeout|ETIMEDOUT|ECONNREFUSED|ENETUNREACH/i.test(msg);
-        if (!status.resendConfigured) {
-          res.status(502).json({
-            ok: false,
-            channel: 'smtp',
-            message: isTimeout
-              ? `Lỗi SMTP (${msg}): Gói miễn phí Render.com chặn cổng SMTP 465/587. Hãy dùng Google Apps Script Webhook (dán link /exec vào EMAIL_WEBHOOK_URL trên Render hoặc ô Webhook Endpoint — chạy qua HTTPS 443 hoàn toàn miễn phí).`
-              : `Lỗi SMTP: ${msg}`,
+      // Priority 2: Server SMTP (Gmail App Password / Custom SMTP)
+      if (status.smtpConfigured) {
+        try {
+          const messageId = await dispatchViaSmtp({
+            toList,
+            ccList,
+            subject,
+            body,
+            html,
+            senderName,
           });
-          return;
+          if (!allowDuplicate) {
+            sentEmailDailyCache.set(dedupKey, {
+              day: todayYMD,
+              channel: 'smtp',
+              recipient: toList.join(', '),
+              messageId,
+              sentAt: new Date().toISOString(),
+            });
+          }
+          return {
+            status: 200,
+            payload: {
+              ok: true,
+              channel: 'smtp',
+              messageId,
+              recipient: toList.join(', '),
+              message: `Đã tự động gửi email qua SMTP tới ${toList.join(', ')}`,
+            },
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Lỗi gửi qua SMTP';
+          const isTimeout = /timeout|ETIMEDOUT|ECONNREFUSED|ENETUNREACH/i.test(msg);
+          if (!status.resendConfigured) {
+            return {
+              status: 502,
+              payload: {
+                ok: false,
+                channel: 'smtp',
+                message: isTimeout
+                  ? `Lỗi SMTP (${msg}): Gói miễn phí Render.com chặn cổng SMTP 465/587. Hãy dùng Google Apps Script Webhook (dán link /exec vào EMAIL_WEBHOOK_URL trên Render hoặc ô Webhook Endpoint — chạy qua HTTPS 443 hoàn toàn miễn phí).`
+                  : `Lỗi SMTP: ${msg}`,
+              },
+            };
+          }
         }
       }
-    }
 
-    // Priority 3: Resend API
-    if (status.resendConfigured) {
-      try {
-        const messageId = await dispatchViaResend({
-          toList,
-          ccList,
-          subject,
-          body,
-          html,
-          senderName,
-        });
-        res.json({
-          ok: true,
-          channel: 'resend',
-          messageId,
-          recipient: toList.join(', '),
-          message: `Đã tự động gửi email qua Resend tới ${toList.join(', ')}`,
-        });
-        return;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'Lỗi gửi qua Resend';
-        res.status(502).json({
+      // Priority 3: Resend API
+      if (status.resendConfigured) {
+        try {
+          const messageId = await dispatchViaResend({
+            toList,
+            ccList,
+            subject,
+            body,
+            html,
+            senderName,
+          });
+          if (!allowDuplicate) {
+            sentEmailDailyCache.set(dedupKey, {
+              day: todayYMD,
+              channel: 'resend',
+              recipient: toList.join(', '),
+              messageId,
+              sentAt: new Date().toISOString(),
+            });
+          }
+          return {
+            status: 200,
+            payload: {
+              ok: true,
+              channel: 'resend',
+              messageId,
+              recipient: toList.join(', '),
+              message: `Đã tự động gửi email qua Resend tới ${toList.join(', ')}`,
+            },
+          };
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Lỗi gửi qua Resend';
+          return {
+            status: 502,
+            payload: {
+              ok: false,
+              channel: 'resend',
+              message: `Lỗi Resend: ${msg}`,
+            },
+          };
+        }
+      }
+
+      return {
+        status: 400,
+        payload: {
           ok: false,
-          channel: 'resend',
-          message: `Lỗi Resend: ${msg}`,
-        });
-        return;
-      }
+          notConfigured: true,
+          message:
+            'Chưa cấu hình kênh gửi tự động (hãy dán link Webhook Google Apps Script miễn phí trong tab Thông Báo Email hoặc thêm SMTP_USER / SMTP_PASS vào Secrets).',
+        },
+      };
+    };
+
+    if (allowDuplicate) {
+      const result = await executeDispatch();
+      res.status(result.status).json(result.payload);
+      return;
     }
 
-    res.status(400).json({
-      ok: false,
-      notConfigured: true,
-      message:
-        'Chưa cấu hình kênh gửi tự động (hãy dán link Webhook Google Apps Script miễn phí trong tab Thông Báo Email hoặc thêm SMTP_USER / SMTP_PASS vào Secrets).',
+    const promise = executeDispatch().finally(() => {
+      inFlightEmailMap.delete(dedupKey);
     });
+    inFlightEmailMap.set(dedupKey, promise);
+    const result = await promise;
+    res.status(result.status).json(result.payload);
   });
 
   if (!IS_PROD) {

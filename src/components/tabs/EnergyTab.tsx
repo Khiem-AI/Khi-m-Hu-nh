@@ -12,7 +12,7 @@ import {
 import { useCMMS } from '../../context/CMMSContext';
 import { Power10Days, WaterMonthly } from '../../types/cmms';
 import { UI_TEXTS } from '../../config/uiTexts';
-import { formatVND, isAdminLevel } from '../../utils/cmmsLogic';
+import { canViewCosts, formatVND, isAdminLevel } from '../../utils/cmmsLogic';
 import { EnergyCompareDashboard } from '../energy/EnergyCompareDashboard';
 import { WaterCompareDashboard } from '../energy/WaterCompareDashboard';
 import { MonthlyEnergyTrendChart } from '../energy/MonthlyEnergyTrendChart';
@@ -60,6 +60,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
     deleteWaterMonthlyRecord,
   } = useCMMS();
   const isAdmin = isAdminLevel(currentUser);
+  const showCosts = canViewCosts(currentUser);
 
   const [activeSubTab, setActiveSubTab] = useState<
     'compareDashboard' | 'waterDashboard' | 'dailyReadings' | 'power10' | 'waterMonth'
@@ -244,7 +245,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
       'Utility (kWh)',
       'Production (kWh)',
       'Office (kWh)',
-      'Chi Phi Uoc Tinh (VND)',
+      ...(showCosts ? ['Chi Phi Uoc Tinh (VND)'] : []),
       'Nguoi Chot',
     ];
     const rows = filteredPower10Table.map((r) => {
@@ -278,7 +279,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
         util,
         prod,
         off,
-        Math.round(cost),
+        ...(showCosts ? [Math.round(cost)] : []),
         `"${r.nguoiChot}"`,
       ].join(',');
     });
@@ -340,14 +341,16 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
             <span>Chốt Số Nước</span>
           </button>
 
-          <button
-            onClick={() => setIsTariffModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition shadow-sm"
-            title="Cài đặt giá điện 3 giá, giá nước và tỷ giá USD"
-          >
-            <Settings className="w-3.5 h-3.5 text-blue-400" />
-            <span>Đơn Giá &amp; Tỷ Giá</span>
-          </button>
+          {showCosts && (
+            <button
+              onClick={() => setIsTariffModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs transition shadow-sm"
+              title="Cài đặt giá điện 3 giá, giá nước và tỷ giá USD"
+            >
+              <Settings className="w-3.5 h-3.5 text-blue-400" />
+              <span>Đơn Giá &amp; Tỷ Giá</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -415,11 +418,13 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
           </button>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
-          <span>Tỷ giá: 1 USD = {tariffConfig.usdToVndRate.toLocaleString()} đ</span>
-          <span>•</span>
-          <span className="text-cyan-400">EVN BT: {formatVND(tariffConfig.evnBT)}</span>
-        </div>
+        {showCosts && (
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+            <span>Tỷ giá: 1 USD = {tariffConfig.usdToVndRate.toLocaleString()} đ</span>
+            <span>•</span>
+            <span className="text-cyan-400">EVN BT: {formatVND(tariffConfig.evnBT)}</span>
+          </div>
+        )}
       </div>
 
       {/* Sub-tab 0: Biểu Đồ Xu Hướng Điện & Nước Hàng Tháng (Recharts) + Dashboard So Sánh */}
@@ -464,7 +469,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
       {activeSubTab === 'power10' && (
         <div className="space-y-6">
           {/* Key Metrics Chu kỳ gần nhất */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${showCosts ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4`}>
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
               <span className="text-xs text-slate-400 font-medium">Tổng Tiêu Thụ & Giờ Vận Hành</span>
               <div className="text-xl font-extrabold text-slate-100 font-mono mt-0.5">
@@ -486,24 +491,28 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/30 space-y-1">
-              <span className="text-xs text-emerald-300 font-medium">Tổng Chi Phí (EVN + Solar)</span>
-              <div className="text-xl font-extrabold text-emerald-400 font-mono mt-0.5">
-                {formatVND(latestTotalCost)}
+            {showCosts && (
+              <div className="p-4 rounded-2xl bg-slate-900 border border-emerald-500/30 space-y-1">
+                <span className="text-xs text-emerald-300 font-medium">Tổng Chi Phí (EVN + Solar)</span>
+                <div className="text-xl font-extrabold text-emerald-400 font-mono mt-0.5">
+                  {formatVND(latestTotalCost)}
+                </div>
+                <span className="text-[11px] text-amber-400 font-semibold mt-1 block font-mono">
+                  {formatVND(latestCostPerHour)}/giờ vận hành
+                </span>
               </div>
-              <span className="text-[11px] text-amber-400 font-semibold mt-1 block font-mono">
-                {formatVND(latestCostPerHour)}/giờ vận hành
-              </span>
-            </div>
+            )}
 
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
               <span className="text-xs text-slate-400 font-medium">Chu Kỳ Gần Nhất / Người Chốt</span>
               <div className="text-sm font-bold text-slate-200 mt-0.5 truncate">
                 {latest10?.chuKy} • {latest10?.nguoiChot || 'Khiêm Huỳnh'}
               </div>
-              <span className="text-[11px] text-slate-500 mt-1 block font-mono">
-                EVN: {formatVND(latestEvnCost)} + Solar: {formatVND(latestSolarCost)}
-              </span>
+              {showCosts && (
+                <span className="text-[11px] text-slate-500 mt-1 block font-mono">
+                  EVN: {formatVND(latestEvnCost)} + Solar: {formatVND(latestSolarCost)}
+                </span>
+              )}
             </div>
           </div>
 
@@ -707,7 +716,9 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                     </span>
                   </div>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Chi tiết EVN 3 khung giờ (BT/CĐ/TĐ), Solar (BT/CĐ), TB/ngày, 3 khu vực (Utility, Production, Office) và chi phí ước tính
+                    {showCosts
+                      ? 'Chi tiết EVN 3 khung giờ (BT/CĐ/TĐ), Solar (BT/CĐ), TB/ngày, 3 khu vực (Utility, Production, Office) và chi phí ước tính'
+                      : 'Chi tiết EVN 3 khung giờ (BT/CĐ/TĐ), Solar (BT/CĐ), TB/ngày và 3 khu vực (Utility, Production, Office)'}
                   </p>
                 </div>
               </div>
@@ -767,7 +778,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                     <th className="py-3 px-3.5 text-right">Utility</th>
                     <th className="py-3 px-3.5 text-right">Production</th>
                     <th className="py-3 px-3.5 text-right">Office</th>
-                    <th className="py-3 px-3.5 text-right">Chi Phí (VNĐ)</th>
+                    {showCosts && <th className="py-3 px-3.5 text-right">Chi Phí (VNĐ)</th>}
                     <th className="py-3 px-3.5">Người Chốt</th>
                     <th className="py-3 px-3.5 text-right">Thao Tác (Admin)</th>
                   </tr>
@@ -775,7 +786,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                 <tbody className="divide-y divide-slate-800 text-slate-300">
                   {filteredPower10Table.length === 0 ? (
                     <tr>
-                      <td colSpan={18} className="py-8 text-center text-slate-500">
+                      <td colSpan={showCosts ? 18 : 17} className="py-8 text-center text-slate-500">
                         Không có bản ghi chu kỳ 10 ngày nào phù hợp với bộ lọc.
                       </td>
                     </tr>
@@ -850,9 +861,11 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                           <td className="py-3 px-3.5 text-right font-mono text-purple-400 whitespace-nowrap">
                             {offTotal.toLocaleString()}
                           </td>
-                          <td className="py-3 px-3.5 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
-                            {formatVND(estCost)}
-                          </td>
+                          {showCosts && (
+                            <td className="py-3 px-3.5 text-right font-mono font-bold text-emerald-400 whitespace-nowrap">
+                              {formatVND(estCost)}
+                            </td>
+                          )}
                           <td className="py-3 px-3.5 text-slate-300 whitespace-nowrap text-[11px]">
                             {rec.nguoiChot}
                           </td>
@@ -904,7 +917,12 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
           <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-950/40 via-cyan-950/30 to-slate-900 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <p className="text-xs text-slate-300">
-                Lượng nước thải được tính quy chuẩn bằng <strong className="text-emerald-400 font-bold">80%</strong> lượng nước sinh hoạt chốt theo tháng. Đơn giá: Cấp {formatVND(tariffConfig.waterVNDPerM3)}/m³ • Thải {formatVND(tariffConfig.sewageVNDPerM3)}/m³.
+                Lượng nước thải được tính quy chuẩn bằng <strong className="text-emerald-400 font-bold">80%</strong> lượng nước sinh hoạt chốt theo tháng.
+                {showCosts && (
+                  <>
+                    {' '}Đơn giá: Cấp {formatVND(tariffConfig.waterVNDPerM3)}/m³ • Thải {formatVND(tariffConfig.sewageVNDPerM3)}/m³.
+                  </>
+                )}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1001,8 +1019,8 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
             </div>
           </div>
 
-          {/* 4 KPI Summary Cards for Water */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* KPI Summary Cards for Water */}
+          <div className={`grid grid-cols-1 sm:grid-cols-2 ${showCosts ? 'lg:grid-cols-4' : 'lg:grid-cols-2'} gap-4`}>
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
               <span className="text-xs text-slate-400 font-medium">Tổng Nước Cấp Tiêu Thụ</span>
               <div className="text-xl font-extrabold text-cyan-400 font-mono">
@@ -1023,25 +1041,29 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
               </span>
             </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-xs text-slate-400 font-medium">Tổng Tiền Nước Cấp</span>
-              <div className="text-xl font-extrabold text-emerald-400 font-mono">
-                {formatVND(waterTotals.totalWaterVND)}
-              </div>
-              <span className="text-[11px] text-slate-400 block font-mono">
-                Tương đương ${waterTotals.totalWaterUSD.toLocaleString()} USD
-              </span>
-            </div>
+            {showCosts && (
+              <>
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-xs text-slate-400 font-medium">Tổng Tiền Nước Cấp</span>
+                  <div className="text-xl font-extrabold text-emerald-400 font-mono">
+                    {formatVND(waterTotals.totalWaterVND)}
+                  </div>
+                  <span className="text-[11px] text-slate-400 block font-mono">
+                    Tương đương ${waterTotals.totalWaterUSD.toLocaleString()} USD
+                  </span>
+                </div>
 
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-xs text-slate-400 font-medium">Tổng Phí Xử Lý Nước Thải</span>
-              <div className="text-xl font-extrabold text-amber-400 font-mono">
-                {formatVND(waterTotals.totalSewageVND)}
-              </div>
-              <span className="text-[11px] text-slate-400 block font-mono">
-                Tương đương ${waterTotals.totalSewageUSD.toLocaleString()} USD
-              </span>
-            </div>
+                <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
+                  <span className="text-xs text-slate-400 font-medium">Tổng Phí Xử Lý Nước Thải</span>
+                  <div className="text-xl font-extrabold text-amber-400 font-mono">
+                    {formatVND(waterTotals.totalSewageVND)}
+                  </div>
+                  <span className="text-[11px] text-slate-400 block font-mono">
+                    Tương đương ${waterTotals.totalSewageUSD.toLocaleString()} USD
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Monthly Water Recharts Line Chart */}
@@ -1130,7 +1152,9 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                   Bảng Dữ Liệu Chi Tiết Sheet Nuoc_month ({filteredWaterMonthly.length} Bản Ghi)
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Đầy đủ dữ liệu nước cấp, nước thải quy chuẩn 80%, thành tiền VNĐ và quy đổi USD
+                  {showCosts
+                    ? 'Đầy đủ dữ liệu nước cấp, nước thải quy chuẩn 80%, thành tiền VNĐ và quy đổi USD'
+                    : 'Đầy đủ dữ liệu nước cấp và nước thải quy chuẩn 80% theo tháng'}
                 </p>
               </div>
               <span
@@ -1161,11 +1185,15 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                     <th className="py-3 px-4">Tháng (Month)</th>
                     <th className="py-3 px-4 text-right">Lượng Nước Cấp (m³)</th>
                     <th className="py-3 px-4 text-right">Lượng Nước Thải (80%)</th>
-                    <th className="py-3 px-4 text-right">Tiền Nước (VNĐ)</th>
-                    <th className="py-3 px-4 text-right">Tiền Nước (USD)</th>
-                    <th className="py-3 px-4 text-right">Phí Nước Thải (VNĐ)</th>
-                    <th className="py-3 px-4 text-right">Phí Nước Thải (USD)</th>
-                    <th className="py-3 px-4 text-right">Tổng Chi Phí Nước (VNĐ)</th>
+                    {showCosts && (
+                      <>
+                        <th className="py-3 px-4 text-right">Tiền Nước (VNĐ)</th>
+                        <th className="py-3 px-4 text-right">Tiền Nước (USD)</th>
+                        <th className="py-3 px-4 text-right">Phí Nước Thải (VNĐ)</th>
+                        <th className="py-3 px-4 text-right">Phí Nước Thải (USD)</th>
+                        <th className="py-3 px-4 text-right">Tổng Chi Phí Nước (VNĐ)</th>
+                      </>
+                    )}
                     <th className="py-3 px-4 text-right">Thao Tác (Admin)</th>
                   </tr>
                 </thead>
@@ -1184,21 +1212,25 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                         <td className="py-3.5 px-4 text-right font-mono text-amber-300 font-semibold">
                           {estSewageM3.toLocaleString()} m³
                         </td>
-                        <td className="py-3.5 px-4 text-right font-mono text-emerald-400 font-semibold">
-                          {formatVND(w.waterVND)}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono text-slate-300">
-                          ${w.waterUSD.toLocaleString()}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono text-amber-400 font-semibold">
-                          {formatVND(w.sewageVND)}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono text-slate-300">
-                          ${w.sewageUSD.toLocaleString()}
-                        </td>
-                        <td className="py-3.5 px-4 text-right font-mono font-bold text-cyan-300">
-                          {formatVND(totalMonthCost)}
-                        </td>
+                        {showCosts && (
+                          <>
+                            <td className="py-3.5 px-4 text-right font-mono text-emerald-400 font-semibold">
+                              {formatVND(w.waterVND)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono text-slate-300">
+                              ${w.waterUSD.toLocaleString()}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono text-amber-400 font-semibold">
+                              {formatVND(w.sewageVND)}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono text-slate-300">
+                              ${w.sewageUSD.toLocaleString()}
+                            </td>
+                            <td className="py-3.5 px-4 text-right font-mono font-bold text-cyan-300">
+                              {formatVND(totalMonthCost)}
+                            </td>
+                          </>
+                        )}
                         <td className="py-3.5 px-4 text-right whitespace-nowrap">
                           {isAdmin ? (
                             <div className="inline-flex items-center gap-1.5">
@@ -1267,10 +1299,12 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
         }}
       />
 
-      <TariffConfigModal
-        isOpen={isTariffModalOpen}
-        onClose={() => setIsTariffModalOpen(false)}
-      />
+      {showCosts && (
+        <TariffConfigModal
+          isOpen={isTariffModalOpen}
+          onClose={() => setIsTariffModalOpen(false)}
+        />
+      )}
 
       {/* Admin Confirm Delete Power 10 Days */}
       {confirmDeletePowerRecord && isAdmin && (

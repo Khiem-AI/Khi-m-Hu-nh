@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { SparePart, StockTransaction } from '../../types/cmms';
-import { formatVND, formatDateVN } from '../../utils/cmmsLogic';
+import { canViewCosts, formatVND, formatDateVN } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Package,
@@ -30,7 +30,8 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
   onOpenAddPart,
   onOpenEditPart,
 }) => {
-  const { spareParts, stockTransactions, deleteSparePart } = useCMMS();
+  const { spareParts, stockTransactions, deleteSparePart, currentUser } = useCMMS();
+  const showCosts = canViewCosts(currentUser);
 
   const [activeSubTab, setActiveSubTab] = useState<'inventory' | 'transactions'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,7 +80,7 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
       'Đơn vị tính',
       'Vị trí lưu',
       'Ghi chú',
-      'Đơn giá (VNĐ)',
+      ...(showCosts ? ['Đơn giá (VNĐ)'] : []),
     ];
     const rows = filteredParts.map((p) => [
       `"${p.maVatTu}"`,
@@ -92,7 +93,7 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
       `"${p.donViTinh}"`,
       `"${p.viTriLuu}"`,
       `"${p.ghiChu}"`,
-      `"${p.donGia}"`,
+      ...(showCosts ? [`"${p.donGia}"`] : []),
     ]);
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -192,18 +193,20 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
       </div>
 
       {/* KPI Highlights */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between">
-          <div>
-            <span className="text-xs text-slate-400 font-medium">Tổng Giá Trị Kho</span>
-            <div className="text-xl font-extrabold text-slate-100 font-mono mt-0.5">
-              {formatVND(totalInventoryValuation)}
+      <div className={`grid grid-cols-1 ${showCosts ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
+        {showCosts && (
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between">
+            <div>
+              <span className="text-xs text-slate-400 font-medium">Tổng Giá Trị Kho</span>
+              <div className="text-xl font-extrabold text-slate-100 font-mono mt-0.5">
+                {formatVND(totalInventoryValuation)}
+              </div>
             </div>
+            <span className="p-3 rounded-xl bg-purple-500/10 text-purple-400">
+              <Package className="w-5 h-5" />
+            </span>
           </div>
-          <span className="p-3 rounded-xl bg-purple-500/10 text-purple-400">
-            <Package className="w-5 h-5" />
-          </span>
-        </div>
+        )}
 
         <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-between">
           <div>
@@ -288,7 +291,7 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
                   <th className="py-3 px-4 text-center">Tồn Thực Tế</th>
                   <th className="py-3 px-4">Đơn Vị</th>
                   <th className="py-3 px-4">Vị Trí Lưu Kho</th>
-                  <th className="py-3 px-4 text-right">Đơn Giá</th>
+                  {showCosts && <th className="py-3 px-4 text-right">Đơn Giá</th>}
                   <th className="py-3 px-4 text-right">Thao Tác</th>
                 </tr>
               </thead>
@@ -323,9 +326,11 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
                       </td>
                       <td className="py-3.5 px-4 text-slate-400">{part.donViTinh}</td>
                       <td className="py-3.5 px-4 text-slate-300 whitespace-nowrap">{part.viTriLuu}</td>
-                      <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-200 whitespace-nowrap">
-                        {formatVND(part.donGia)}
-                      </td>
+                      {showCosts && (
+                        <td className="py-3.5 px-4 text-right font-mono font-semibold text-slate-200 whitespace-nowrap">
+                          {formatVND(part.donGia)}
+                        </td>
+                      )}
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
                           <button

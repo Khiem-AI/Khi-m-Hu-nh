@@ -318,6 +318,7 @@ export interface EmailSendResult {
   method: 'auto' | 'webhook' | 'interactive' | 'draft' | 'failed';
   channel?: 'web' | 'gmail' | 'smtp' | 'resend' | 'webhook';
   webNotified?: boolean;
+  deduplicated?: boolean;
   notConfigured?: boolean;
   needsGmailAuth?: boolean;
   recipient: string;

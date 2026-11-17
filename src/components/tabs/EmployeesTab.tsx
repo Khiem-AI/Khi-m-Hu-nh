@@ -2,7 +2,12 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { APP_VIEW_OPTIONS, Employee, UserRole } from '../../types/cmms';
-import { ADMIN_ONLY_VIEWS, getEffectiveAllowedViews } from '../../utils/cmmsLogic';
+import {
+  ADMIN_ONLY_VIEWS,
+  COST_RESTRICTED_VIEWS,
+  canViewCosts,
+  getEffectiveAllowedViews,
+} from '../../utils/cmmsLogic';
 import { CameraCaptureInput } from '../common/CameraCaptureInput';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
@@ -42,7 +47,14 @@ export const EmployeesTab: React.FC = () => {
   );
   const [newAllowedViews, setNewAllowedViews] = useState<string[]>(
     APP_VIEW_OPTIONS.filter(
-      (v) => !['employees', 'logs', 'email_alerts', ...(ADMIN_ONLY_VIEWS as readonly string[])].includes(v.id)
+      (v) =>
+        ![
+          'employees',
+          'logs',
+          'email_alerts',
+          ...(ADMIN_ONLY_VIEWS as readonly string[]),
+          ...(COST_RESTRICTED_VIEWS as readonly string[]),
+        ].includes(v.id)
     ).map((v) => v.id)
   );
 
@@ -81,6 +93,9 @@ export const EmployeesTab: React.FC = () => {
     role === 'Admin' ||
     role === 'Quản trị viên' ||
     empCode?.trim().toUpperCase() === 'ID1460';
+
+  const isCostRestrictedRole = (role: UserRole, empCode?: string) =>
+    !canViewCosts({ maNhanVien: empCode || '', chucVu: role } as Employee);
 
   const getDefaultViewsForRole = (role: UserRole, empCode?: string): string[] => {
     if (isAdminRole(role, empCode)) {
@@ -133,9 +148,15 @@ export const EmployeesTab: React.FC = () => {
     if (!editingEmployee) return;
 
     const allowAdminViews = isAdminRole(editChucVu, editingEmployee.maNhanVien);
-    const sanitizedViews = allowAdminViews
-      ? editAllowedViews
-      : editAllowedViews.filter((id) => !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id));
+    const costRestricted = isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien);
+    const sanitizedViews = editAllowedViews.filter(
+      (id) =>
+        (allowAdminViews || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id)) &&
+        (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
+    );
+    const sanitizedRules = costRestricted
+      ? editRules.filter((r) => r !== 'MANAGE_COSTS')
+      : editRules;
 
     updateEmployee({
       ...editingEmployee,
@@ -150,7 +171,7 @@ export const EmployeesTab: React.FC = () => {
       ngayNghiPhepDaDung: Math.max(0, Math.min(365, Number(editNghiPhepDaDung) || 0)),
       password: editPassword,
       anhDaiDien: editAnhDaiDien || editingEmployee.anhDaiDien,
-      quyenHan: editRules,
+      quyenHan: sanitizedRules,
       allowedViews: sanitizedViews.length > 0 ? sanitizedViews : ['dashboard'],
     });
 
@@ -171,9 +192,12 @@ export const EmployeesTab: React.FC = () => {
         : ['VIEW_EQUIPMENT', 'EXECUTE_PLANS', 'PROCESS_TICKETS', 'REQUEST_SPARE_PARTS'];
 
     const allowAdminViews = isAdminRole(chucVu, maNhanVien);
-    const sanitizedNewViews = allowAdminViews
-      ? newAllowedViews
-      : newAllowedViews.filter((id) => !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id));
+    const costRestricted = isCostRestrictedRole(chucVu, maNhanVien);
+    const sanitizedNewViews = newAllowedViews.filter(
+      (id) =>
+        (allowAdminViews || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id)) &&
+        (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
+    );
 
     addEmployee({
       maNhanVien: maNhanVien.trim().toUpperCase(),
@@ -506,10 +530,17 @@ export const EmployeesTab: React.FC = () => {
                     onChange={(e) => {
                       const nextRole = e.target.value as UserRole;
                       setEditChucVu(nextRole);
-                      if (!isAdminRole(nextRole, editingEmployee.maNhanVien)) {
-                        setEditAllowedViews((prev) =>
-                          prev.filter((id) => !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id))
-                        );
+                      const allowAdmin = isAdminRole(nextRole, editingEmployee.maNhanVien);
+                      const costRestricted = isCostRestrictedRole(nextRole, editingEmployee.maNhanVien);
+                      setEditAllowedViews((prev) =>
+                        prev.filter(
+                          (id) =>
+                            (allowAdmin || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id)) &&
+                            (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
+                        )
+                      );
+                      if (costRestricted) {
+                        setEditRules((prev) => prev.filter((r) => r !== 'MANAGE_COSTS'));
                       }
                     }}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -636,9 +667,12 @@ export const EmployeesTab: React.FC = () => {
                       type="button"
                       onClick={() => {
                         const allowAdmin = isAdminRole(editChucVu, editingEmployee.maNhanVien);
+                        const costRestricted = isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien);
                         setEditAllowedViews(
                           APP_VIEW_OPTIONS.filter(
-                            (v) => allowAdmin || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(v.id)
+                            (v) =>
+                              (allowAdmin || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(v.id)) &&
+                              (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(v.id))
                           ).map((v) => v.id)
                         );
                       }}
@@ -661,8 +695,10 @@ export const EmployeesTab: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                   {APP_VIEW_OPTIONS.map((v) => {
                     const isAdminOnly = (ADMIN_ONLY_VIEWS as readonly string[]).includes(v.id);
+                    const isCostOnly = (COST_RESTRICTED_VIEWS as readonly string[]).includes(v.id);
                     const lockedForRole =
-                      isAdminOnly && !isAdminRole(editChucVu, editingEmployee.maNhanVien);
+                      (isAdminOnly && !isAdminRole(editChucVu, editingEmployee.maNhanVien)) ||
+                      (isCostOnly && isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien));
                     const checked = !lockedForRole && editAllowedViews.includes(v.id);
                     return (
                       <label
@@ -692,6 +728,11 @@ export const EmployeesTab: React.FC = () => {
                             Admin
                           </span>
                         )}
+                        {isCostOnly && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                            Quản lý / KS
+                          </span>
+                        )}
                       </label>
                     );
                   })}
@@ -717,27 +758,34 @@ export const EmployeesTab: React.FC = () => {
                     'PROCESS_TICKETS',
                     'REQUEST_SPARE_PARTS',
                   ].map((rule) => {
-                    const isChecked = editRules.includes(rule);
+                    const ruleLocked =
+                      rule === 'MANAGE_COSTS' &&
+                      isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien);
+                    const isChecked = !ruleLocked && editRules.includes(rule);
                     return (
                       <label
                         key={rule}
-                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition ${
-                          isChecked
-                            ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 font-bold'
-                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                        className={`flex items-center gap-2 p-2 rounded-lg border transition ${
+                          ruleLocked
+                            ? 'bg-slate-900/50 border-slate-800 text-slate-500 cursor-not-allowed opacity-60'
+                            : isChecked
+                            ? 'bg-indigo-600/20 border-indigo-500/50 text-indigo-300 font-bold cursor-pointer'
+                            : 'bg-slate-800 border-slate-700 text-slate-400 cursor-pointer'
                         }`}
                       >
                         <input
                           type="checkbox"
                           checked={isChecked}
+                          disabled={ruleLocked}
                           onChange={(e) => {
+                            if (ruleLocked) return;
                             if (e.target.checked) {
                               setEditRules([...editRules, rule]);
                             } else {
                               setEditRules(editRules.filter((r) => r !== rule));
                             }
                           }}
-                          className="rounded text-indigo-600 focus:ring-0"
+                          className="rounded text-indigo-600 focus:ring-0 disabled:opacity-40"
                         />
                         <span className="font-mono text-[10px] truncate">{rule}</span>
                       </label>
@@ -935,9 +983,12 @@ export const EmployeesTab: React.FC = () => {
                     type="button"
                     onClick={() => {
                       const allowAdmin = isAdminRole(chucVu, maNhanVien);
+                      const costRestricted = isCostRestrictedRole(chucVu, maNhanVien);
                       setNewAllowedViews(
                         APP_VIEW_OPTIONS.filter(
-                          (v) => allowAdmin || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(v.id)
+                          (v) =>
+                            (allowAdmin || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(v.id)) &&
+                            (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(v.id))
                         ).map((v) => v.id)
                       );
                     }}
@@ -949,7 +1000,10 @@ export const EmployeesTab: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs">
                   {APP_VIEW_OPTIONS.map((v) => {
                     const isAdminOnly = (ADMIN_ONLY_VIEWS as readonly string[]).includes(v.id);
-                    const lockedForRole = isAdminOnly && !isAdminRole(chucVu, maNhanVien);
+                    const isCostOnly = (COST_RESTRICTED_VIEWS as readonly string[]).includes(v.id);
+                    const lockedForRole =
+                      (isAdminOnly && !isAdminRole(chucVu, maNhanVien)) ||
+                      (isCostOnly && isCostRestrictedRole(chucVu, maNhanVien));
                     const checked = !lockedForRole && newAllowedViews.includes(v.id);
                     return (
                       <label
@@ -975,6 +1029,11 @@ export const EmployeesTab: React.FC = () => {
                         {isAdminOnly && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 shrink-0">
                             Admin
+                          </span>
+                        )}
+                        {isCostOnly && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 shrink-0">
+                            Quản lý / KS
                           </span>
                         )}
                       </label>

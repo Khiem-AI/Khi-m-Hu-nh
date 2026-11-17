@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Equipment, MaintenanceHistory, MaintenanceResult, MaintenanceWorkType } from '../types/cmms';
 import { useCMMS } from '../context/CMMSContext';
-import { calculateNextMaintenanceDate, formatDateVN, getHistoryWorkType, isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
+import {
+  calculateNextMaintenanceDate,
+  canViewCosts,
+  formatDateVN,
+  getHistoryWorkType,
+  isAdminLevel,
+  parseAssigneeNames,
+} from '../utils/cmmsLogic';
 import { BOOTSTRAPPED_ADMIN_EMAIL } from '../utils/firestoreSync';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
@@ -122,6 +129,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
   const calculatedNextDate = calculateNextMaintenanceDate(ngayThucHien, activeEquipment.tanSuat);
 
   const adminAuthorized = isAdminLevel(currentUser);
+  const showCosts = canViewCosts(currentUser);
   const isAutoSendReady = Boolean(
     emailConfig.notificationMode === 'web_only' ||
       isGmailConnected ||
@@ -395,7 +403,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className={`grid grid-cols-1 ${showCosts ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 text-amber-400" />
@@ -425,20 +433,22 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
               </select>
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
-                Chi Phí Ước Tính (VNĐ)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="50000"
-                value={chiPhiUocTinh}
-                onChange={(e) => setChiPhiUocTinh(Number(e.target.value))}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
+            {showCosts && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                  Chi Phí Ước Tính (VNĐ)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="50000"
+                  value={chiPhiUocTinh}
+                  onChange={(e) => setChiPhiUocTinh(Number(e.target.value))}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            )}
           </div>
 
           {/* Direct Camera Capture: Before & After Photos */}

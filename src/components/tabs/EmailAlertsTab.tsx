@@ -294,6 +294,7 @@ export const EmailAlertsTab: React.FC = () => {
       relatedId: 'TEST-PING',
       webhookUrlOverride: trimmedWebhook,
       userConfirmed: true,
+      allowDuplicate: true,
     });
 
     setIsProcessing(false);

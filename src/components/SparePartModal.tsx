@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { SparePart } from '../types/cmms';
+import { canViewCosts } from '../utils/cmmsLogic';
 import { X, Package, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface SparePartModalProps {
@@ -14,7 +15,8 @@ export const SparePartModal: React.FC<SparePartModalProps> = ({
   onClose,
   partToEdit,
 }) => {
-  const { addSparePart, updateSparePart, equipment } = useCMMS();
+  const { addSparePart, updateSparePart, equipment, currentUser } = useCMMS();
+  const showCosts = canViewCosts(currentUser);
 
   const [maVatTu, setMaVatTu] = useState(partToEdit?.maVatTu || '');
   const [tenVatTu, setTenVatTu] = useState(partToEdit?.tenVatTu || '');
@@ -57,7 +59,7 @@ export const SparePartModal: React.FC<SparePartModalProps> = ({
       donViTinh,
       viTriLuu,
       ghiChu,
-      donGia: Number(donGia),
+      donGia: showCosts ? Number(donGia) : partToEdit ? partToEdit.donGia : 0,
     };
 
     if (partToEdit) {
@@ -170,7 +172,7 @@ export const SparePartModal: React.FC<SparePartModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className={`grid ${showCosts ? 'grid-cols-3' : 'grid-cols-2'} gap-3`}>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">Tồn Tối Thiểu (Min)</label>
               <input
@@ -195,18 +197,20 @@ export const SparePartModal: React.FC<SparePartModalProps> = ({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">Đơn Giá (VNĐ)</label>
-              <input
-                type="number"
-                min="0"
-                step="10000"
-                value={donGia}
-                onChange={(e) => setDonGia(Number(e.target.value))}
-                required
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
-            </div>
+            {showCosts && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">Đơn Giá (VNĐ)</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="10000"
+                  value={donGia}
+                  onChange={(e) => setDonGia(Number(e.target.value))}
+                  required
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

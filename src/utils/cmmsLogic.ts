@@ -227,6 +227,7 @@ export function canAccessBackup(user?: Employee | null): boolean {
 }
 
 export const ADMIN_ONLY_VIEWS = ['admin_dashboard', 'employee_performance'] as const;
+export const COST_RESTRICTED_VIEWS = ['costs'] as const;
 
 /**
  * Only Admin-level users (Owner, Admin, Quản trị viên, ID1460) can access admin-only views.
@@ -243,20 +244,37 @@ export function isAdminLevel(user?: Employee | null): boolean {
 }
 
 /**
+ * Technicians ('Kỹ thuật viên') and Operators ('Nhân viên vận hành') cannot view or export any cost-related data.
+ */
+export function canViewCosts(user?: Employee | null): boolean {
+  if (!user) return false;
+  if (isAdminLevel(user)) return true;
+  if (user.chucVu === 'Kỹ thuật viên' || user.chucVu === 'Nhân viên vận hành') {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Returns the effective list of tab/view IDs an employee is authorized to see.
  */
 export function getEffectiveAllowedViews(user?: Employee | null): string[] {
   const allViewIds = APP_VIEW_OPTIONS.map((v) => v.id);
   const adminAccess = isAdminLevel(user);
-  const filterAdminViews = (views: string[]) =>
-    adminAccess ? views : views.filter((id) => !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id));
+  const costAccess = canViewCosts(user);
+  const filterRestrictedViews = (views: string[]) =>
+    views.filter(
+      (id) =>
+        (adminAccess || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id)) &&
+        (costAccess || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
+    );
 
   if (!user) return ['dashboard'];
   if (Array.isArray(user.allowedViews) && user.allowedViews.length > 0) {
     const withProfile = user.allowedViews.includes('profile')
       ? user.allowedViews
       : [...user.allowedViews, 'profile'];
-    return filterAdminViews(withProfile);
+    return filterRestrictedViews(withProfile);
   }
   if (adminAccess) {
     return allViewIds;
@@ -268,9 +286,9 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
     user.chucVu === 'Kỹ sư thiết bị' ||
     user.quyenHan?.includes('ALL')
   ) {
-    return filterAdminViews(allViewIds);
+    return filterRestrictedViews(allViewIds);
   }
-  return [
+  return filterRestrictedViews([
     'dashboard',
     'my_tasks',
     'profile',
@@ -283,7 +301,7 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
     'spare_parts',
     'documents',
     'energy',
-  ];
+  ]);
 }
 
 /**

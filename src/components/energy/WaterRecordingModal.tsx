@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { WATER_DAILY_METERS, MeterReading, WaterMonthly } from '../../types/cmms';
 import { NumericInput } from '../common/NumericInput';
-import { formatVND, isAdminLevel } from '../../utils/cmmsLogic';
+import { canViewCosts, formatVND, isAdminLevel } from '../../utils/cmmsLogic';
 import {
   X,
   Droplet,
@@ -47,6 +47,7 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
   } = useCMMS();
 
   const isAdmin = isAdminLevel(currentUser);
+  const showCosts = canViewCosts(currentUser);
   const isEditMode = Boolean(editingRecord && isAdmin);
   const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>(
     editingRecord ? 'monthly' : initialMode
@@ -606,7 +607,7 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                   </h4>
                 </div>
                 <div className="flex items-center gap-2">
-                  {isAdmin && (
+                  {isAdmin && showCosts && (
                     <button
                       type="button"
                       onClick={() => recalcMonthlyCosts(monthlyWaterM3)}
@@ -630,38 +631,41 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                     <span className="text-xl font-black text-slate-100 font-mono">
                       {monthlyWaterM3.toLocaleString()} <span className="text-xs text-slate-400 font-normal">m³</span>
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      @{formatVND(tariffConfig.waterVNDPerM3)}/m³
-                    </span>
+                    {showCosts && (
+                      <span className="text-[11px] text-slate-400">
+                        @{formatVND(tariffConfig.waterVNDPerM3)}/m³
+                      </span>
+                    )}
                   </div>
-                  {isEditMode ? (
-                    <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400">Tiền nước (VNĐ)</label>
-                        <NumericInput
-                          value={monthlyWaterVNDInput}
-                          onChange={setMonthlyWaterVNDInput}
-                          className="text-right font-mono text-xs py-1"
-                        />
+                  {showCosts &&
+                    (isEditMode ? (
+                      <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400">Tiền nước (VNĐ)</label>
+                          <NumericInput
+                            value={monthlyWaterVNDInput}
+                            onChange={setMonthlyWaterVNDInput}
+                            className="text-right font-mono text-xs py-1"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400">Tiền nước (USD)</label>
+                          <NumericInput
+                            value={monthlyWaterUSDInput}
+                            onChange={setMonthlyWaterUSDInput}
+                            className="text-right font-mono text-xs py-1"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400">Tiền nước (USD)</label>
-                        <NumericInput
-                          value={monthlyWaterUSDInput}
-                          onChange={setMonthlyWaterUSDInput}
-                          className="text-right font-mono text-xs py-1"
-                        />
+                    ) : (
+                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Thành tiền:</span>
+                        <div className="text-right">
+                          <span className="font-bold text-emerald-400 font-mono">{formatVND(monthlyWaterVND)}</span>
+                          <span className="text-[11px] text-slate-500 block font-mono">(${monthlyWaterUSD.toLocaleString()})</span>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Thành tiền:</span>
-                      <div className="text-right">
-                        <span className="font-bold text-emerald-400 font-mono">{formatVND(monthlyWaterVND)}</span>
-                        <span className="text-[11px] text-slate-500 block font-mono">(${monthlyWaterUSD.toLocaleString()})</span>
-                      </div>
-                    </div>
-                  )}
+                    ))}
                 </div>
 
                 {/* Khối 2: Phí xử lý nước thải (80%) */}
@@ -674,60 +678,65 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
                     <span className="text-xl font-black text-amber-300 font-mono">
                       {monthlySewageM3.toLocaleString()} <span className="text-xs text-slate-400 font-normal">m³</span>
                     </span>
-                    <span className="text-[11px] text-slate-400">
-                      @{formatVND(tariffConfig.sewageVNDPerM3)}/m³
-                    </span>
+                    {showCosts && (
+                      <span className="text-[11px] text-slate-400">
+                        @{formatVND(tariffConfig.sewageVNDPerM3)}/m³
+                      </span>
+                    )}
                   </div>
-                  {isEditMode ? (
-                    <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400">Phí thải (VNĐ)</label>
-                        <NumericInput
-                          value={monthlySewageVNDInput}
-                          onChange={setMonthlySewageVNDInput}
-                          className="text-right font-mono text-xs py-1"
-                        />
+                  {showCosts &&
+                    (isEditMode ? (
+                      <div className="pt-2 border-t border-slate-800 grid grid-cols-2 gap-2 text-xs">
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400">Phí thải (VNĐ)</label>
+                          <NumericInput
+                            value={monthlySewageVNDInput}
+                            onChange={setMonthlySewageVNDInput}
+                            className="text-right font-mono text-xs py-1"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] text-slate-400">Phí thải (USD)</label>
+                          <NumericInput
+                            value={monthlySewageUSDInput}
+                            onChange={setMonthlySewageUSDInput}
+                            className="text-right font-mono text-xs py-1"
+                          />
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] text-slate-400">Phí thải (USD)</label>
-                        <NumericInput
-                          value={monthlySewageUSDInput}
-                          onChange={setMonthlySewageUSDInput}
-                          className="text-right font-mono text-xs py-1"
-                        />
+                    ) : (
+                      <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
+                        <span className="text-slate-400">Phí xử lý:</span>
+                        <div className="text-right">
+                          <span className="font-bold text-amber-400 font-mono">{formatVND(monthlySewageVND)}</span>
+                          <span className="text-[11px] text-slate-500 block font-mono">(${monthlySewageUSD.toLocaleString()})</span>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs">
-                      <span className="text-slate-400">Phí xử lý:</span>
-                      <div className="text-right">
-                        <span className="font-bold text-amber-400 font-mono">{formatVND(monthlySewageVND)}</span>
-                        <span className="text-[11px] text-slate-500 block font-mono">(${monthlySewageUSD.toLocaleString()})</span>
-                      </div>
-                    </div>
-                  )}
+                    ))}
                 </div>
               </div>
 
               {/* Tổng hóa đơn nước tháng */}
-              <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <span className="text-xs font-bold text-slate-200 block">
-                    Tổng Hóa Đơn Nước Tháng {selectedMonth} (Cấp + Thải)
-                  </span>
-                  <span className="text-[11px] text-slate-400">
-                    Tỷ giá quy đổi: 1 USD = {tariffConfig.usdToVndRate.toLocaleString()} VNĐ
-                  </span>
+              {showCosts && (
+                <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="text-xs font-bold text-slate-200 block">
+                      Tổng Hóa Đơn Nước Tháng {selectedMonth} (Cấp + Thải)
+                    </span>
+                    <span className="text-[11px] text-slate-400">
+                      Tỷ giá quy đổi: 1 USD = {tariffConfig.usdToVndRate.toLocaleString()} VNĐ
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-lg font-black text-emerald-300 font-mono">
+                      {formatVND(monthlyTotalVND)}
+                    </span>
+                    <span className="text-xs text-cyan-300 font-mono ml-2 font-bold">
+                      (${monthlyTotalUSD.toLocaleString()})
+                    </span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-lg font-black text-emerald-300 font-mono">
-                    {formatVND(monthlyTotalVND)}
-                  </span>
-                  <span className="text-xs text-cyan-300 font-mono ml-2 font-bold">
-                    (${monthlyTotalUSD.toLocaleString()})
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Footer Buttons */}
