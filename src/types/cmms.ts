@@ -629,9 +629,31 @@ export type DailyAreaCheckStatus = 'Chờ kiểm tra' | 'Đang kiểm tra' | 'Đ
 
 export type DailyAreaCheckResult = 'Chưa đánh giá' | 'Bình thường' | 'Cần theo dõi' | 'Có sự cố';
 
+export interface DailyAreaDayReport {
+  ngay: string; // YYYY-MM-DD
+  trangThai: DailyAreaCheckStatus;
+  ketQua: DailyAreaCheckResult;
+  baoCaoThucTe: string;
+  nguoiBaoCao?: string;
+  thoiGianBaoCao?: string;
+  anhHienTruong?: string;
+}
+
+export interface MorningCheckAreaTemplate {
+  khuVuc: DailyInspectionArea;
+  tieuDe: string;
+  moTaCongViec: string;
+  hanHoanThanh: string;
+  nguoiMacDinh?: string;
+}
+
+export type MorningCheckTemplatesMap = Record<DailyInspectionArea, MorningCheckAreaTemplate>;
+
 export interface DailyAreaCheck {
   id: string;
-  ngayKiemTra: string; // YYYY-MM-DD
+  ngayKiemTra: string; // YYYY-MM-DD (Start date / single-day check date)
+  ngayKetThuc?: string; // YYYY-MM-DD (End date for Mon-Sat weekly range)
+  ngayTrongTuan?: number[]; // 1=T2 ... 6=T7, 0=CN (default [1,2,3,4,5,6])
   caLamViec: DailyAreaCheckShift;
   khuVuc: DailyInspectionArea;
   tieuDe: string;
@@ -645,7 +667,5 @@ export interface DailyAreaCheck {
   nguoiBaoCao?: string;
   thoiGianBaoCao?: string;
   anhHienTruong?: string;
+  baoCaoTheoNgay?: DailyAreaDayReport[];
 }
-
-
-

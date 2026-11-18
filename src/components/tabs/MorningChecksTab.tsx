@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import {
@@ -6,13 +6,20 @@ import {
   DailyAreaCheckResult,
   DailyAreaCheckShift,
   DailyAreaCheckStatus,
+  DailyAreaDayReport,
   DailyInspectionArea,
+  MorningCheckAreaTemplate,
 } from '../../types/cmms';
 import {
   canDeleteRecords,
   canManageMaintenancePlans,
+  DEFAULT_MORNING_CHECK_TEMPLATES,
   formatDateVN,
+  getScheduledDatesForAreaCheck,
+  getWeekdayLabelVN,
+  getWeekMonToSatRange,
   matchesAssignee,
+  WEEK_DAYS_MON_SAT,
 } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import { MultiAssigneePicker } from '../common/MultiAssigneePicker';
@@ -34,11 +41,14 @@ import {
   Users,
   Search,
   Calendar,
+  CalendarRange,
   ClipboardEdit,
   X,
   Sparkles,
   Camera,
   Send,
+  RotateCcw,
+  SlidersHorizontal,
 } from 'lucide-react';
 
 const AREAS: DailyInspectionArea[] = ['Vòng trong', 'Vòng Ngoài', 'Phòng Utility'];
@@ -51,12 +61,20 @@ const RESULT_OPTIONS: DailyAreaCheckResult[] = [
   'Có sự cố',
 ];
 
-const AREA_META: Record<
+const WEEKDAY_OPTIONS: Array<{ value: number; label: string }> = [
+  { value: 1, label: 'T2' },
+  { value: 2, label: 'T3' },
+  { value: 3, label: 'T4' },
+  { value: 4, label: 'T5' },
+  { value: 5, label: 'T6' },
+  { value: 6, label: 'T7' },
+  { value: 0, label: 'CN' },
+];
+
+const AREA_STYLE_META: Record<
   DailyInspectionArea,
   {
     subtitle: string;
-    defaultTitle: string;
-    defaultDescription: string;
     icon: React.FC<{ className?: string }>;
     badgeClass: string;
     accentBorder: string;
@@ -65,9 +83,6 @@ const AREA_META: Record<
 > = {
   'Vòng trong': {
     subtitle: 'Xưởng sản xuất · Kho · Văn phòng · AHU/FCU · Lối thoát hiểm',
-    defaultTitle: 'Kiểm tra đầu ngày khu vực sản xuất & văn phòng (Vòng trong)',
-    defaultDescription:
-      '1. Kiểm tra nhiệt độ & độ ẩm khu vực xưởng sản xuất, kho nguyên liệu và phòng sạch qua màn hình AHU/BMS.\n2. Kiểm tra áp suất chênh áp phòng Coating, phòng IQC và trạng thái hoạt động quạt hút/quạt cấp.\n3. Kiểm tra chiếu sáng nhà xưởng, văn phòng tầng 1–2, đèn Exit & cửa thoát hiểm không bị che chắn.\n4. Kiểm tra rò rỉ nước/dầu sàn nhà xưởng, khu vực FCU và nhà vệ sinh sản xuất.',
     icon: Building2,
     badgeClass: 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30',
     accentBorder: 'border-cyan-500/30',
@@ -75,9 +90,6 @@ const AREA_META: Record<
   },
   'Vòng Ngoài': {
     subtitle: 'Khuôn viên ngoài · Trạm bơm · Xử lý nước thải · Nhà bảo vệ · Kho hóa chất',
-    defaultTitle: 'Kiểm tra đầu ngày khuôn viên ngoài xưởng & trạm phụ (Vòng Ngoài)',
-    defaultDescription:
-      '1. Kiểm tra hệ thống bơm nước sinh hoạt (WAT-DBV-01/02), mực nước bể ngầm 200m³ và rò rỉ đường ống cấp thoát nước ngoài trời.\n2. Kiểm tra khu vực trạm xử lý nước thải, đầu ra nước thải DI và hệ thống cống rãnh xung quanh nhà máy.\n3. Kiểm tra tủ điện chiếu sáng ngoài trời, hàng rào an toàn, cổng bảo vệ 1 & 2, hệ thống điều hòa nhà bảo vệ.\n4. Kiểm tra khu vực kho hóa chất, mái che, bảng cảnh báo an toàn & bình chữa cháy vòng ngoài.',
     icon: Trees,
     badgeClass: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
     accentBorder: 'border-emerald-500/30',
@@ -85,15 +97,25 @@ const AREA_META: Record<
   },
   'Phòng Utility': {
     subtitle: 'Chiller · Cooling Tower · Máy nén khí · Tủ điện MSB · Hệ nước DI',
-    defaultTitle: 'Kiểm tra đầu ngày hệ thống trung tâm Phòng Utility',
-    defaultDescription:
-      '1. Kiểm tra thông số vận hành Chiller 01, Chiller 02, Mini Chiller: nhiệt độ nước cấp/hồi, áp suất gas, độ rung và tiếng ồn bất thường.\n2. Kiểm tra cụm bơm nước lạnh (CHWP), bơm giải nhiệt (CLWP) và tháp giải nhiệt Cooling Tower 01–02.\n3. Kiểm tra cụm máy nén khí GA90-1/2, GA75-1, máy sấy khí FD220 và áp suất khí nén đường ống chính.\n4. Kiểm tra tủ điện phân phối MSB1–MSB5, nhiệt độ thanh cái, điện áp 3 pha, máy phát điện dự phòng & hệ thống nước DI.',
     icon: Gauge,
     badgeClass: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
     accentBorder: 'border-amber-500/30',
     iconBg: 'bg-amber-500/15 text-amber-400',
   },
 };
+
+function getTodayYmd(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    now.getDate()
+  ).padStart(2, '0')}`;
+}
+
+function formatShortDate(ymd: string): string {
+  const parts = (ymd || '').split('-');
+  if (parts.length !== 3) return ymd;
+  return `${parts[2]}/${parts[1]}`;
+}
 
 function getStatusBadgeClass(status: DailyAreaCheckStatus): string {
   switch (status) {
@@ -119,11 +141,36 @@ function getResultBadgeClass(result: DailyAreaCheckResult): string {
   }
 }
 
+function getDayReportMap(item: DailyAreaCheck): Map<string, DailyAreaDayReport> {
+  const map = new Map<string, DailyAreaDayReport>();
+  if (Array.isArray(item.baoCaoTheoNgay)) {
+    for (const r of item.baoCaoTheoNgay) {
+      if (r?.ngay) map.set(r.ngay, r);
+    }
+  }
+  // Backwards compatibility for legacy single-day items without baoCaoTheoNgay
+  if (map.size === 0 && item.baoCaoThucTe && item.ngayKiemTra) {
+    map.set(item.ngayKiemTra, {
+      ngay: item.ngayKiemTra,
+      trangThai: item.trangThai,
+      ketQua: item.ketQua,
+      baoCaoThucTe: item.baoCaoThucTe,
+      nguoiBaoCao: item.nguoiBaoCao,
+      thoiGianBaoCao: item.thoiGianBaoCao,
+      anhHienTruong: item.anhHienTruong,
+    });
+  }
+  return map;
+}
+
 export const MorningChecksTab: React.FC = () => {
   const {
     dailyAreaChecks,
+    morningCheckTemplates,
     employees,
     currentUser,
+    updateMorningCheckTemplate,
+    resetMorningCheckTemplates,
     addDailyAreaCheck,
     updateDailyAreaCheck,
     submitDailyAreaCheckReport,
@@ -133,6 +180,7 @@ export const MorningChecksTab: React.FC = () => {
 
   const canManageAssignments = canManageMaintenancePlans(currentUser);
   const canDelete = canDeleteRecords(currentUser);
+  const todayYmd = getTodayYmd();
 
   const [selectedArea, setSelectedArea] = useState<'Tất cả' | DailyInspectionArea>('Tất cả');
   const [filterStatus, setFilterStatus] = useState<string>('Tất cả');
@@ -140,57 +188,107 @@ export const MorningChecksTab: React.FC = () => {
   const [onlyMyChecks, setOnlyMyChecks] = useState<boolean>(!canManageAssignments);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [selectedPreviewDayByCheck, setSelectedPreviewDayByCheck] = useState<Record<string, string>>({});
 
-  // Assign / Edit Area Description Modal (Admin/Manager/Engineer)
+  // Modal 0: Edit Job Templates ("Sửa công việc mẫu")
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const [templateArea, setTemplateArea] = useState<DailyInspectionArea>('Vòng trong');
+  const [templateDraft, setTemplateDraft] = useState<MorningCheckAreaTemplate>(
+    morningCheckTemplates['Vòng trong']
+  );
+  const [applyTemplateToPending, setApplyTemplateToPending] = useState<boolean>(false);
+
+  // Modal 1: Assign / Edit Area Check (with Mon-Sat weekly range)
+  const initialWeek = getWeekMonToSatRange(0);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [editingCheck, setEditingCheck] = useState<DailyAreaCheck | null>(null);
   const [formArea, setFormArea] = useState<DailyInspectionArea>('Vòng trong');
-  const [formDate, setFormDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [formScheduleMode, setFormScheduleMode] = useState<'range' | 'single'>('range');
+  const [formStartDate, setFormStartDate] = useState<string>(initialWeek.start);
+  const [formEndDate, setFormEndDate] = useState<string>(initialWeek.end);
+  const [formWeekdays, setFormWeekdays] = useState<number[]>([...WEEK_DAYS_MON_SAT]);
   const [formShift, setFormShift] = useState<DailyAreaCheckShift>('Ca Sáng');
-  const [formDeadline, setFormDeadline] = useState<string>('08:30');
-  const [formTitle, setFormTitle] = useState<string>(AREA_META['Vòng trong'].defaultTitle);
-  const [formDescription, setFormDescription] = useState<string>(
-    AREA_META['Vòng trong'].defaultDescription
+  const [formDeadline, setFormDeadline] = useState<string>(
+    morningCheckTemplates['Vòng trong'].hanHoanThanh
   );
-  const [formAssignees, setFormAssignees] = useState<string>('');
+  const [formTitle, setFormTitle] = useState<string>(morningCheckTemplates['Vòng trong'].tieuDe);
+  const [formDescription, setFormDescription] = useState<string>(
+    morningCheckTemplates['Vòng trong'].moTaCongViec
+  );
+  const [formAssignees, setFormAssignees] = useState<string>(
+    morningCheckTemplates['Vòng trong'].nguoiMacDinh || ''
+  );
 
-  // Quick 3-Area Batch Assign Modal (Admin/Manager/Engineer)
+  // Modal 2: Quick 3-Area Batch Assign (with Mon-Sat weekly range)
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
-  const [batchDate, setBatchDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [batchScheduleMode, setBatchScheduleMode] = useState<'range' | 'single'>('range');
+  const [batchStartDate, setBatchStartDate] = useState<string>(initialWeek.start);
+  const [batchEndDate, setBatchEndDate] = useState<string>(initialWeek.end);
+  const [batchWeekdays, setBatchWeekdays] = useState<number[]>([...WEEK_DAYS_MON_SAT]);
   const [batchShift, setBatchShift] = useState<DailyAreaCheckShift>('Ca Sáng');
   const [batchAssignees, setBatchAssignees] = useState<Record<DailyInspectionArea, string>>({
-    'Vòng trong': 'Trương Quang Sơn',
-    'Vòng Ngoài': 'Lê Văn Thắng',
-    'Phòng Utility': 'Đỗ Hữu Thịnh',
+    'Vòng trong': morningCheckTemplates['Vòng trong'].nguoiMacDinh || '',
+    'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].nguoiMacDinh || '',
+    'Phòng Utility': morningCheckTemplates['Phòng Utility'].nguoiMacDinh || '',
   });
   const [batchDescriptions, setBatchDescriptions] = useState<Record<DailyInspectionArea, string>>({
-    'Vòng trong': AREA_META['Vòng trong'].defaultDescription,
-    'Vòng Ngoài': AREA_META['Vòng Ngoài'].defaultDescription,
-    'Phòng Utility': AREA_META['Phòng Utility'].defaultDescription,
+    'Vòng trong': morningCheckTemplates['Vòng trong'].moTaCongViec,
+    'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].moTaCongViec,
+    'Phòng Utility': morningCheckTemplates['Phòng Utility'].moTaCongViec,
   });
 
-  // Technician / Assignee Report Modal
+  // Modal 3: Technician / Assignee Per-Day Report Modal
   const [reportingCheck, setReportingCheck] = useState<DailyAreaCheck | null>(null);
+  const [reportDate, setReportDate] = useState<string>(todayYmd);
   const [reportStatus, setReportStatus] = useState<DailyAreaCheckStatus>('Đã hoàn thành');
   const [reportResult, setReportResult] = useState<DailyAreaCheckResult>('Bình thường');
   const [reportText, setReportText] = useState<string>('');
   const [reportPhoto, setReportPhoto] = useState<string>('');
 
-  // Delete Confirmation Modal
+  // Modal 4: Delete Confirmation Modal
   const [checkToDelete, setCheckToDelete] = useState<DailyAreaCheck | null>(null);
+
+  useEffect(() => {
+    setBatchAssignees({
+      'Vòng trong': morningCheckTemplates['Vòng trong'].nguoiMacDinh || '',
+      'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].nguoiMacDinh || '',
+      'Phòng Utility': morningCheckTemplates['Phòng Utility'].nguoiMacDinh || '',
+    });
+    setBatchDescriptions({
+      'Vòng trong': morningCheckTemplates['Vòng trong'].moTaCongViec,
+      'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].moTaCongViec,
+      'Phòng Utility': morningCheckTemplates['Phòng Utility'].moTaCongViec,
+    });
+  }, [morningCheckTemplates]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
     window.setTimeout(() => setToastMsg(null), 4000);
   };
 
+  const formScheduledPreview = useMemo(() => {
+    return getScheduledDatesForAreaCheck({
+      ngayKiemTra: formStartDate,
+      ngayKetThuc: formScheduleMode === 'range' ? formEndDate : formStartDate,
+      ngayTrongTuan: formScheduleMode === 'range' ? formWeekdays : undefined,
+    });
+  }, [formStartDate, formEndDate, formScheduleMode, formWeekdays]);
+
+  const batchScheduledPreview = useMemo(() => {
+    return getScheduledDatesForAreaCheck({
+      ngayKiemTra: batchStartDate,
+      ngayKetThuc: batchScheduleMode === 'range' ? batchEndDate : batchStartDate,
+      ngayTrongTuan: batchScheduleMode === 'range' ? batchWeekdays : undefined,
+    });
+  }, [batchStartDate, batchEndDate, batchScheduleMode, batchWeekdays]);
+
   const latestDateInData = useMemo(() => {
-    if (dailyAreaChecks.length === 0) return new Date().toISOString().slice(0, 10);
+    if (dailyAreaChecks.length === 0) return todayYmd;
     return [...dailyAreaChecks]
-      .map((c) => c.ngayKiemTra)
+      .map((c) => c.ngayKetThuc || c.ngayKiemTra)
       .filter(Boolean)
       .sort((a, b) => b.localeCompare(a))[0];
-  }, [dailyAreaChecks]);
+  }, [dailyAreaChecks, todayYmd]);
 
   const stats = useMemo(() => {
     const total = dailyAreaChecks.length;
@@ -200,8 +298,7 @@ export const MorningChecksTab: React.FC = () => {
       (c) => c.ketQua === 'Có sự cố' || c.ketQua === 'Cần theo dõi'
     ).length;
     const myPending = dailyAreaChecks.filter(
-      (c) =>
-        matchesAssignee(c.nguoiDuocGiao, currentUser) && c.trangThai !== 'Đã hoàn thành'
+      (c) => matchesAssignee(c.nguoiDuocGiao, currentUser) && c.trangThai !== 'Đã hoàn thành'
     ).length;
     return { total, completed, pending, issues, myPending };
   }, [dailyAreaChecks, currentUser]);
@@ -209,7 +306,10 @@ export const MorningChecksTab: React.FC = () => {
   const areaLatestSummary = useMemo(() => {
     return AREAS.map((area) => {
       const items = dailyAreaChecks.filter((c) => c.khuVuc === area);
-      const latest = [...items].sort((a, b) => b.ngayKiemTra.localeCompare(a.ngayKiemTra))[0] || null;
+      const latest =
+        [...items].sort((a, b) =>
+          (b.ngayKetThuc || b.ngayKiemTra).localeCompare(a.ngayKetThuc || a.ngayKiemTra)
+        )[0] || null;
       const doneCount = items.filter((c) => c.trangThai === 'Đã hoàn thành').length;
       const pendingCount = items.filter((c) => c.trangThai !== 'Đã hoàn thành').length;
       return { area, latest, total: items.length, doneCount, pendingCount };
@@ -222,10 +322,17 @@ export const MorningChecksTab: React.FC = () => {
       .filter((item) => {
         if (selectedArea !== 'Tất cả' && item.khuVuc !== selectedArea) return false;
         if (filterStatus !== 'Tất cả' && item.trangThai !== filterStatus) return false;
-        if (filterDate && item.ngayKiemTra !== filterDate) return false;
+        if (filterDate) {
+          const scheduled = getScheduledDatesForAreaCheck(item);
+          if (!scheduled.includes(filterDate) && item.ngayKiemTra !== filterDate) return false;
+        }
         if (onlyMyChecks && !matchesAssignee(item.nguoiDuocGiao, currentUser)) return false;
         if (q) {
-          const hay = `${item.khuVuc} ${item.tieuDe} ${item.moTaCongViec} ${item.nguoiDuocGiao} ${item.baoCaoThucTe || ''} ${item.nguoiBaoCao || ''}`.toLowerCase();
+          const dailyNotes = (item.baoCaoTheoNgay || [])
+            .map((r) => `${r.ngay} ${r.baoCaoThucTe} ${r.nguoiBaoCao || ''}`)
+            .join(' ');
+          const hay =
+            `${item.khuVuc} ${item.tieuDe} ${item.moTaCongViec} ${item.nguoiDuocGiao} ${item.baoCaoThucTe || ''} ${item.nguoiBaoCao || ''} ${dailyNotes}`.toLowerCase();
           if (!hay.includes(q)) return false;
         }
         return true;
@@ -245,24 +352,75 @@ export const MorningChecksTab: React.FC = () => {
     currentUser,
   ]);
 
+  // Template Modal Handlers
+  const handleOpenTemplateModal = (area: DailyInspectionArea = 'Vòng trong') => {
+    if (!canManageAssignments) return;
+    setTemplateArea(area);
+    setTemplateDraft({ ...morningCheckTemplates[area] });
+    setApplyTemplateToPending(false);
+    setIsTemplateModalOpen(true);
+  };
+
+  const handleSwitchTemplateArea = (area: DailyInspectionArea) => {
+    setTemplateArea(area);
+    setTemplateDraft({ ...morningCheckTemplates[area] });
+  };
+
+  const handleSaveTemplate = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canManageAssignments) return;
+    updateMorningCheckTemplate(templateArea, templateDraft, applyTemplateToPending);
+    showToast(
+      `Đã lưu công việc mẫu khu vực ${templateArea}${
+        applyTemplateToPending ? ' và cập nhật các phiếu chưa hoàn thành.' : '.'
+      }`
+    );
+    setIsTemplateModalOpen(false);
+  };
+
+  const handleResetCurrentAreaTemplate = () => {
+    setTemplateDraft({ ...DEFAULT_MORNING_CHECK_TEMPLATES[templateArea] });
+  };
+
+  const handleResetAllTemplates = () => {
+    if (!canManageAssignments) return;
+    resetMorningCheckTemplates();
+    setTemplateDraft({ ...DEFAULT_MORNING_CHECK_TEMPLATES[templateArea] });
+    showToast('Đã khôi phục 3 mẫu công việc đầu ngày về mặc định.');
+  };
+
+  // Assign / Edit Modal Handlers
   const handleOpenCreateModal = (presetArea: DailyInspectionArea = 'Vòng trong') => {
     if (!canManageAssignments) return;
+    const tpl = morningCheckTemplates[presetArea];
+    const week = getWeekMonToSatRange(0);
     setEditingCheck(null);
     setFormArea(presetArea);
-    setFormDate(new Date().toISOString().slice(0, 10));
+    setFormScheduleMode('range');
+    setFormStartDate(week.start);
+    setFormEndDate(week.end);
+    setFormWeekdays([...WEEK_DAYS_MON_SAT]);
     setFormShift('Ca Sáng');
-    setFormDeadline('08:30');
-    setFormTitle(AREA_META[presetArea].defaultTitle);
-    setFormDescription(AREA_META[presetArea].defaultDescription);
-    setFormAssignees('');
+    setFormDeadline(tpl.hanHoanThanh || '08:30');
+    setFormTitle(tpl.tieuDe);
+    setFormDescription(tpl.moTaCongViec);
+    setFormAssignees(tpl.nguoiMacDinh || '');
     setIsAssignModalOpen(true);
   };
 
   const handleOpenEditModal = (item: DailyAreaCheck) => {
     if (!canManageAssignments) return;
+    const isRange = Boolean(item.ngayKetThuc && item.ngayKetThuc !== item.ngayKiemTra);
     setEditingCheck(item);
     setFormArea(item.khuVuc);
-    setFormDate(item.ngayKiemTra);
+    setFormScheduleMode(isRange ? 'range' : 'single');
+    setFormStartDate(item.ngayKiemTra);
+    setFormEndDate(item.ngayKetThuc || item.ngayKiemTra);
+    setFormWeekdays(
+      Array.isArray(item.ngayTrongTuan) && item.ngayTrongTuan.length > 0
+        ? item.ngayTrongTuan
+        : [...WEEK_DAYS_MON_SAT]
+    );
     setFormShift(item.caLamViec);
     setFormDeadline(item.hanHoanThanh || '08:30');
     setFormTitle(item.tieuDe);
@@ -274,9 +432,36 @@ export const MorningChecksTab: React.FC = () => {
   const handleAreaChangeInForm = (area: DailyInspectionArea) => {
     setFormArea(area);
     if (!editingCheck) {
-      setFormTitle(AREA_META[area].defaultTitle);
-      setFormDescription(AREA_META[area].defaultDescription);
+      const tpl = morningCheckTemplates[area];
+      setFormTitle(tpl.tieuDe);
+      setFormDescription(tpl.moTaCongViec);
+      setFormDeadline(tpl.hanHoanThanh || '08:30');
+      setFormAssignees(tpl.nguoiMacDinh || '');
     }
+  };
+
+  const toggleWeekday = (list: number[], setList: (next: number[]) => void, dayVal: number) => {
+    if (list.includes(dayVal)) {
+      if (list.length <= 1) return; // Keep at least 1 weekday selected
+      setList(list.filter((d) => d !== dayVal));
+    } else {
+      const order = [1, 2, 3, 4, 5, 6, 0];
+      setList([...list, dayVal].sort((a, b) => order.indexOf(a) - order.indexOf(b)));
+    }
+  };
+
+  const applyWeekPreset = (
+    offsetWeeks: number,
+    setStart: (v: string) => void,
+    setEnd: (v: string) => void,
+    setDays: (v: number[]) => void,
+    setMode: (m: 'range' | 'single') => void
+  ) => {
+    const range = getWeekMonToSatRange(offsetWeeks);
+    setMode('range');
+    setStart(range.start);
+    setEnd(range.end);
+    setDays([...WEEK_DAYS_MON_SAT]);
   };
 
   const handleSaveAssignment = (e: React.FormEvent) => {
@@ -284,10 +469,21 @@ export const MorningChecksTab: React.FC = () => {
     if (!canManageAssignments) return;
     if (!formTitle.trim() || !formDescription.trim() || !formAssignees.trim()) return;
 
+    const effectiveEnd =
+      formScheduleMode === 'range'
+        ? formEndDate >= formStartDate
+          ? formEndDate
+          : formStartDate
+        : undefined;
+    const effectiveWeekdays =
+      formScheduleMode === 'range' ? [...formWeekdays] : undefined;
+
     if (editingCheck) {
       updateDailyAreaCheck({
         ...editingCheck,
-        ngayKiemTra: formDate,
+        ngayKiemTra: formStartDate,
+        ngayKetThuc: effectiveEnd,
+        ngayTrongTuan: effectiveWeekdays,
         caLamViec: formShift,
         khuVuc: formArea,
         tieuDe: formTitle.trim(),
@@ -295,10 +491,12 @@ export const MorningChecksTab: React.FC = () => {
         nguoiDuocGiao: formAssignees.trim(),
         hanHoanThanh: formDeadline.trim(),
       });
-      showToast(`Đã cập nhật phân công & mô tả công việc khu vực ${formArea}.`);
+      showToast(`Đã cập nhật lịch & mô tả công việc khu vực ${formArea}.`);
     } else {
       addDailyAreaCheck({
-        ngayKiemTra: formDate,
+        ngayKiemTra: formStartDate,
+        ngayKetThuc: effectiveEnd,
+        ngayTrongTuan: effectiveWeekdays,
         caLamViec: formShift,
         khuVuc: formArea,
         tieuDe: formTitle.trim(),
@@ -308,58 +506,135 @@ export const MorningChecksTab: React.FC = () => {
         hanHoanThanh: formDeadline.trim(),
         trangThai: 'Chờ kiểm tra',
         ketQua: 'Chưa đánh giá',
+        baoCaoTheoNgay: [],
       });
+      const rangeText = effectiveEnd
+        ? `${formatDateVN(formStartDate)} → ${formatDateVN(effectiveEnd)} (${formScheduledPreview.length} ngày)`
+        : formatDateVN(formStartDate);
       triggerWebNotification({
         type: 'GIAO_VIEC',
         title: `[Công Việc Đầu Ngày] Phân công ${formArea}`,
-        message: `${currentUser.tenNhanVien} đã giao kiểm tra ${formArea} (${formatDateVN(formDate)} - ${formShift}) cho ${formAssignees.trim()}`,
+        message: `${currentUser.tenNhanVien} đã giao kiểm tra ${formArea} (${rangeText} - ${formShift}) cho ${formAssignees.trim()}`,
         targetTab: 'morning_checks',
       });
-      showToast(`Đã tạo phiếu kiểm tra đầu ngày cho khu vực ${formArea}.`);
+      showToast(`Đã tạo lịch kiểm tra khu vực ${formArea} (${rangeText}).`);
     }
     setIsAssignModalOpen(false);
+  };
+
+  // Batch 3-Area Modal Handlers
+  const handleOpenBatchModal = () => {
+    if (!canManageAssignments) return;
+    const week = getWeekMonToSatRange(0);
+    setBatchScheduleMode('range');
+    setBatchStartDate(week.start);
+    setBatchEndDate(week.end);
+    setBatchWeekdays([...WEEK_DAYS_MON_SAT]);
+    setBatchShift('Ca Sáng');
+    setBatchAssignees({
+      'Vòng trong': morningCheckTemplates['Vòng trong'].nguoiMacDinh || '',
+      'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].nguoiMacDinh || '',
+      'Phòng Utility': morningCheckTemplates['Phòng Utility'].nguoiMacDinh || '',
+    });
+    setBatchDescriptions({
+      'Vòng trong': morningCheckTemplates['Vòng trong'].moTaCongViec,
+      'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].moTaCongViec,
+      'Phòng Utility': morningCheckTemplates['Phòng Utility'].moTaCongViec,
+    });
+    setIsBatchModalOpen(true);
   };
 
   const handleCreateBatch3Areas = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canManageAssignments) return;
+    const effectiveEnd =
+      batchScheduleMode === 'range'
+        ? batchEndDate >= batchStartDate
+          ? batchEndDate
+          : batchStartDate
+        : undefined;
+    const effectiveWeekdays =
+      batchScheduleMode === 'range' ? [...batchWeekdays] : undefined;
+
     let createdCount = 0;
     AREAS.forEach((area) => {
+      const tpl = morningCheckTemplates[area];
       const assignee = (batchAssignees[area] || '').trim();
-      const desc = (batchDescriptions[area] || AREA_META[area].defaultDescription).trim();
+      const desc = (batchDescriptions[area] || tpl.moTaCongViec).trim();
       if (!assignee) return;
       addDailyAreaCheck({
-        ngayKiemTra: batchDate,
+        ngayKiemTra: batchStartDate,
+        ngayKetThuc: effectiveEnd,
+        ngayTrongTuan: effectiveWeekdays,
         caLamViec: batchShift,
         khuVuc: area,
-        tieuDe: AREA_META[area].defaultTitle,
+        tieuDe: tpl.tieuDe,
         moTaCongViec: desc,
         nguoiDuocGiao: assignee,
         nguoiPhanQuyen: currentUser.tenNhanVien,
-        hanHoanThanh: area === 'Vòng Ngoài' ? '08:45' : '08:30',
+        hanHoanThanh: tpl.hanHoanThanh || (area === 'Vòng Ngoài' ? '08:45' : '08:30'),
         trangThai: 'Chờ kiểm tra',
         ketQua: 'Chưa đánh giá',
+        baoCaoTheoNgay: [],
       });
       createdCount += 1;
     });
     if (createdCount > 0) {
+      const rangeText = effectiveEnd
+        ? `${formatDateVN(batchStartDate)} → ${formatDateVN(effectiveEnd)}`
+        : formatDateVN(batchStartDate);
       triggerWebNotification({
         type: 'GIAO_VIEC',
-        title: `[Công Việc Đầu Ngày] Giao ${createdCount} khu vực (${formatDateVN(batchDate)})`,
-        message: `${currentUser.tenNhanVien} vừa phát hành lịch kiểm tra đầu ngày (${batchShift}) cho Vòng trong, Vòng Ngoài & Phòng Utility.`,
+        title: `[Công Việc Đầu Ngày] Giao ${createdCount} khu vực (${rangeText})`,
+        message: `${currentUser.tenNhanVien} vừa phát hành lịch kiểm tra đầu ngày (${batchShift}, ${rangeText}) cho Vòng trong, Vòng Ngoài & Phòng Utility.`,
         targetTab: 'morning_checks',
       });
-      showToast(`Đã tạo ${createdCount} phiếu kiểm tra đầu ngày cho các khu vực.`);
+      showToast(`Đã tạo ${createdCount} lịch kiểm tra (${rangeText}) cho 3 khu vực.`);
       setIsBatchModalOpen(false);
     }
   };
 
-  const handleOpenReportModal = (item: DailyAreaCheck) => {
+  // Per-day Report Modal Handlers
+  const loadDayFieldsIntoReportModal = (item: DailyAreaCheck, targetDay: string) => {
+    const dayMap = getDayReportMap(item);
+    const dayEntry = dayMap.get(targetDay);
+    setReportDate(targetDay);
+    setReportStatus(
+      dayEntry
+        ? dayEntry.trangThai === 'Chờ kiểm tra'
+          ? 'Đã hoàn thành'
+          : dayEntry.trangThai
+        : 'Đã hoàn thành'
+    );
+    setReportResult(
+      dayEntry
+        ? dayEntry.ketQua === 'Chưa đánh giá'
+          ? 'Bình thường'
+          : dayEntry.ketQua
+        : 'Bình thường'
+    );
+    setReportText(dayEntry?.baoCaoThucTe || '');
+    setReportPhoto(dayEntry?.anhHienTruong || '');
+  };
+
+  const handleOpenReportModal = (item: DailyAreaCheck, specificDay?: string) => {
+    const scheduled = getScheduledDatesForAreaCheck(item);
+    const dayMap = getDayReportMap(item);
+    const defaultDay =
+      specificDay ||
+      selectedPreviewDayByCheck[item.id] ||
+      (scheduled.includes(todayYmd) ? todayYmd : undefined) ||
+      scheduled.find((d) => dayMap.get(d)?.trangThai !== 'Đã hoàn thành') ||
+      scheduled[0] ||
+      item.ngayKiemTra;
+
     setReportingCheck(item);
-    setReportStatus(item.trangThai === 'Chờ kiểm tra' ? 'Đã hoàn thành' : item.trangThai);
-    setReportResult(item.ketQua === 'Chưa đánh giá' ? 'Bình thường' : item.ketQua);
-    setReportText(item.baoCaoThucTe || '');
-    setReportPhoto(item.anhHienTruong || '');
+    loadDayFieldsIntoReportModal(item, defaultDay);
+  };
+
+  const handleSwitchReportDateInModal = (targetDay: string) => {
+    if (!reportingCheck) return;
+    loadDayFieldsIntoReportModal(reportingCheck, targetDay);
   };
 
   const handleSubmitReport = (e: React.FormEvent) => {
@@ -367,12 +642,18 @@ export const MorningChecksTab: React.FC = () => {
     if (!reportingCheck) return;
     submitDailyAreaCheckReport({
       id: reportingCheck.id,
+      ngayBaoCao: reportDate,
       trangThai: reportStatus,
       ketQua: reportResult,
       baoCaoThucTe: reportText,
       anhHienTruong: reportPhoto,
     });
-    showToast(`Đã ghi nhận báo cáo kiểm tra khu vực ${reportingCheck.khuVuc}.`);
+    setSelectedPreviewDayByCheck((prev) => ({ ...prev, [reportingCheck.id]: reportDate }));
+    showToast(
+      `Đã ghi nhận báo cáo ngày ${formatDateVN(reportDate)} (${getWeekdayLabelVN(
+        reportDate
+      )}) — ${reportingCheck.khuVuc}.`
+    );
     setReportingCheck(null);
   };
 
@@ -397,11 +678,11 @@ export const MorningChecksTab: React.FC = () => {
               {UI_TEXTS.tabs.morningChecks.title}
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-3xl leading-relaxed">
-              Phân quyền và theo dõi kiểm tra đầu ca tại 3 khu vực trọng điểm:{' '}
+              Quản lý công việc mẫu, giao lịch kiểm tra theo tuần (Thứ 2 – Thứ 7) tại 3 khu vực:{' '}
               <span className="text-cyan-300 font-semibold">Vòng trong</span>,{' '}
               <span className="text-emerald-300 font-semibold">Vòng Ngoài</span> và{' '}
-              <span className="text-amber-300 font-semibold">Phòng Utility</span>. Kỹ thuật viên xem
-              mô tả công việc từng khu vực và ghi nhận báo cáo hiện trường trực tiếp.
+              <span className="text-amber-300 font-semibold">Phòng Utility</span>. Người phụ trách
+              chọn từng ngày để cập nhật báo cáo hiện trường.
             </p>
           </div>
 
@@ -428,7 +709,15 @@ export const MorningChecksTab: React.FC = () => {
               <>
                 <button
                   type="button"
-                  onClick={() => setIsBatchModalOpen(true)}
+                  onClick={() => handleOpenTemplateModal('Vòng trong')}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-amber-500/30 text-xs font-bold shadow-md transition min-h-[42px]"
+                >
+                  <SlidersHorizontal className="w-4 h-4" />
+                  <span>Sửa Công Việc Mẫu</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleOpenBatchModal}
                   className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md transition min-h-[42px]"
                 >
                   <Sparkles className="w-4 h-4" />
@@ -455,7 +744,11 @@ export const MorningChecksTab: React.FC = () => {
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
             <span>{toastMsg}</span>
           </div>
-          <button type="button" onClick={() => setToastMsg(null)} className="text-emerald-300 hover:text-white">
+          <button
+            type="button"
+            onClick={() => setToastMsg(null)}
+            className="text-emerald-300 hover:text-white"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -464,19 +757,23 @@ export const MorningChecksTab: React.FC = () => {
       {/* KPI Metrics Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-          <div className="text-xs text-slate-400">Tổng Phiếu Kiểm Tra</div>
+          <div className="text-xs text-slate-400">Tổng Lịch Kiểm Tra</div>
           <div className="text-2xl font-extrabold text-white tabular-nums">{stats.total}</div>
-          <div className="text-[11px] text-slate-400">Ngày gần nhất: {formatDateVN(latestDateInData)}</div>
+          <div className="text-[11px] text-slate-400">
+            Đến ngày: {formatDateVN(latestDateInData)}
+          </div>
         </div>
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
-          <div className="text-xs text-slate-400">Đã Hoàn Thành</div>
-          <div className="text-2xl font-extrabold text-emerald-400 tabular-nums">{stats.completed}</div>
-          <div className="text-[11px] text-slate-400">Đã có báo cáo hiện trường</div>
+          <div className="text-xs text-slate-400">Đã Hoàn Thành Đủ Ngày</div>
+          <div className="text-2xl font-extrabold text-emerald-400 tabular-nums">
+            {stats.completed}
+          </div>
+          <div className="text-[11px] text-slate-400">Hoàn tất toàn bộ lịch tuần/ngày</div>
         </div>
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-xs text-slate-400">Chờ / Đang Kiểm Tra</div>
           <div className="text-2xl font-extrabold text-cyan-400 tabular-nums">{stats.pending}</div>
-          <div className="text-[11px] text-slate-400">Cần hoàn tất đầu ca</div>
+          <div className="text-[11px] text-slate-400">Cần cập nhật báo cáo theo ngày</div>
         </div>
         <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
           <div className="text-xs text-slate-400">Cảnh Báo / Sự Cố</div>
@@ -494,25 +791,28 @@ export const MorningChecksTab: React.FC = () => {
       {/* 3 Area Overview Cards (Vòng trong, Vòng Ngoài, Phòng Utility) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {areaLatestSummary.map(({ area, latest, total, doneCount, pendingCount }) => {
-          const meta = AREA_META[area];
-          const Icon = meta.icon;
+          const styleMeta = AREA_STYLE_META[area];
+          const tpl = morningCheckTemplates[area];
+          const Icon = styleMeta.icon;
           const isSelected = selectedArea === area;
           return (
             <div
               key={area}
               className={`rounded-2xl bg-slate-900/85 border p-4 sm:p-5 flex flex-col justify-between gap-4 transition ${
-                isSelected ? 'border-cyan-400 ring-1 ring-cyan-500/40' : `${meta.accentBorder} hover:border-slate-700`
+                isSelected
+                  ? 'border-cyan-400 ring-1 ring-cyan-500/40'
+                  : `${styleMeta.accentBorder} hover:border-slate-700`
               }`}
             >
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3 min-w-0">
-                    <span className={`p-2.5 rounded-xl shrink-0 ${meta.iconBg}`}>
+                    <span className={`p-2.5 rounded-xl shrink-0 ${styleMeta.iconBg}`}>
                       <Icon className="w-5 h-5" />
                     </span>
                     <div className="min-w-0">
                       <h2 className="text-base font-extrabold text-white">{area}</h2>
-                      <p className="text-[11px] text-slate-400 leading-snug">{meta.subtitle}</p>
+                      <p className="text-[11px] text-slate-400 leading-snug">{styleMeta.subtitle}</p>
                     </div>
                   </div>
                   <button
@@ -528,15 +828,35 @@ export const MorningChecksTab: React.FC = () => {
                   </button>
                 </div>
 
-                {/* Area Job Description Preview */}
+                {/* Area Job Template Preview */}
                 <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
-                  <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
-                    <FileText className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>Mô tả công việc khu vực:</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Công việc mẫu ({tpl.hanHoanThanh}):</span>
+                    </div>
+                    {canManageAssignments && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTemplateModal(area)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 hover:text-amber-200"
+                      >
+                        <Edit3 className="w-3 h-3" />
+                        <span>Sửa mẫu</span>
+                      </button>
+                    )}
                   </div>
-                  <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed line-clamp-4">
-                    {latest?.moTaCongViec || meta.defaultDescription}
+                  <div className="text-[11px] font-semibold text-cyan-200 line-clamp-1">
+                    {tpl.tieuDe}
+                  </div>
+                  <p className="text-xs text-slate-300 whitespace-pre-line leading-relaxed line-clamp-3">
+                    {tpl.moTaCongViec}
                   </p>
+                  {tpl.nguoiMacDinh && (
+                    <div className="text-[11px] text-slate-400 pt-0.5">
+                      Mặc định: <span className="text-slate-200 font-medium">{tpl.nguoiMacDinh}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -545,32 +865,26 @@ export const MorningChecksTab: React.FC = () => {
                   Xong <span className="font-bold text-emerald-400">{doneCount}</span> · Chờ{' '}
                   <span className="font-bold text-amber-300">{pendingCount}</span>
                 </div>
-                {latest ? (
-                  <div className="flex items-center gap-1.5">
-                    <span className={`px-2 py-0.5 rounded border text-[11px] font-bold ${getStatusBadgeClass(latest.trangThai)}`}>
+                <div className="flex items-center gap-1.5">
+                  {latest && (
+                    <span
+                      className={`px-2 py-0.5 rounded border text-[11px] font-bold ${getStatusBadgeClass(
+                        latest.trangThai
+                      )}`}
+                    >
                       {latest.trangThai}
                     </span>
-                    {canManageAssignments && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenCreateModal(area)}
-                        className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px] font-semibold transition"
-                      >
-                        + Giao mới
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  canManageAssignments && (
+                  )}
+                  {canManageAssignments && (
                     <button
                       type="button"
                       onClick={() => handleOpenCreateModal(area)}
-                      className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-bold transition"
+                      className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px] font-semibold transition"
                     >
-                      + Tạo phiếu đầu tiên
+                      + Giao tuần/ngày
                     </button>
-                  )
-                )}
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -659,10 +973,43 @@ export const MorningChecksTab: React.FC = () => {
       ) : (
         <div className="space-y-4">
           {filteredChecks.map((item) => {
-            const areaMeta = AREA_META[item.khuVuc];
-            const AreaIcon = areaMeta.icon;
+            const areaStyle = AREA_STYLE_META[item.khuVuc];
+            const AreaIcon = areaStyle.icon;
             const isAssignedToMe = matchesAssignee(item.nguoiDuocGiao, currentUser);
-            const photoUrl = item.anhHienTruong ? resolveImageUrl(item.anhHienTruong) : '';
+            const scheduledDates = getScheduledDatesForAreaCheck(item);
+            const dayMap = getDayReportMap(item);
+            const isWeeklyOrMulti =
+              scheduledDates.length > 1 ||
+              Boolean(item.ngayKetThuc && item.ngayKetThuc !== item.ngayKiemTra);
+            const completedDaysCount = scheduledDates.filter(
+              (d) => dayMap.get(d)?.trangThai === 'Đã hoàn thành'
+            ).length;
+
+            const activePreviewDay =
+              (selectedPreviewDayByCheck[item.id] &&
+              scheduledDates.includes(selectedPreviewDayByCheck[item.id])
+                ? selectedPreviewDayByCheck[item.id]
+                : undefined) ||
+              (scheduledDates.includes(todayYmd) ? todayYmd : undefined) ||
+              [...scheduledDates].reverse().find((d) => dayMap.has(d)) ||
+              scheduledDates[0] ||
+              item.ngayKiemTra;
+
+            const activeDayReport = dayMap.get(activePreviewDay);
+            const displayReportText =
+              activeDayReport?.baoCaoThucTe ||
+              (!isWeeklyOrMulti ? item.baoCaoThucTe : undefined) ||
+              '';
+            const displayReporter =
+              activeDayReport?.nguoiBaoCao ||
+              (!isWeeklyOrMulti ? item.nguoiBaoCao : undefined);
+            const displayReportTime =
+              activeDayReport?.thoiGianBaoCao ||
+              (!isWeeklyOrMulti ? item.thoiGianBaoCao : undefined);
+            const rawPhoto =
+              activeDayReport?.anhHienTruong ||
+              (!isWeeklyOrMulti ? item.anhHienTruong : undefined);
+            const photoUrl = rawPhoto ? resolveImageUrl(rawPhoto) : '';
 
             return (
               <div
@@ -680,21 +1027,38 @@ export const MorningChecksTab: React.FC = () => {
                   <div className="space-y-1.5 min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-bold ${areaMeta.badgeClass}`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-[11px] font-bold ${areaStyle.badgeClass}`}
                       >
                         <AreaIcon className="w-3.5 h-3.5" />
                         <span>{item.khuVuc}</span>
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-200 tabular-nums">
-                        <Calendar className="w-3 h-3 text-cyan-400" />
-                        {formatDateVN(item.ngayKiemTra)} · {item.caLamViec}
+
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[11px] font-semibold text-slate-200 tabular-nums">
+                        {isWeeklyOrMulti ? (
+                          <CalendarRange className="w-3.5 h-3.5 text-cyan-400" />
+                        ) : (
+                          <Calendar className="w-3 h-3 text-cyan-400" />
+                        )}
+                        {isWeeklyOrMulti
+                          ? `${formatDateVN(item.ngayKiemTra)} → ${formatDateVN(
+                              item.ngayKetThuc || scheduledDates[scheduledDates.length - 1]
+                            )} (${scheduledDates.length} ngày) · ${item.caLamViec}`
+                          : `${formatDateVN(item.ngayKiemTra)} (${getWeekdayLabelVN(
+                              item.ngayKiemTra
+                            )}) · ${item.caLamViec}`}
                       </span>
+
                       {item.hanHoanThanh && (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-800 border border-slate-700 text-[11px] text-slate-300 tabular-nums">
                           <Clock className="w-3 h-3 text-amber-400" />
                           Hạn: {item.hanHoanThanh}
                         </span>
                       )}
+
+                      <span className="px-2 py-0.5 rounded-md bg-slate-800/90 border border-slate-700 text-[11px] font-bold text-emerald-300 tabular-nums">
+                        {completedDaysCount}/{scheduledDates.length} ngày xong
+                      </span>
+
                       {isAssignedToMe && (
                         <span className="px-2 py-0.5 rounded-md bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 text-[11px] font-bold">
                           Việc của tôi
@@ -709,7 +1073,7 @@ export const MorningChecksTab: React.FC = () => {
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
                       <span className="inline-flex items-center gap-1.5">
                         <Users className="w-3.5 h-3.5 text-cyan-400" />
-                        Người được giao:{' '}
+                        Người phụ trách:{' '}
                         <strong className="text-slate-100">{item.nguoiDuocGiao}</strong>
                       </span>
                       {item.nguoiPhanQuyen && (
@@ -739,7 +1103,7 @@ export const MorningChecksTab: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Two-Column Body: Mô tả công việc & Báo cáo từ người được giao việc */}
+                {/* Two-Column Body: Mô tả công việc & Báo cáo theo ngày */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   {/* Left: Mô tả công việc của khu vực */}
                   <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
@@ -752,64 +1116,172 @@ export const MorningChecksTab: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Right: Ghi nhận báo cáo từ người được giao việc */}
+                  {/* Right: Báo cáo theo ngày từ người phụ trách */}
                   <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 flex flex-col justify-between gap-3">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <div className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                           <ClipboardEdit className="w-4 h-4" />
-                          <span>Báo Cáo Từ Người Được Giao Việc</span>
+                          <span>Báo Cáo Theo Ngày (Người Phụ Trách)</span>
                         </div>
-                        {item.thoiGianBaoCao && (
+                        {displayReportTime && (
                           <span className="text-[11px] font-mono text-slate-400 tabular-nums">
-                            {item.thoiGianBaoCao}
+                            {displayReportTime}
                           </span>
                         )}
                       </div>
 
-                      {item.baoCaoThucTe ? (
-                        <div className="space-y-2">
-                          <p className="text-xs text-slate-100 whitespace-pre-line leading-relaxed bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-                            {item.baoCaoThucTe}
-                          </p>
-                          {item.nguoiBaoCao && (
-                            <div className="text-[11px] text-slate-400">
-                              Người báo cáo:{' '}
-                              <span className="text-slate-200 font-semibold">{item.nguoiBaoCao}</span>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="p-3 rounded-lg bg-slate-900/50 border border-dashed border-slate-700 text-xs text-slate-400">
-                          Chưa có báo cáo hiện trường từ người được giao việc. Bấm nút{' '}
-                          <span className="text-cyan-300 font-semibold">"Ghi Nhận Báo Cáo"</span> để
-                          cập nhật tình trạng kiểm tra.
-                        </div>
-                      )}
+                      {/* Scheduled Days Selector Grid (T2 - T7) */}
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                        {scheduledDates.map((d) => {
+                          const rep = dayMap.get(d);
+                          const isDayActive = d === activePreviewDay;
+                          const isDone = rep?.trangThai === 'Đã hoàn thành';
+                          const isProgress = rep?.trangThai === 'Đang kiểm tra';
+                          const hasIssue =
+                            rep?.ketQua === 'Có sự cố' || rep?.ketQua === 'Cần theo dõi';
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() =>
+                                setSelectedPreviewDayByCheck((prev) => ({
+                                  ...prev,
+                                  [item.id]: d,
+                                }))
+                              }
+                              onDoubleClick={() => handleOpenReportModal(item, d)}
+                              title={`Xem hoặc báo cáo ngày ${formatDateVN(d)} (${
+                                rep?.trangThai || 'Chờ kiểm tra'
+                              })`}
+                              className={`px-2 py-1.5 rounded-lg border text-left transition ${
+                                isDayActive
+                                  ? 'bg-cyan-600/25 border-cyan-400 ring-1 ring-cyan-400/50'
+                                  : isDone
+                                  ? 'bg-emerald-950/40 border-emerald-500/35 hover:border-emerald-400'
+                                  : isProgress
+                                  ? 'bg-cyan-950/40 border-cyan-500/35 hover:border-cyan-400'
+                                  : 'bg-slate-900/70 border-slate-800 hover:border-slate-600'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <span className="text-[11px] font-bold text-white tabular-nums">
+                                  {getWeekdayLabelVN(d)}
+                                </span>
+                                <span
+                                  className={`w-2 h-2 rounded-full ${
+                                    rep?.ketQua === 'Có sự cố'
+                                      ? 'bg-rose-400'
+                                      : rep?.ketQua === 'Cần theo dõi'
+                                      ? 'bg-amber-400'
+                                      : isDone
+                                      ? 'bg-emerald-400'
+                                      : isProgress
+                                      ? 'bg-cyan-400'
+                                      : 'bg-slate-600'
+                                  }`}
+                                />
+                              </div>
+                              <div className="text-[10px] text-slate-300 tabular-nums">
+                                {formatShortDate(d)}
+                              </div>
+                              <div
+                                className={`text-[9px] font-semibold truncate ${
+                                  hasIssue
+                                    ? 'text-amber-300'
+                                    : isDone
+                                    ? 'text-emerald-300'
+                                    : isProgress
+                                    ? 'text-cyan-300'
+                                    : 'text-slate-500'
+                                }`}
+                              >
+                                {rep ? (isDone ? 'Xong' : 'Đang làm') : 'Chưa BC'}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
 
-                      {photoUrl && (
-                        <div className="pt-1">
-                          <div className="text-[11px] text-slate-400 mb-1 flex items-center gap-1">
-                            <Camera className="w-3.5 h-3.5 text-cyan-400" />
-                            <span>Ảnh hiện trường đính kèm</span>
+                      {/* Selected Day Detail Box */}
+                      <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="text-[11px] font-bold text-cyan-200 tabular-nums">
+                            Chi tiết ngày {getWeekdayLabelVN(activePreviewDay)} ·{' '}
+                            {formatDateVN(activePreviewDay)}
                           </div>
-                          <img
-                            src={photoUrl}
-                            alt={`Hiện trường ${item.khuVuc}`}
-                            className="max-h-44 rounded-lg border border-slate-700 object-cover"
-                          />
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              className={`px-2 py-0.5 rounded border text-[10px] font-bold ${getStatusBadgeClass(
+                                activeDayReport?.trangThai || 'Chờ kiểm tra'
+                              )}`}
+                            >
+                              {activeDayReport?.trangThai || 'Chờ kiểm tra'}
+                            </span>
+                            {activeDayReport && (
+                              <span
+                                className={`px-2 py-0.5 rounded border text-[10px] font-bold ${getResultBadgeClass(
+                                  activeDayReport.ketQua
+                                )}`}
+                              >
+                                {activeDayReport.ketQua}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      )}
+
+                        {displayReportText ? (
+                          <div className="space-y-1.5">
+                            <p className="text-xs text-slate-100 whitespace-pre-line leading-relaxed">
+                              {displayReportText}
+                            </p>
+                            {displayReporter && (
+                              <div className="text-[11px] text-slate-400">
+                                Người báo cáo:{' '}
+                                <span className="text-slate-200 font-semibold">
+                                  {displayReporter}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-400">
+                            Chưa có báo cáo cho ngày {formatDateVN(activePreviewDay)}. Bấm nút{' '}
+                            <span className="text-cyan-300 font-semibold">
+                              "Báo Cáo Ngày {formatShortDate(activePreviewDay)}"
+                            </span>{' '}
+                            để cập nhật.
+                          </p>
+                        )}
+
+                        {photoUrl && (
+                          <div className="pt-1">
+                            <div className="text-[11px] text-slate-400 mb-1 flex items-center gap-1">
+                              <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                              <span>Ảnh hiện trường ngày {formatShortDate(activePreviewDay)}</span>
+                            </div>
+                            <img
+                              src={photoUrl}
+                              alt={`Hiện trường ${item.khuVuc} ngày ${activePreviewDay}`}
+                              className="max-h-40 rounded-lg border border-slate-700 object-cover"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-end gap-2">
                       <button
                         type="button"
-                        onClick={() => handleOpenReportModal(item)}
+                        onClick={() => handleOpenReportModal(item, activePreviewDay)}
                         className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow transition min-h-[38px]"
                       >
                         <Send className="w-3.5 h-3.5" />
-                        <span>{item.baoCaoThucTe ? 'Cập Nhật Báo Cáo' : 'Ghi Nhận Báo Cáo'}</span>
+                        <span>
+                          {activeDayReport
+                            ? `Cập Nhật Báo Cáo (${formatShortDate(activePreviewDay)})`
+                            : `Báo Cáo Ngày ${formatShortDate(activePreviewDay)}`}
+                        </span>
                       </button>
 
                       {canManageAssignments && (
@@ -819,7 +1291,7 @@ export const MorningChecksTab: React.FC = () => {
                           className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition min-h-[38px]"
                         >
                           <Edit3 className="w-3.5 h-3.5 text-indigo-400" />
-                          <span>Sửa Phân Công / Mô Tả</span>
+                          <span>Sửa Lịch / Mô Tả</span>
                         </button>
                       )}
 
@@ -842,15 +1314,161 @@ export const MorningChecksTab: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 1: ASSIGN / EDIT AREA CHECK & DESCRIPTION (ADMIN / MANAGER / ENGINEER) */}
+      {/* MODAL 0: EDIT MORNING CHECK AREA TEMPLATES ("SỬA CÔNG VIỆC MẪU") */}
+      {isTemplateModalOpen && canManageAssignments && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4">
+          <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-5 h-5 text-amber-400" />
+                <h3 className="text-base font-bold text-white">
+                  Sửa Công Việc Mẫu Theo Khu Vực
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsTemplateModalOpen(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveTemplate} className="p-5 overflow-y-auto space-y-4 text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {AREAS.map((area) => (
+                    <button
+                      key={area}
+                      type="button"
+                      onClick={() => handleSwitchTemplateArea(area)}
+                      className={`px-3 py-1.5 rounded-lg font-bold border transition ${
+                        templateArea === area
+                          ? 'bg-amber-600 text-white border-amber-400/50'
+                          : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      {area}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetAllTemplates}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-[11px] font-semibold"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Khôi phục cả 3 mẫu gốc</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div className="sm:col-span-3">
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Tiêu Đề Mẫu ({templateArea}) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={templateDraft.tieuDe}
+                    onChange={(e) =>
+                      setTemplateDraft((prev) => ({ ...prev, tieuDe: e.target.value }))
+                    }
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-300 font-semibold mb-1">
+                    Hạn Hoàn Thành
+                  </label>
+                  <input
+                    type="text"
+                    value={templateDraft.hanHoanThanh}
+                    onChange={(e) =>
+                      setTemplateDraft((prev) => ({ ...prev, hanHoanThanh: e.target.value }))
+                    }
+                    placeholder="08:30"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 tabular-nums"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-slate-300 font-semibold">
+                    Nội Dung Mô Tả Công Việc Mẫu ({templateArea}) *
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleResetCurrentAreaTemplate}
+                    className="text-[11px] text-cyan-400 hover:underline font-semibold"
+                  >
+                    Nạp lại nội dung mặc định {templateArea}
+                  </button>
+                </div>
+                <textarea
+                  rows={6}
+                  required
+                  value={templateDraft.moTaCongViec}
+                  onChange={(e) =>
+                    setTemplateDraft((prev) => ({ ...prev, moTaCongViec: e.target.value }))
+                  }
+                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 leading-relaxed"
+                />
+              </div>
+
+              <MultiAssigneePicker
+                employees={employees}
+                value={templateDraft.nguoiMacDinh || ''}
+                onChange={(formatted) =>
+                  setTemplateDraft((prev) => ({ ...prev, nguoiMacDinh: formatted }))
+                }
+                label={`Người Phụ Trách Mặc Định (${templateArea})`}
+                accentColor="amber"
+              />
+
+              <label className="flex items-start gap-2.5 p-3 rounded-xl bg-slate-950/60 border border-slate-800 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={applyTemplateToPending}
+                  onChange={(e) => setApplyTemplateToPending(e.target.checked)}
+                  className="mt-0.5 rounded border-slate-600 bg-slate-800 text-amber-500"
+                />
+                <span className="text-slate-300 leading-relaxed">
+                  Đồng bộ tiêu đề, mô tả công việc & hạn hoàn thành mới vào các phiếu{' '}
+                  <strong className="text-white">{templateArea}</strong> chưa hoàn thành hiện tại.
+                </span>
+              </label>
+
+              <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTemplateModalOpen(false)}
+                  className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold"
+                >
+                  Lưu Công Việc Mẫu
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 1: ASSIGN / EDIT AREA CHECK (WEEKLY MON-SAT RANGE SUPPORT) */}
       {isAssignModalOpen && canManageAssignments && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4">
           <div className="w-full max-w-2xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
               <h3 className="text-base font-bold text-white">
                 {editingCheck
-                  ? `Chỉnh Sửa Phân Công & Mô Tả (${editingCheck.khuVuc})`
-                  : 'Giao Việc Kiểm Tra Đầu Ngày Theo Khu Vực'}
+                  ? `Chỉnh Sửa Lịch & Mô Tả (${editingCheck.khuVuc})`
+                  : 'Giao Việc Kiểm Tra Đầu Ngày (Theo Tuần / Ngày)'}
               </h3>
               <button
                 type="button"
@@ -862,8 +1480,8 @@ export const MorningChecksTab: React.FC = () => {
             </div>
 
             <form onSubmit={handleSaveAssignment} className="p-5 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                <div className="sm:col-span-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
                   <label className="block text-slate-300 font-semibold mb-1">Khu Vực *</label>
                   <select
                     value={formArea}
@@ -878,38 +1496,158 @@ export const MorningChecksTab: React.FC = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Ngày Kiểm Tra *</label>
-                  <input
-                    type="date"
-                    required
-                    value={formDate}
-                    onChange={(e) => setFormDate(e.target.value)}
+                  <label className="block text-slate-300 font-semibold mb-1">Ca Làm Việc</label>
+                  <select
+                    value={formShift}
+                    onChange={(e) => setFormShift(e.target.value as DailyAreaCheckShift)}
                     className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
-                  />
+                  >
+                    {SHIFTS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Ca / Hạn</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <select
-                      value={formShift}
-                      onChange={(e) => setFormShift(e.target.value as DailyAreaCheckShift)}
-                      className="px-2 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
+                  <label className="block text-slate-300 font-semibold mb-1">Hạn Hàng Ngày</label>
+                  <input
+                    type="text"
+                    value={formDeadline}
+                    onChange={(e) => setFormDeadline(e.target.value)}
+                    placeholder="08:30"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 tabular-nums"
+                  />
+                </div>
+              </div>
+
+              {/* Date Range / Mon-Sat Selector */}
+              <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setFormScheduleMode('range')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                        formScheduleMode === 'range'
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
                     >
-                      {SHIFTS.map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                    <input
-                      type="text"
-                      value={formDeadline}
-                      onChange={(e) => setFormDeadline(e.target.value)}
-                      placeholder="08:30"
-                      className="px-2 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100 tabular-nums"
-                    />
+                      Khoảng ngày / Theo tuần (T2–T7)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFormScheduleMode('single')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                        formScheduleMode === 'single'
+                          ? 'bg-cyan-600 text-white'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      1 ngày cụ thể
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        applyWeekPreset(
+                          0,
+                          setFormStartDate,
+                          setFormEndDate,
+                          setFormWeekdays,
+                          setFormScheduleMode
+                        )
+                      }
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px] font-semibold"
+                    >
+                      Tuần này (T2–T7)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        applyWeekPreset(
+                          1,
+                          setFormStartDate,
+                          setFormEndDate,
+                          setFormWeekdays,
+                          setFormScheduleMode
+                        )
+                      }
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 text-[11px] font-semibold"
+                    >
+                      Tuần sau (T2–T7)
+                    </button>
                   </div>
                 </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      {formScheduleMode === 'range' ? 'Từ Ngày *' : 'Ngày Kiểm Tra *'}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={formStartDate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormStartDate(v);
+                        if (formEndDate < v) setFormEndDate(v);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
+                    />
+                  </div>
+                  {formScheduleMode === 'range' && (
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Đến Ngày *</label>
+                      <input
+                        type="date"
+                        required
+                        min={formStartDate}
+                        value={formEndDate}
+                        onChange={(e) => setFormEndDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {formScheduleMode === 'range' && (
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-slate-400 mr-1">Các thứ thực hiện:</span>
+                      {WEEKDAY_OPTIONS.map((wd) => {
+                        const active = formWeekdays.includes(wd.value);
+                        return (
+                          <button
+                            key={wd.value}
+                            type="button"
+                            onClick={() => toggleWeekday(formWeekdays, setFormWeekdays, wd.value)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${
+                              active
+                                ? 'bg-cyan-600/30 text-cyan-200 border-cyan-500/60'
+                                : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                            }`}
+                          >
+                            {wd.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="text-[11px] text-slate-300">
+                      Sẽ tạo lịch kiểm tra cho{' '}
+                      <strong className="text-cyan-300">{formScheduledPreview.length} ngày</strong>:{' '}
+                      <span className="text-slate-400">
+                        {formScheduledPreview
+                          .map((d) => `${getWeekdayLabelVN(d)} ${formatShortDate(d)}`)
+                          .join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div>
@@ -930,10 +1668,15 @@ export const MorningChecksTab: React.FC = () => {
                   </label>
                   <button
                     type="button"
-                    onClick={() => setFormDescription(AREA_META[formArea].defaultDescription)}
+                    onClick={() => {
+                      const tpl = morningCheckTemplates[formArea];
+                      setFormTitle(tpl.tieuDe);
+                      setFormDescription(tpl.moTaCongViec);
+                      setFormDeadline(tpl.hanHoanThanh);
+                    }}
                     className="text-[11px] text-cyan-400 hover:underline font-semibold"
                   >
-                    Dùng mẫu chuẩn {formArea}
+                    Nạp từ công việc mẫu {formArea}
                   </button>
                 </div>
                 <textarea
@@ -976,7 +1719,7 @@ export const MorningChecksTab: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 2: QUICK 3-AREA BATCH ASSIGNMENT (ADMIN / MANAGER / ENGINEER) */}
+      {/* MODAL 2: QUICK 3-AREA BATCH ASSIGNMENT (WEEKLY MON-SAT RANGE) */}
       {isBatchModalOpen && canManageAssignments && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4">
           <div className="w-full max-w-3xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -994,47 +1737,169 @@ export const MorningChecksTab: React.FC = () => {
             </div>
 
             <form onSubmit={handleCreateBatch3Areas} className="p-5 overflow-y-auto space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Ngày Kiểm Tra</label>
-                  <input
-                    type="date"
-                    required
-                    value={batchDate}
-                    onChange={(e) => setBatchDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
-                  />
+              <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setBatchScheduleMode('range')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                        batchScheduleMode === 'range'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      Theo tuần / Khoảng ngày (T2–T7)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBatchScheduleMode('single')}
+                      className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                        batchScheduleMode === 'single'
+                          ? 'bg-emerald-600 text-white'
+                          : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                      }`}
+                    >
+                      1 ngày
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        applyWeekPreset(
+                          0,
+                          setBatchStartDate,
+                          setBatchEndDate,
+                          setBatchWeekdays,
+                          setBatchScheduleMode
+                        )
+                      }
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 text-[11px] font-semibold"
+                    >
+                      Tuần này (T2–T7)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        applyWeekPreset(
+                          1,
+                          setBatchStartDate,
+                          setBatchEndDate,
+                          setBatchWeekdays,
+                          setBatchScheduleMode
+                        )
+                      }
+                      className="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-emerald-300 text-[11px] font-semibold"
+                    >
+                      Tuần sau (T2–T7)
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-slate-300 font-semibold mb-1">Ca Làm Việc</label>
-                  <select
-                    value={batchShift}
-                    onChange={(e) => setBatchShift(e.target.value as DailyAreaCheckShift)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
-                  >
-                    {SHIFTS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">
+                      {batchScheduleMode === 'range' ? 'Từ Ngày' : 'Ngày Kiểm Tra'}
+                    </label>
+                    <input
+                      type="date"
+                      required
+                      value={batchStartDate}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setBatchStartDate(v);
+                        if (batchEndDate < v) setBatchEndDate(v);
+                      }}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
+                    />
+                  </div>
+                  {batchScheduleMode === 'range' && (
+                    <div>
+                      <label className="block text-slate-300 font-semibold mb-1">Đến Ngày</label>
+                      <input
+                        type="date"
+                        required
+                        min={batchStartDate}
+                        value={batchEndDate}
+                        onChange={(e) => setBatchEndDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-slate-300 font-semibold mb-1">Ca Làm Việc</label>
+                    <select
+                      value={batchShift}
+                      onChange={(e) => setBatchShift(e.target.value as DailyAreaCheckShift)}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-slate-100"
+                    >
+                      {SHIFTS.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
+
+                {batchScheduleMode === 'range' && (
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-slate-400 mr-1">Các thứ thực hiện:</span>
+                      {WEEKDAY_OPTIONS.map((wd) => {
+                        const active = batchWeekdays.includes(wd.value);
+                        return (
+                          <button
+                            key={wd.value}
+                            type="button"
+                            onClick={() => toggleWeekday(batchWeekdays, setBatchWeekdays, wd.value)}
+                            className={`px-2.5 py-1 rounded-md text-[11px] font-bold border transition ${
+                              active
+                                ? 'bg-emerald-600/30 text-emerald-200 border-emerald-500/60'
+                                : 'bg-slate-900 text-slate-400 border-slate-700 hover:border-slate-500'
+                            }`}
+                          >
+                            {wd.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="text-[11px] text-slate-300">
+                      Áp dụng cho{' '}
+                      <strong className="text-emerald-300">
+                        {batchScheduledPreview.length} ngày
+                      </strong>
+                      :{' '}
+                      <span className="text-slate-400">
+                        {batchScheduledPreview
+                          .map((d) => `${getWeekdayLabelVN(d)} ${formatShortDate(d)}`)
+                          .join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
                 {AREAS.map((area) => {
-                  const meta = AREA_META[area];
-                  const Icon = meta.icon;
+                  const styleMeta = AREA_STYLE_META[area];
+                  const Icon = styleMeta.icon;
                   return (
                     <div
                       key={area}
                       className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3"
                     >
-                      <div className="flex items-center gap-2 font-bold text-white">
-                        <span className={`p-1.5 rounded-lg ${meta.iconBg}`}>
-                          <Icon className="w-4 h-4" />
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 font-bold text-white">
+                          <span className={`p-1.5 rounded-lg ${styleMeta.iconBg}`}>
+                            <Icon className="w-4 h-4" />
+                          </span>
+                          <span>{area}</span>
+                        </div>
+                        <span className="text-[11px] text-slate-400">
+                          Hạn mẫu: {morningCheckTemplates[area].hanHoanThanh}
                         </span>
-                        <span>{area}</span>
                       </div>
                       <div>
                         <label className="block text-slate-400 mb-1">
@@ -1075,7 +1940,7 @@ export const MorningChecksTab: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
                 >
-                  Tạo Phiếu Cho Các Khu Vực
+                  Tạo Lịch Cho Các Khu Vực
                 </button>
               </div>
             </form>
@@ -1083,18 +1948,19 @@ export const MorningChecksTab: React.FC = () => {
         </div>
       )}
 
-      {/* MODAL 3: FIELD REPORT SUBMISSION BY ASSIGNED TECHNICIAN */}
+      {/* MODAL 3: PER-DAY FIELD REPORT SUBMISSION BY ASSIGNED TECHNICIAN */}
       {reportingCheck && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-3 sm:p-4">
           <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-5 py-4 border-b border-slate-800 flex items-center justify-between">
               <div>
                 <h3 className="text-base font-bold text-white">
-                  Ghi Nhận Báo Cáo Kiểm Tra — {reportingCheck.khuVuc}
+                  Báo Cáo Theo Ngày — {reportingCheck.khuVuc}
                 </h3>
                 <p className="text-[11px] text-slate-400">
-                  {formatDateVN(reportingCheck.ngayKiemTra)} · {reportingCheck.caLamViec} · Người
-                  báo cáo: <span className="text-cyan-300 font-semibold">{currentUser.tenNhanVien}</span>
+                  {getWeekdayLabelVN(reportDate)} {formatDateVN(reportDate)} ·{' '}
+                  {reportingCheck.caLamViec} · Người báo cáo:{' '}
+                  <span className="text-cyan-300 font-semibold">{currentUser.tenNhanVien}</span>
                 </p>
               </div>
               <button
@@ -1107,6 +1973,48 @@ export const MorningChecksTab: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmitReport} className="p-5 overflow-y-auto space-y-4 text-xs">
+              {/* Day Strip Selector */}
+              {(() => {
+                const scheduled = getScheduledDatesForAreaCheck(reportingCheck);
+                const dayMap = getDayReportMap(reportingCheck);
+                return (
+                  <div className="space-y-1.5">
+                    <label className="block text-slate-300 font-semibold">
+                      Chọn Ngày Cập Nhật Báo Cáo:
+                    </label>
+                    <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
+                      {scheduled.map((d) => {
+                        const existingDay = dayMap.get(d);
+                        const isSelected = d === reportDate;
+                        const isDone = existingDay?.trangThai === 'Đã hoàn thành';
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => handleSwitchReportDateInModal(d)}
+                            className={`px-2 py-1.5 rounded-lg border text-left transition ${
+                              isSelected
+                                ? 'bg-cyan-600 text-white border-cyan-400 shadow'
+                                : isDone
+                                ? 'bg-emerald-950/40 text-emerald-200 border-emerald-500/40 hover:border-emerald-400'
+                                : 'bg-slate-800 text-slate-300 border-slate-700 hover:border-slate-500'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1 font-bold text-[11px]">
+                              <span>{getWeekdayLabelVN(d)}</span>
+                              {isDone && <CheckCircle2 className="w-3 h-3 text-emerald-400" />}
+                            </div>
+                            <div className="text-[10px] opacity-90 tabular-nums">
+                              {formatShortDate(d)}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Show Area Task Description for reference */}
               <div className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
                 <div className="text-[11px] font-bold text-cyan-300">
@@ -1120,7 +2028,7 @@ export const MorningChecksTab: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-semibold mb-1">
-                    Trạng Thái Thực Hiện
+                    Trạng Thái Ngày {formatShortDate(reportDate)}
                   </label>
                   <select
                     value={reportStatus}
@@ -1154,7 +2062,8 @@ export const MorningChecksTab: React.FC = () => {
 
               <div>
                 <label className="block text-slate-300 font-semibold mb-1">
-                  Nội Dung Báo Cáo Hiện Trường *
+                  Nội Dung Báo Cáo Hiện Trường ({getWeekdayLabelVN(reportDate)}{' '}
+                  {formatDateVN(reportDate)}) *
                 </label>
                 <textarea
                   rows={4}
@@ -1185,7 +2094,7 @@ export const MorningChecksTab: React.FC = () => {
                   type="submit"
                   className="px-5 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-bold"
                 >
-                  Lưu Báo Cáo Kiểm Tra
+                  Lưu Báo Cáo Ngày {formatShortDate(reportDate)}
                 </button>
               </div>
             </form>
@@ -1199,12 +2108,16 @@ export const MorningChecksTab: React.FC = () => {
           <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
             <div className="flex items-center gap-3 text-rose-400">
               <AlertTriangle className="w-6 h-6 shrink-0" />
-              <h3 className="text-base font-bold text-white">Xác Nhận Xóa Phiếu Kiểm Tra</h3>
+              <h3 className="text-base font-bold text-white">Xác Nhận Xóa Lịch Kiểm Tra</h3>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
               Bạn có chắc chắn muốn xóa phiếu kiểm tra đầu ngày khu vực{' '}
               <strong className="text-white">{checkToDelete.khuVuc}</strong> (
-              {formatDateVN(checkToDelete.ngayKiemTra)} · {checkToDelete.caLamViec})?
+              {formatDateVN(checkToDelete.ngayKiemTra)}
+              {checkToDelete.ngayKetThuc && checkToDelete.ngayKetThuc !== checkToDelete.ngayKiemTra
+                ? ` → ${formatDateVN(checkToDelete.ngayKetThuc)}`
+                : ''}{' '}
+              · {checkToDelete.caLamViec})?
             </p>
             <div className="flex items-center justify-end gap-2 pt-2">
               <button

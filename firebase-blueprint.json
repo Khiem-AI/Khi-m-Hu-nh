@@ -522,6 +522,8 @@
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 80 },
         "ngayKiemTra": { "type": "string", "maxLength": 32 },
+        "ngayKetThuc": { "type": "string", "maxLength": 32 },
+        "ngayTrongTuan": { "type": "array" },
         "caLamViec": { "type": "string", "enum": ["Ca Sáng", "Ca Chiều", "Ca Đêm"] },
         "khuVuc": { "type": "string", "enum": ["Vòng trong", "Vòng Ngoài", "Phòng Utility"] },
         "tieuDe": { "type": "string", "maxLength": 300 },
@@ -535,6 +537,7 @@
         "nguoiBaoCao": { "type": "string", "maxLength": 160 },
         "thoiGianBaoCao": { "type": "string", "maxLength": 40 },
         "anhHienTruong": { "type": "string", "maxLength": 450000 },
+        "baoCaoTheoNgay": { "type": "array" },
         "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
         "allowedEmails": { "type": "array" },
         "createdAt": { "type": "string", "format": "date-time" },

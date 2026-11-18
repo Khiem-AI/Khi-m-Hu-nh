@@ -32,6 +32,10 @@ import {
   DailyAreaCheck,
   DailyAreaCheckResult,
   DailyAreaCheckStatus,
+  DailyAreaDayReport,
+  DailyInspectionArea,
+  MorningCheckAreaTemplate,
+  MorningCheckTemplatesMap,
 } from '../types/cmms';
 import { buildProfessionalEmailHtml } from '../utils/emailTemplates';
 import {
@@ -76,6 +80,8 @@ import {
   canAccessBackup,
   canDeleteRecords,
   canManageMaintenancePlans,
+  DEFAULT_MORNING_CHECK_TEMPLATES,
+  getScheduledDatesForAreaCheck,
 } from '../utils/cmmsLogic';
 import {
   GmailAccountInfo,
@@ -154,6 +160,7 @@ interface CMMSContextType {
   tools: ToolItem[];
   toolLogs: ToolBorrowLog[];
   dailyAreaChecks: DailyAreaCheck[];
+  morningCheckTemplates: MorningCheckTemplatesMap;
   currentUser: Employee;
 
   // Equipment Actions
@@ -257,10 +264,17 @@ interface CMMSContextType {
   deleteProject: (id: string) => void;
 
   // Daily Start-Of-Day Area Checks ("Công Việc Đầu Ngày")
+  updateMorningCheckTemplate: (
+    area: DailyInspectionArea,
+    template: MorningCheckAreaTemplate,
+    applyToPendingChecks?: boolean
+  ) => void;
+  resetMorningCheckTemplates: () => void;
   addDailyAreaCheck: (check: Omit<DailyAreaCheck, 'id'>) => DailyAreaCheck | null;
   updateDailyAreaCheck: (check: DailyAreaCheck) => void;
   submitDailyAreaCheckReport: (params: {
     id: string;
+    ngayBaoCao?: string;
     trangThai: DailyAreaCheckStatus;
     ketQua: DailyAreaCheckResult;
     baoCaoThucTe: string;
@@ -656,6 +670,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [dailyAreaChecks, setDailyAreaChecks] = useState<DailyAreaCheck[]>(() =>
     loadStorage('dailyAreaChecks', INITIAL_DAILY_AREA_CHECKS)
   );
+  const [morningCheckTemplates, setMorningCheckTemplates] = useState<MorningCheckTemplatesMap>(() => ({
+    ...DEFAULT_MORNING_CHECK_TEMPLATES,
+    ...loadStorage<Partial<MorningCheckTemplatesMap>>('morningCheckTemplates', {}),
+  }));
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('cmms_authenticated') === 'true';
@@ -728,6 +746,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     tools,
     toolLogs,
     dailyAreaChecks,
+    morningCheckTemplates,
     emailLogs,
     auditLogs,
     emailConfig,
@@ -753,6 +772,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tools,
       toolLogs,
       dailyAreaChecks,
+      morningCheckTemplates,
       emailLogs,
       auditLogs,
       emailConfig,
@@ -776,6 +796,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     tools,
     toolLogs,
     dailyAreaChecks,
+    morningCheckTemplates,
     emailLogs,
     auditLogs,
     emailConfig,
@@ -1046,6 +1067,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }));
               } else if (s.key === 'tariff_config' && s.payload) {
                 setTariffConfig((prev) => ({ ...prev, ...(s.payload as Partial<EnergyTariffConfig>) }));
+              } else if (s.key === 'morning_check_templates' && s.payload) {
+                setMorningCheckTemplates((prev) => ({
+                  ...DEFAULT_MORNING_CHECK_TEMPLATES,
+                  ...prev,
+                  ...(s.payload as Partial<MorningCheckTemplatesMap>),
+                }));
               }
             }
           },
@@ -1451,6 +1478,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveStorage('tools', tools), [tools]);
   useEffect(() => saveStorage('toolLogs', toolLogs), [toolLogs]);
   useEffect(() => saveStorage('dailyAreaChecks', dailyAreaChecks), [dailyAreaChecks]);
+  useEffect(() => saveStorage('morningCheckTemplates', morningCheckTemplates), [morningCheckTemplates]);
   useEffect(() => saveStorage('webNotifications', webNotifications), [webNotifications]);
 
   useEffect(() => {
@@ -2184,6 +2212,74 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Daily Start-Of-Day Area Checks ("Công Việc Đầu Ngày")
+  const updateMorningCheckTemplate = (
+    area: DailyInspectionArea,
+    template: MorningCheckAreaTemplate,
+    applyToPendingChecks = false
+  ) => {
+    if (!canManageMaintenancePlans(currentUserRef.current)) return;
+    const normalized: MorningCheckAreaTemplate = {
+      khuVuc: area,
+      tieuDe: template.tieuDe.trim() || DEFAULT_MORNING_CHECK_TEMPLATES[area].tieuDe,
+      moTaCongViec: template.moTaCongViec.trim() || DEFAULT_MORNING_CHECK_TEMPLATES[area].moTaCongViec,
+      hanHoanThanh: template.hanHoanThanh.trim() || DEFAULT_MORNING_CHECK_TEMPLATES[area].hanHoanThanh,
+      nguoiMacDinh: (template.nguoiMacDinh || '').trim(),
+    };
+    const nextTemplates: MorningCheckTemplatesMap = {
+      ...morningCheckTemplates,
+      [area]: normalized,
+    };
+    setMorningCheckTemplates(nextTemplates);
+    syncDoc('settings', 'morning_check_templates', {
+      key: 'morning_check_templates',
+      payload: nextTemplates as unknown as Record<string, unknown>,
+    });
+
+    if (applyToPendingChecks) {
+      const updatedDocs: DailyAreaCheck[] = [];
+      setDailyAreaChecks((prev) =>
+        prev.map((c) => {
+          if (c.khuVuc === area && c.trangThai !== 'Đã hoàn thành') {
+            const nextItem: DailyAreaCheck = {
+              ...c,
+              tieuDe: normalized.tieuDe,
+              moTaCongViec: normalized.moTaCongViec,
+              hanHoanThanh: normalized.hanHoanThanh,
+            };
+            updatedDocs.push(nextItem);
+            return nextItem;
+          }
+          return c;
+        })
+      );
+      updatedDocs.forEach((docItem) => {
+        syncDoc('daily_area_checks', docItem.id, sanitizeDailyAreaCheck(docItem));
+      });
+    }
+
+    addAuditLog(
+      'Sửa',
+      'Công Việc Đầu Ngày',
+      `Mẫu ${area}`,
+      `Cập nhật công việc mẫu khu vực ${area}${applyToPendingChecks ? ' và đồng bộ vào các phiếu đang chờ' : ''}`
+    );
+  };
+
+  const resetMorningCheckTemplates = () => {
+    if (!canManageMaintenancePlans(currentUserRef.current)) return;
+    setMorningCheckTemplates(DEFAULT_MORNING_CHECK_TEMPLATES);
+    syncDoc('settings', 'morning_check_templates', {
+      key: 'morning_check_templates',
+      payload: DEFAULT_MORNING_CHECK_TEMPLATES as unknown as Record<string, unknown>,
+    });
+    addAuditLog(
+      'Cập nhật',
+      'Công Việc Đầu Ngày',
+      'Công việc mẫu',
+      'Khôi phục 3 mẫu công việc đầu ngày về thiết lập mặc định'
+    );
+  };
+
   const addDailyAreaCheck = (checkData: Omit<DailyAreaCheck, 'id'>): DailyAreaCheck | null => {
     if (!canManageMaintenancePlans(currentUserRef.current)) return null;
     const newCheck: DailyAreaCheck = {
@@ -2193,11 +2289,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
     setDailyAreaChecks((prev) => [newCheck, ...prev]);
     syncDoc('daily_area_checks', newCheck.id, sanitizeDailyAreaCheck(newCheck));
+    const rangeLabel =
+      newCheck.ngayKetThuc && newCheck.ngayKetThuc !== newCheck.ngayKiemTra
+        ? `${newCheck.ngayKiemTra} → ${newCheck.ngayKetThuc}`
+        : newCheck.ngayKiemTra;
     addAuditLog(
       'Thêm',
       'Công Việc Đầu Ngày',
       newCheck.khuVuc,
-      `Phân công kiểm tra ${newCheck.khuVuc} (${newCheck.ngayKiemTra} - ${newCheck.caLamViec}) cho ${newCheck.nguoiDuocGiao || 'Chưa phân công'}`
+      `Phân công kiểm tra ${newCheck.khuVuc} (${rangeLabel} - ${newCheck.caLamViec}) cho ${newCheck.nguoiDuocGiao || 'Chưa phân công'}`
     );
     return newCheck;
   };
@@ -2205,16 +2305,21 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateDailyAreaCheck = (check: DailyAreaCheck) => {
     setDailyAreaChecks((prev) => prev.map((item) => (item.id === check.id ? check : item)));
     syncDoc('daily_area_checks', check.id, sanitizeDailyAreaCheck(check));
+    const rangeLabel =
+      check.ngayKetThuc && check.ngayKetThuc !== check.ngayKiemTra
+        ? `${check.ngayKiemTra} → ${check.ngayKetThuc}`
+        : check.ngayKiemTra;
     addAuditLog(
       'Sửa',
       'Công Việc Đầu Ngày',
       check.khuVuc,
-      `Cập nhật công việc đầu ngày ${check.khuVuc} (${check.ngayKiemTra}): ${check.trangThai} - ${check.ketQua}`
+      `Cập nhật công việc đầu ngày ${check.khuVuc} (${rangeLabel}): ${check.trangThai} - ${check.ketQua}`
     );
   };
 
   const submitDailyAreaCheckReport = (params: {
     id: string;
+    ngayBaoCao?: string;
     trangThai: DailyAreaCheckStatus;
     ketQua: DailyAreaCheckResult;
     baoCaoThucTe: string;
@@ -2224,17 +2329,100 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!existing) return;
     const actor = currentUserRef.current;
     const now = new Date();
-    const formattedTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+    const nowYmd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
       now.getDate()
-    ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const updated: DailyAreaCheck = {
-      ...existing,
+    ).padStart(2, '0')}`;
+    const formattedTime = `${nowYmd} ${String(now.getHours()).padStart(2, '0')}:${String(
+      now.getMinutes()
+    ).padStart(2, '0')}`;
+
+    const scheduledDates = getScheduledDatesForAreaCheck(existing);
+    const targetDate = (params.ngayBaoCao || existing.ngayKiemTra || scheduledDates[0] || nowYmd).trim();
+
+    const baseReports: DailyAreaDayReport[] = Array.isArray(existing.baoCaoTheoNgay)
+      ? existing.baoCaoTheoNgay.map((r) => ({ ...r }))
+      : [];
+
+    // Preserve legacy single-day report under existing.ngayKiemTra if needed
+    if (
+      baseReports.length === 0 &&
+      existing.baoCaoThucTe &&
+      existing.ngayKiemTra &&
+      targetDate !== existing.ngayKiemTra
+    ) {
+      baseReports.push({
+        ngay: existing.ngayKiemTra,
+        trangThai: existing.trangThai,
+        ketQua: existing.ketQua,
+        baoCaoThucTe: existing.baoCaoThucTe,
+        nguoiBaoCao: existing.nguoiBaoCao,
+        thoiGianBaoCao: existing.thoiGianBaoCao,
+        anhHienTruong: existing.anhHienTruong,
+      });
+    }
+
+    const existingDayIdx = baseReports.findIndex((r) => r.ngay === targetDate);
+    const existingDay = existingDayIdx >= 0 ? baseReports[existingDayIdx] : undefined;
+    const newDayReport: DailyAreaDayReport = {
+      ngay: targetDate,
       trangThai: params.trangThai,
       ketQua: params.ketQua,
       baoCaoThucTe: params.baoCaoThucTe.trim(),
       nguoiBaoCao: actor.tenNhanVien,
       thoiGianBaoCao: formattedTime,
-      anhHienTruong: params.anhHienTruong !== undefined ? params.anhHienTruong : existing.anhHienTruong,
+      anhHienTruong:
+        params.anhHienTruong !== undefined ? params.anhHienTruong : existingDay?.anhHienTruong,
+    };
+
+    if (existingDayIdx >= 0) {
+      baseReports[existingDayIdx] = newDayReport;
+    } else {
+      baseReports.push(newDayReport);
+    }
+    baseReports.sort((a, b) => a.ngay.localeCompare(b.ngay));
+
+    // Roll up overall weekly/check status and worst-case result across scheduled days
+    const reportByDate = new Map(baseReports.map((r) => [r.ngay, r]));
+    const allScheduledDone =
+      scheduledDates.length > 0 &&
+      scheduledDates.every((d) => reportByDate.get(d)?.trangThai === 'Đã hoàn thành');
+    const anyStarted = baseReports.some(
+      (r) =>
+        r.trangThai === 'Đã hoàn thành' ||
+        r.trangThai === 'Đang kiểm tra' ||
+        Boolean(r.baoCaoThucTe && r.baoCaoThucTe.trim())
+    );
+    const overallStatus: DailyAreaCheckStatus = allScheduledDone
+      ? 'Đã hoàn thành'
+      : anyStarted
+      ? 'Đang kiểm tra'
+      : 'Chờ kiểm tra';
+
+    const severityRank: Record<DailyAreaCheckResult, number> = {
+      'Chưa đánh giá': 0,
+      'Bình thường': 1,
+      'Cần theo dõi': 2,
+      'Có sự cố': 3,
+    };
+    let overallResult: DailyAreaCheckResult = 'Chưa đánh giá';
+    for (const r of baseReports) {
+      if ((severityRank[r.ketQua] || 0) > (severityRank[overallResult] || 0)) {
+        overallResult = r.ketQua;
+      }
+    }
+
+    const updated: DailyAreaCheck = {
+      ...existing,
+      trangThai: overallStatus,
+      ketQua: overallResult,
+      baoCaoThucTe: newDayReport.baoCaoThucTe,
+      nguoiBaoCao: actor.tenNhanVien,
+      thoiGianBaoCao: formattedTime,
+      anhHienTruong:
+        newDayReport.anhHienTruong !== undefined
+          ? newDayReport.anhHienTruong
+          : existing.anhHienTruong,
+      baoCaoTheoNgay: baseReports,
     };
     setDailyAreaChecks((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
     syncDoc('daily_area_checks', updated.id, sanitizeDailyAreaCheck(updated));
@@ -2242,14 +2430,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       params.trangThai === 'Đã hoàn thành' ? 'Hoàn thành' : 'Cập nhật',
       'Công Việc Đầu Ngày',
       updated.khuVuc,
-      `${actor.tenNhanVien} ghi nhận báo cáo ${updated.khuVuc} (${updated.ngayKiemTra}): ${updated.ketQua} — ${updated.baoCaoThucTe || 'Không có ghi chú'}`
+      `${actor.tenNhanVien} ghi nhận báo cáo ${updated.khuVuc} ngày ${targetDate}: ${params.ketQua} — ${newDayReport.baoCaoThucTe || 'Không có ghi chú'}`
     );
 
     if (params.ketQua === 'Có sự cố' || params.ketQua === 'Cần theo dõi') {
       triggerWebNotification({
         type: 'BAO_CAO_HOAN_THANH',
-        title: `[Kiểm Tra Đầu Ngày] ${updated.khuVuc} — ${params.ketQua}`,
-        message: `${actor.tenNhanVien} vừa báo cáo ${updated.khuVuc} (${updated.caLamViec}): ${params.baoCaoThucTe || params.ketQua}`,
+        title: `[Kiểm Tra Đầu Ngày] ${updated.khuVuc} (${targetDate}) — ${params.ketQua}`,
+        message: `${actor.tenNhanVien} vừa báo cáo ${updated.khuVuc} (${targetDate} · ${updated.caLamViec}): ${params.baoCaoThucTe || params.ketQua}`,
         relatedId: updated.id,
         targetTab: 'morning_checks',
       });
@@ -3698,6 +3886,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setTools(INITIAL_TOOLS);
     setToolLogs(INITIAL_TOOL_LOGS);
     setDailyAreaChecks(INITIAL_DAILY_AREA_CHECKS);
+    setMorningCheckTemplates(DEFAULT_MORNING_CHECK_TEMPLATES);
     applyCurrentUser(INITIAL_EMPLOYEES[0], false);
     localStorage.clear();
     if (cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
@@ -3722,6 +3911,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           tools: INITIAL_TOOLS,
           toolLogs: INITIAL_TOOL_LOGS,
           dailyAreaChecks: INITIAL_DAILY_AREA_CHECKS,
+          morningCheckTemplates: DEFAULT_MORNING_CHECK_TEMPLATES,
           emailLogs: INITIAL_EMAIL_LOGS,
           auditLogs: INITIAL_AUDIT_LOGS,
           emailConfig: INITIAL_EMAIL_CONFIG,
@@ -3754,6 +3944,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tools,
       toolLogs,
       dailyAreaChecks,
+      morningCheckTemplates,
       emailConfig,
       emailLogs,
       tariffConfig,
@@ -3787,6 +3978,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Array.isArray(data.tools)) setTools(data.tools);
       if (Array.isArray(data.toolLogs)) setToolLogs(data.toolLogs);
       if (Array.isArray(data.dailyAreaChecks)) setDailyAreaChecks(data.dailyAreaChecks);
+      if (data.morningCheckTemplates && typeof data.morningCheckTemplates === 'object') {
+        setMorningCheckTemplates({
+          ...DEFAULT_MORNING_CHECK_TEMPLATES,
+          ...data.morningCheckTemplates,
+        });
+      }
       if (data.tariffConfig && typeof data.tariffConfig === 'object') setTariffConfig(data.tariffConfig);
       if (data.emailConfig && typeof data.emailConfig === 'object') setEmailConfig(data.emailConfig);
       addAuditLog('Cập nhật', 'Sao Lưu & Khôi Phục', 'Toàn bộ dữ liệu', 'Khôi phục thành công từ file sao lưu');
@@ -3809,6 +4006,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           tools: Array.isArray(data.tools) ? data.tools : tools,
           toolLogs: Array.isArray(data.toolLogs) ? data.toolLogs : toolLogs,
           dailyAreaChecks: Array.isArray(data.dailyAreaChecks) ? data.dailyAreaChecks : dailyAreaChecks,
+          morningCheckTemplates:
+            data.morningCheckTemplates && typeof data.morningCheckTemplates === 'object'
+              ? { ...DEFAULT_MORNING_CHECK_TEMPLATES, ...data.morningCheckTemplates }
+              : morningCheckTemplates,
           emailLogs: Array.isArray(data.emailLogs) ? data.emailLogs : emailLogs,
           auditLogs,
           emailConfig:
@@ -3851,6 +4052,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         tools,
         toolLogs,
         dailyAreaChecks,
+        morningCheckTemplates,
         currentUser,
         emailConfig,
         emailLogs,
@@ -3927,6 +4129,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addProject,
         updateProject,
         deleteProject,
+        updateMorningCheckTemplate,
+        resetMorningCheckTemplates,
         addDailyAreaCheck,
         updateDailyAreaCheck,
         submitDailyAreaCheckReport,

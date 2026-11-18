@@ -28,6 +28,7 @@ import {
   MaintenanceHistory,
   MaintenancePlan,
   MeterReading,
+  MorningCheckTemplatesMap,
   Power10Days,
   SafetyInspectionItem,
   SparePart,
@@ -570,9 +571,44 @@ export function sanitizeAuditLog(a: AuditLog): Record<string, unknown> {
 }
 
 export function sanitizeDailyAreaCheck(c: DailyAreaCheck): Record<string, unknown> {
+  const topPhoto = clampDataUrl(c.anhHienTruong);
+  let remainingPhotoBudget = Math.max(0, 650000 - (topPhoto ? topPhoto.length : 0));
+
+  const sanitizedDailyReports = Array.isArray(c.baoCaoTheoNgay)
+    ? c.baoCaoTheoNgay.slice(0, 31).map((r) => {
+        let dayPhoto: string | undefined;
+        const candidate = clampDataUrl(r.anhHienTruong);
+        if (candidate && candidate.length <= remainingPhotoBudget) {
+          dayPhoto = candidate;
+          remainingPhotoBudget -= candidate.length;
+        }
+        return stripUndefined({
+          ngay: clampString(r.ngay || '', 32),
+          trangThai: r.trangThai || 'Chờ kiểm tra',
+          ketQua: r.ketQua || 'Chưa đánh giá',
+          baoCaoThucTe: clampString(r.baoCaoThucTe || '', 4000),
+          nguoiBaoCao: r.nguoiBaoCao ? clampString(r.nguoiBaoCao, 160) : undefined,
+          thoiGianBaoCao: r.thoiGianBaoCao ? clampString(r.thoiGianBaoCao, 40) : undefined,
+          anhHienTruong: dayPhoto,
+        });
+      })
+    : undefined;
+
+  const sanitizedWeekdays = Array.isArray(c.ngayTrongTuan)
+    ? Array.from(
+        new Set(
+          c.ngayTrongTuan
+            .map((n) => Number(n))
+            .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6)
+        )
+      ).slice(0, 7)
+    : undefined;
+
   return stripUndefined({
     id: clampString(c.id, 80),
     ngayKiemTra: clampString(c.ngayKiemTra || '', 32),
+    ngayKetThuc: c.ngayKetThuc ? clampString(c.ngayKetThuc, 32) : undefined,
+    ngayTrongTuan: sanitizedWeekdays && sanitizedWeekdays.length > 0 ? sanitizedWeekdays : undefined,
     caLamViec: c.caLamViec || 'Ca Sáng',
     khuVuc: c.khuVuc || 'Vòng trong',
     tieuDe: clampString((c.tieuDe || '').trim() || 'Kiểm tra khu vực', 300),
@@ -585,7 +621,8 @@ export function sanitizeDailyAreaCheck(c: DailyAreaCheck): Record<string, unknow
     baoCaoThucTe: c.baoCaoThucTe ? clampString(c.baoCaoThucTe, 4000) : undefined,
     nguoiBaoCao: c.nguoiBaoCao ? clampString(c.nguoiBaoCao, 160) : undefined,
     thoiGianBaoCao: c.thoiGianBaoCao ? clampString(c.thoiGianBaoCao, 40) : undefined,
-    anhHienTruong: clampDataUrl(c.anhHienTruong),
+    anhHienTruong: topPhoto,
+    baoCaoTheoNgay: sanitizedDailyReports,
   });
 }
 
@@ -788,6 +825,7 @@ export interface WorkspaceSnapshotData {
   auditLogs: AuditLog[];
   emailConfig: EmailConfig;
   tariffConfig: EnergyTariffConfig;
+  morningCheckTemplates?: MorningCheckTemplatesMap;
 }
 
 export async function seedOrPushWorkspaceToFirestore(
@@ -882,6 +920,16 @@ export async function seedOrPushWorkspaceToFirestore(
     id: 'tariff_config',
     data: { key: 'tariff_config', payload: stripUndefined(snapshotData.tariffConfig as unknown as Record<string, unknown>) },
   });
+  if (snapshotData.morningCheckTemplates) {
+    ops.push({
+      col: 'settings',
+      id: 'morning_check_templates',
+      data: {
+        key: 'morning_check_templates',
+        payload: stripUndefined(snapshotData.morningCheckTemplates as unknown as Record<string, unknown>),
+      },
+    });
+  }
   ops.push({
     col: 'settings',
     id: 'workspace_meta',

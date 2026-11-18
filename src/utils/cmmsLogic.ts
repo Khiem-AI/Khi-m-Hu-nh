@@ -9,6 +9,8 @@ import {
   FacilityProject,
   InspectionCycle,
   InspectionStatus,
+  DailyAreaCheck,
+  MorningCheckTemplatesMap,
 } from '../types/cmms';
 
 /**
@@ -622,3 +624,97 @@ export function calculateNextInspectionDate(
   return `${y}-${m}-${d}`;
 }
 
+export const DEFAULT_MORNING_CHECK_TEMPLATES: MorningCheckTemplatesMap = {
+  'Vòng trong': {
+    khuVuc: 'Vòng trong',
+    tieuDe: 'Kiểm tra đầu ngày khu vực sản xuất & văn phòng (Vòng trong)',
+    moTaCongViec:
+      '1. Kiểm tra nhiệt độ & độ ẩm khu vực xưởng sản xuất, kho nguyên liệu và phòng sạch qua màn hình AHU/BMS.\n2. Kiểm tra áp suất chênh áp phòng Coating, phòng IQC và trạng thái hoạt động quạt hút/quạt cấp.\n3. Kiểm tra chiếu sáng nhà xưởng, văn phòng tầng 1–2, đèn Exit & cửa thoát hiểm không bị che chắn.\n4. Kiểm tra rò rỉ nước/dầu sàn nhà xưởng, khu vực FCU và nhà vệ sinh sản xuất.',
+    hanHoanThanh: '08:30',
+    nguoiMacDinh: 'Trương Quang Sơn',
+  },
+  'Vòng Ngoài': {
+    khuVuc: 'Vòng Ngoài',
+    tieuDe: 'Kiểm tra đầu ngày khuôn viên ngoài xưởng & trạm phụ (Vòng Ngoài)',
+    moTaCongViec:
+      '1. Kiểm tra hệ thống bơm nước sinh hoạt (WAT-DBV-01/02), mực nước bể ngầm 200m³ và rò rỉ đường ống cấp thoát nước ngoài trời.\n2. Kiểm tra khu vực trạm xử lý nước thải, đầu ra nước thải DI và hệ thống cống rãnh xung quanh nhà máy.\n3. Kiểm tra tủ điện chiếu sáng ngoài trời, hàng rào an toàn, cổng bảo vệ 1 & 2, hệ thống điều hòa nhà bảo vệ.\n4. Kiểm tra khu vực kho hóa chất, mái che, bảng cảnh báo an toàn & bình chữa cháy vòng ngoài.',
+    hanHoanThanh: '08:45',
+    nguoiMacDinh: 'Lê Văn Thắng',
+  },
+  'Phòng Utility': {
+    khuVuc: 'Phòng Utility',
+    tieuDe: 'Kiểm tra đầu ngày hệ thống trung tâm Phòng Utility',
+    moTaCongViec:
+      '1. Kiểm tra thông số vận hành Chiller 01, Chiller 02, Mini Chiller: nhiệt độ nước cấp/hồi, áp suất gas, độ rung và tiếng ồn bất thường.\n2. Kiểm tra cụm bơm nước lạnh (CHWP), bơm giải nhiệt (CLWP) và tháp giải nhiệt Cooling Tower 01–02.\n3. Kiểm tra cụm máy nén khí GA90-1/2, GA75-1, máy sấy khí FD220 và áp suất khí nén đường ống chính.\n4. Kiểm tra tủ điện phân phối MSB1–MSB5, nhiệt độ thanh cái, điện áp 3 pha, máy phát điện dự phòng & hệ thống nước DI.',
+    hanHoanThanh: '08:30',
+    nguoiMacDinh: 'Đỗ Hữu Thịnh, Trương Quang Sơn',
+  },
+};
+
+export const WEEK_DAYS_MON_SAT = [1, 2, 3, 4, 5, 6] as const;
+
+function parseYmdUtc(ymd: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((ymd || '').trim());
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatUtcYmd(d: Date): string {
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+export function getWeekdayLabelVN(ymd: string): string {
+  const d = parseYmdUtc(ymd);
+  if (!d) return '';
+  const day = d.getUTCDay();
+  return day === 0 ? 'CN' : `T${day + 1}`;
+}
+
+export function getWeekMonToSatRange(
+  offsetWeeks: number = 0,
+  referenceDate: Date = new Date()
+): { start: string; end: string } {
+  const baseUtc = new Date(
+    Date.UTC(referenceDate.getFullYear(), referenceDate.getMonth(), referenceDate.getDate())
+  );
+  const dow = baseUtc.getUTCDay(); // 0=Sun..6=Sat
+  const diffToMon = dow === 0 ? -6 : 1 - dow;
+  const mon = new Date(baseUtc.getTime());
+  mon.setUTCDate(baseUtc.getUTCDate() + diffToMon + offsetWeeks * 7);
+  const sat = new Date(mon.getTime());
+  sat.setUTCDate(mon.getUTCDate() + 5);
+  return {
+    start: formatUtcYmd(mon),
+    end: formatUtcYmd(sat),
+  };
+}
+
+export function getScheduledDatesForAreaCheck(
+  check: Pick<DailyAreaCheck, 'ngayKiemTra' | 'ngayKetThuc' | 'ngayTrongTuan'>
+): string[] {
+  const start = parseYmdUtc(check.ngayKiemTra);
+  if (!start) return check.ngayKiemTra ? [check.ngayKiemTra] : [];
+  const endRaw = check.ngayKetThuc ? parseYmdUtc(check.ngayKetThuc) : null;
+  if (!endRaw || endRaw.getTime() <= start.getTime()) {
+    return [formatUtcYmd(start)];
+  }
+  const allowedWeekdays =
+    Array.isArray(check.ngayTrongTuan) && check.ngayTrongTuan.length > 0
+      ? new Set(check.ngayTrongTuan)
+      : new Set<number>([1, 2, 3, 4, 5, 6]);
+  const dates: string[] = [];
+  const cur = new Date(start.getTime());
+  let guard = 0;
+  while (cur.getTime() <= endRaw.getTime() && guard < 31) {
+    if (allowedWeekdays.has(cur.getUTCDay())) {
+      dates.push(formatUtcYmd(cur));
+    }
+    cur.setUTCDate(cur.getUTCDate() + 1);
+    guard += 1;
+  }
+  return dates.length > 0 ? dates : [formatUtcYmd(start)];
+}
