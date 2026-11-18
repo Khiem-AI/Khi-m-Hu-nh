@@ -5,6 +5,7 @@ import { APP_VIEW_OPTIONS, DEFAULT_ENERGY_TARIFF_CONFIG } from '../src/types/cmm
 import { UI_TEXTS } from '../src/config/uiTexts';
 import { ADMIN_ONLY_VIEWS } from '../src/utils/cmmsLogic';
 import {
+  INITIAL_DAILY_AREA_CHECKS,
   INITIAL_DOCUMENTS,
   INITIAL_EMPLOYEES,
   INITIAL_EQUIPMENT,
@@ -28,19 +29,28 @@ const APP_PATH = path.join(ROOT_DIR, 'src/App.tsx');
 const FILE_DESCRIPTIONS: Record<string, string> = {
   'index.html': 'Tiêu đề trang web (<title>), thẻ meta SEO & font chữ hệ thống',
   'metadata.json': 'Tên, mô tả và quyền truy cập thiết bị (camera)',
-  'package.json': 'Danh sách thư viện & lệnh build/dev/lint/sync-docs',
+  'package.json': 'Danh sách thư viện & lệnh build/dev/start/lint/sync-docs',
   'vite.config.ts': 'Cấu hình Vite, React, Tailwind v4 & cổng dev server 3000',
+  'server.ts': 'Express server tích hợp Vite dev middleware, API gửi Email (/api/send-email) & chống gửi trùng trong ngày',
+  'firestore.rules': 'Quy tắc bảo mật Cloud Firestore theo RBAC & schema validation',
+  'firebase-blueprint.json': 'Bản thiết kế schema toàn bộ collection Firestore',
+  '.env.example': 'Mẫu biến môi trường (NODE_ENV, SMTP, RESEND_API_KEY, EMAIL_WEBHOOK_URL...)',
   'src/App.tsx': 'Điều hướng chính giữa các Tab và quản lý các Modal toàn cục',
   'src/index.css': 'Tailwind CSS v4, font chữ, quy tắc Nền Sáng (html.light) & thanh cuộn',
   'src/main.tsx': 'Điểm khởi chạy React Root',
   'src/config/uiTexts.ts': '[QUAN TRỌNG] Toàn bộ nội dung chữ, tên menu & nhãn form giao diện',
-  'src/types/cmms.ts': 'Định nghĩa kiểu dữ liệu (Interface), APP_VIEW_OPTIONS & hằng số điện/nước',
+  'src/types/cmms.ts': 'Định nghĩa kiểu dữ liệu (Interface), APP_VIEW_OPTIONS, DailyAreaCheck & hằng số điện/nước',
   'src/data/equipment_parsed.json': 'Dữ liệu danh sách thiết bị gốc đã chuẩn hóa JSON',
-  'src/data/initialData.ts': 'Dữ liệu mẫu ban đầu (Thiết bị, Nhân viên, Vật tư, Dự án, Kiểm định, Dụng cụ...)',
-  'src/context/CMMSContext.tsx': 'State trung tâm, LocalStorage, đăng nhập, phân quyền, Email & Sao lưu',
-  'src/utils/cmmsLogic.ts': 'Nghiệp vụ chu kỳ bảo trì/kiểm định, tách người thực hiện, phân quyền & tiến độ dự án',
+  'src/data/initialData.ts': 'Dữ liệu mẫu ban đầu (Thiết bị, Nhân viên, Vật tư, Dự án, Kiểm định, Dụng cụ, Công việc đầu ngày...)',
+  'src/context/CMMSContext.tsx': 'State trung tâm, LocalStorage, Firestore sync, đăng nhập, phân quyền, Email/Web Notification & Sao lưu',
+  'src/utils/cmmsLogic.ts': 'Nghiệp vụ chu kỳ bảo trì/kiểm định, tách người thực hiện, phân quyền RBAC (chi phí/xóa/CSV/kế hoạch) & tiến độ dự án',
+  'src/utils/codeExport.ts': 'Tiện ích xuất/tải mã nguồn hoặc cấu hình',
   'src/utils/costForecasting.ts': 'Mô hình dự báo chi phí bảo trì 6 tháng & hồi quy tuyến tính (OLS)',
+  'src/utils/emailTemplates.ts': 'Trình dựng mẫu Email HTML chuyên nghiệp chuẩn màu sắc theo loại cảnh báo',
   'src/utils/excelExport.ts': 'Xuất Excel (.xlsx) đa Sheet định dạng đẹp kèm khung ký duyệt',
+  'src/utils/firebaseClient.ts': 'Khởi tạo Firebase App, Firestore & Google Auth từ cấu hình dự án',
+  'src/utils/firestoreSync.ts': 'Sanitizer payload, đồng bộ snapshot & real-time listener với Cloud Firestore',
+  'src/utils/gmailAuth.ts': 'Xác thực OAuth phía client để gửi email qua Gmail API',
   'src/utils/imageUtils.tsx': 'Xử lý ảnh Google Drive, nén ảnh chụp và ảnh dự phòng',
   'src/utils/cmmsLogic.test.ts': 'Unit test kiểm tra logic nghiệp vụ CMMS',
   'src/components/Header.tsx': 'Thanh Header, Quét QR, Nền Sáng/Tối, Chuông cảnh báo, Sao lưu & Tài khoản',
@@ -59,34 +69,42 @@ const FILE_DESCRIPTIONS: Record<string, string> = {
   'src/components/QRModal.tsx': 'Xem & In tem mã QR thiết bị',
   'src/components/QRScannerModal.tsx': 'Quét mã QR bằng camera hoặc nhập tay mã thiết bị',
   'src/components/common/CameraCaptureInput.tsx': 'Component chụp ảnh camera hoặc tải tệp ảnh',
+  'src/components/common/EmailDispatchModal.tsx': 'Hộp thoại xem trước nội dung Email HTML và chọn kênh gửi',
+  'src/components/common/GoogleSignInButton.tsx': 'Nút đăng nhập / kết nối tài khoản Google đồng bộ Cloud',
   'src/components/common/MultiAssigneePicker.tsx': 'Bộ chọn nhiều nhân viên thực hiện cùng lúc',
   'src/components/common/NumericInput.tsx': 'Ô nhập số định dạng chuẩn',
   'src/components/common/SmartHorizontalScroll.tsx': 'Thanh cuộn ngang đồng bộ đầu/cuối bảng dữ liệu lớn',
+  'src/components/common/WebNotificationToast.tsx': 'Hiển thị thông báo nổi trực tiếp trên Web (miễn phí)',
   'src/components/common/WorkAssignmentModal.tsx': 'Form Giao việc nhiều người & gửi Email thông báo',
   'src/components/dashboard/MaintenanceD3Summary.tsx': 'Biểu đồ D3 phân tích quá hạn & lịch trọng điểm trên Dashboard',
   'src/components/energy/EnergyCompareDashboard.tsx': 'Dashboard phân tích & so sánh tiêu thụ điện EVN / Solar theo khung giờ',
   'src/components/energy/DailyReadingsWithAlerts.tsx': 'Bảng chỉ số điện/nước hàng ngày & cảnh báo vượt ngưỡng',
   'src/components/energy/DailyPowerModal.tsx': 'Nhập liệu chỉ số điện hàng ngày',
+  'src/components/energy/MeterReadingEditModal.tsx': 'Chỉnh sửa bản ghi chỉ số đồng hồ điện/nước đã chốt',
+  'src/components/energy/MonthlyEnergyTrendChart.tsx': 'Biểu đồ xu hướng tiêu thụ điện năng theo tháng',
   'src/components/energy/Power10DaysModal.tsx': 'Nhập liệu điện chu kỳ 10 ngày',
-  'src/components/energy/WaterRecordingModal.tsx': 'Nhập liệu chỉ số nước tháng',
   'src/components/energy/TariffConfigModal.tsx': 'Cấu hình đơn giá điện EVN, Solar, Nước & tỷ giá USD',
-  'src/components/tabs/DashboardTab.tsx': 'Tổng quan O&M, KPI, công việc của tôi & lịch 30 ngày',
+  'src/components/energy/WaterCompareDashboard.tsx': 'Dashboard phân tích & so sánh tiêu thụ nước theo kỳ',
+  'src/components/energy/WaterRecordingModal.tsx': 'Nhập liệu chỉ số nước tháng',
+  'src/components/tabs/DashboardTab.tsx': 'Tổng quan O&M, KPI, công việc của tôi, lịch 30 ngày & nút Download CSV (ẩn với Kỹ thuật viên)',
   'src/components/tabs/AdminDashboardTab.tsx': 'Dashboard Admin D3: OEE, MTBF, MTTR & tỷ lệ PM/CM (Chỉ Admin)',
   'src/components/tabs/MyTasksTab.tsx': 'Danh sách công việc được giao cho tài khoản đang đăng nhập',
-  'src/components/tabs/EquipmentTab.tsx': 'Danh mục máy móc thiết bị & QR Code',
-  'src/components/tabs/MaintenanceTab.tsx': 'Kế hoạch định kỳ, Lịch sử (Bảo trì vs Sửa chữa), Lịch kéo thả & Xuất Excel',
+  'src/components/tabs/MorningChecksTab.tsx': 'Công việc đầu ngày: phân quyền kiểm tra Vòng trong, Vòng Ngoài, Phòng Utility & ghi nhận báo cáo',
+  'src/components/tabs/ProfileTab.tsx': 'Hồ sơ cá nhân, phép năm & đổi mật khẩu',
+  'src/components/tabs/EquipmentTab.tsx': 'Danh mục máy móc thiết bị & QR Code (Kỹ thuật viên chỉ sửa, không xóa)',
+  'src/components/tabs/MaintenanceTab.tsx': 'Kế hoạch định kỳ (KTV chỉ xem), Lịch sử (Bảo trì vs Sửa chữa), Lịch kéo thả & Xuất Excel',
   'src/components/tabs/SafetyInspectionTab.tsx': 'Quản lý Kiểm định an toàn & Hiệu chuẩn có nhắc lịch & gửi mail tự động',
-  'src/components/tabs/ToolsManagementTab.tsx': 'Quản lý Dụng cụ & Đồ nghề, sổ Mượn/Trả & hạn hiệu chuẩn',
-  'src/components/tabs/TicketsTab.tsx': 'Quản lý Tickets sự cố & sửa chữa',
-  'src/components/tabs/ProjectsTab.tsx': 'Quản lý Dự án kỹ thuật (WBS, Kanban, Cột mốc, Rủi ro, Ngân sách)',
-  'src/components/tabs/SparePartsTab.tsx': 'Kho phụ tùng & Nhật ký xuất nhập kho',
-  'src/components/tabs/DocumentsTab.tsx': 'Tra cứu tài liệu SOP, File & Checklist tương tác',
+  'src/components/tabs/ToolsManagementTab.tsx': 'Quản lý Dụng cụ & Đồ nghề, sổ Mượn/Trả & hạn hiệu chuẩn (KTV chỉ sửa, không xóa)',
+  'src/components/tabs/TicketsTab.tsx': 'Quản lý Tickets sự cố & sửa chữa (KTV chỉ sửa, không xóa)',
+  'src/components/tabs/ProjectsTab.tsx': 'Quản lý Dự án kỹ thuật (WBS, Kanban, Cột mốc, Rủi ro, Ngân sách — ẩn xóa & chi phí với KTV)',
+  'src/components/tabs/SparePartsTab.tsx': 'Kho phụ tùng & Nhật ký xuất nhập kho (ẩn giá & xóa với KTV)',
+  'src/components/tabs/DocumentsTab.tsx': 'Tra cứu tài liệu SOP, File & Checklist tương tác (ẩn xóa với KTV)',
   'src/components/tabs/EnergyTab.tsx': 'Giám sát & phân tích năng lượng Điện - Nước',
-  'src/components/tabs/CostTab.tsx': 'Quản lý chi phí & Phân tích dự báo ngân sách 6 tháng tới',
+  'src/components/tabs/CostTab.tsx': 'Quản lý chi phí & Phân tích dự báo ngân sách 6 tháng tới (ẩn với KTV)',
   'src/components/tabs/EmployeesTab.tsx': 'Quản lý nhân sự & phân quyền View theo tài khoản',
   'src/components/tabs/EmployeePerformanceTab.tsx': 'Đánh giá hiệu quả nhân viên & biểu đồ D3 (Chỉ Admin)',
-  'src/components/tabs/AuditLogTab.tsx': 'Nhật ký tác động toàn hệ thống',
-  'src/components/tabs/EmailAlertsTab.tsx': 'Cấu hình sự kiện gửi Email & nhật ký Email đã gửi',
+  'src/components/tabs/AuditLogTab.tsx': 'Nhật ký tác động toàn hệ thống (hiển thị chính xác ID & tên tài khoản, xuất CSV)',
+  'src/components/tabs/EmailAlertsTab.tsx': 'Cấu hình thông báo Web miễn phí & Email tự động, mẫu HTML & nhật ký gửi',
   'scripts/build_real_cmms_data.py': 'Script Python tạo dữ liệu thiết bị & lịch sử thực tế từ CSV',
   'scripts/generate_cmms_dataset.py': 'Script Python sinh bộ dữ liệu mẫu CMMS',
   'scripts/generate_complete_cmms_dataset.py': 'Script Python tổng hợp dữ liệu CMMS đầy đủ',
@@ -102,6 +120,8 @@ const CORE_DOCUMENTED_VIEWS = new Set([
   'dashboard',
   'admin_dashboard',
   'my_tasks',
+  'morning_checks',
+  'profile',
   'equipment',
   'maintenance',
   'inspection_calibration',
@@ -166,8 +186,14 @@ function getAccessScopeLabel(viewId: string): string {
   if ((ADMIN_ONLY_VIEWS as readonly string[]).includes(viewId)) {
     return 'Chỉ Admin / Owner (`ID1460`)';
   }
-  if (['costs', 'employees', 'logs', 'email_alerts'].includes(viewId)) {
+  if (viewId === 'costs') {
+    return 'Quản lý / Kỹ sư / Admin (ẩn với Kỹ thuật viên & NV vận hành)';
+  }
+  if (['employees', 'logs', 'email_alerts'].includes(viewId)) {
     return 'Quản lý / Kỹ sư / Admin (hoặc cấp quyền View)';
+  }
+  if (viewId === 'profile') {
+    return 'Tất cả nhân sự (tự xem/sửa hồ sơ cá nhân; Admin xem toàn bộ)';
   }
   return 'Tất cả nhân sự (tùy chỉnh theo View)';
 }
@@ -230,7 +256,7 @@ function buildSystemSnapshotMarkdown(dataVersion: string): string {
 
   return [
     `- **Phiên bản dữ liệu (\`CMMS_DATA_VERSION\`)**: \`${dataVersion}\``,
-    `- **Số liệu mẫu tích hợp sẵn**: ${INITIAL_EQUIPMENT.length} thiết bị · ${INITIAL_MAINTENANCE_PLANS.length} kế hoạch bảo trì · ${INITIAL_MAINTENANCE_HISTORY.length} biên bản lịch sử · ${INITIAL_SAFETY_INSPECTIONS.length} hồ sơ kiểm định/hiệu chuẩn · ${INITIAL_TOOLS.length} bộ dụng cụ & đồ nghề · ${INITIAL_PROJECTS.length} dự án kỹ thuật · ${INITIAL_SPARE_PARTS.length} mã phụ tùng · ${INITIAL_DOCUMENTS.length} tài liệu SOP/Checklist · ${INITIAL_EMPLOYEES.length} nhân sự.`,
+    `- **Số liệu mẫu tích hợp sẵn**: ${INITIAL_EQUIPMENT.length} thiết bị · ${INITIAL_MAINTENANCE_PLANS.length} kế hoạch bảo trì · ${INITIAL_MAINTENANCE_HISTORY.length} biên bản lịch sử · ${INITIAL_SAFETY_INSPECTIONS.length} hồ sơ kiểm định/hiệu chuẩn · ${INITIAL_TOOLS.length} bộ dụng cụ & đồ nghề · ${INITIAL_PROJECTS.length} dự án kỹ thuật · ${INITIAL_SPARE_PARTS.length} mã phụ tùng · ${INITIAL_DOCUMENTS.length} tài liệu SOP/Checklist · ${INITIAL_DAILY_AREA_CHECKS.length} phiếu công việc đầu ngày · ${INITIAL_EMPLOYEES.length} nhân sự.`,
     `- **Tài khoản quản lý & quản trị mẫu**: ${managersAndAdmins}.`,
   ].join('\n');
 }
@@ -239,9 +265,16 @@ function buildRepoTreeMarkdown(): string {
   const sections: { title: string; files: string[] }[] = [
     {
       title: 'Tệp gốc & Cấu hình',
-      files: ['index.html', 'metadata.json', 'package.json', 'vite.config.ts'].filter((f) =>
-        fs.existsSync(path.join(ROOT_DIR, f))
-      ),
+      files: [
+        'index.html',
+        'metadata.json',
+        'package.json',
+        'vite.config.ts',
+        'server.ts',
+        'firestore.rules',
+        'firebase-blueprint.json',
+        '.env.example',
+      ].filter((f) => fs.existsSync(path.join(ROOT_DIR, f))),
     },
     { title: 'Cấu hình UI (`src/config`)', files: listFilesSorted('src/config') },
     { title: 'Kiểu dữ liệu (`src/types`)', files: listFilesSorted('src/types') },

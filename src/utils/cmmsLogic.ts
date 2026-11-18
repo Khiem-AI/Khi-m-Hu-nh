@@ -308,14 +308,20 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
     );
 
   if (!user) return ['dashboard'];
-  if (Array.isArray(user.allowedViews) && user.allowedViews.length > 0) {
-    const withProfile = user.allowedViews.includes('profile')
-      ? user.allowedViews
-      : [...user.allowedViews, 'profile'];
-    return filterRestrictedViews(withProfile);
-  }
   if (adminAccess) {
     return allViewIds;
+  }
+  if (Array.isArray(user.allowedViews) && user.allowedViews.length > 0) {
+    const resolved = user.allowedViews.includes('profile')
+      ? [...user.allowedViews]
+      : [...user.allowedViews, 'profile'];
+    if (
+      !resolved.includes('morning_checks') &&
+      !(user.quyenHan || []).includes('DENY_MORNING_CHECKS')
+    ) {
+      resolved.push('morning_checks');
+    }
+    return filterRestrictedViews(resolved);
   }
   if (
     user.chucVu === 'Director' ||

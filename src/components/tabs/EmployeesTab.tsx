@@ -161,10 +161,14 @@ export const EmployeesTab: React.FC = () => {
         (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
     );
     const sanitizedRules = editRules.filter((r) => {
+      if (r === 'DENY_MORNING_CHECKS') return false;
       if (costRestricted && r === 'MANAGE_COSTS') return false;
       if (planEditRestricted && (r === 'MANAGE_PLANS' || r === 'ALL')) return false;
       return true;
     });
+    if (!allowAdminViews && !sanitizedViews.includes('morning_checks')) {
+      sanitizedRules.push('DENY_MORNING_CHECKS');
+    }
 
     updateEmployee({
       ...editingEmployee,
@@ -206,6 +210,10 @@ export const EmployeesTab: React.FC = () => {
         (allowAdminViews || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id)) &&
         (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
     );
+    const finalNewRules =
+      !allowAdminViews && !sanitizedNewViews.includes('morning_checks')
+        ? [...defaultRules, 'DENY_MORNING_CHECKS']
+        : defaultRules;
 
     addEmployee({
       maNhanVien: maNhanVien.trim().toUpperCase(),
@@ -222,7 +230,7 @@ export const EmployeesTab: React.FC = () => {
       email,
       username: maNhanVien.trim().toUpperCase(),
       password: password || '123456',
-      quyenHan: defaultRules,
+      quyenHan: finalNewRules,
       allowedViews: sanitizedNewViews.length > 0 ? sanitizedNewViews : ['dashboard'],
       anhDaiDien:
         anhDaiDien ||
