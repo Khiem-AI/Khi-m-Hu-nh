@@ -5,6 +5,7 @@ import { APP_VIEW_OPTIONS, Employee, UserRole } from '../../types/cmms';
 import {
   ADMIN_ONLY_VIEWS,
   COST_RESTRICTED_VIEWS,
+  canManageMaintenancePlans,
   canViewCosts,
   getEffectiveAllowedViews,
 } from '../../utils/cmmsLogic';
@@ -97,6 +98,9 @@ export const EmployeesTab: React.FC = () => {
   const isCostRestrictedRole = (role: UserRole, empCode?: string) =>
     !canViewCosts({ maNhanVien: empCode || '', chucVu: role } as Employee);
 
+  const isPlanEditRestrictedRole = (role: UserRole, empCode?: string) =>
+    !canManageMaintenancePlans({ maNhanVien: empCode || '', chucVu: role } as Employee);
+
   const getDefaultViewsForRole = (role: UserRole, empCode?: string): string[] => {
     if (isAdminRole(role, empCode)) {
       return APP_VIEW_OPTIONS.map((v) => v.id);
@@ -116,6 +120,7 @@ export const EmployeesTab: React.FC = () => {
     return [
       'dashboard',
       'my_tasks',
+      'morning_checks',
       'equipment',
       'maintenance',
       'tickets',
@@ -149,14 +154,17 @@ export const EmployeesTab: React.FC = () => {
 
     const allowAdminViews = isAdminRole(editChucVu, editingEmployee.maNhanVien);
     const costRestricted = isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien);
+    const planEditRestricted = isPlanEditRestrictedRole(editChucVu, editingEmployee.maNhanVien);
     const sanitizedViews = editAllowedViews.filter(
       (id) =>
         (allowAdminViews || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id)) &&
         (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
     );
-    const sanitizedRules = costRestricted
-      ? editRules.filter((r) => r !== 'MANAGE_COSTS')
-      : editRules;
+    const sanitizedRules = editRules.filter((r) => {
+      if (costRestricted && r === 'MANAGE_COSTS') return false;
+      if (planEditRestricted && (r === 'MANAGE_PLANS' || r === 'ALL')) return false;
+      return true;
+    });
 
     updateEmployee({
       ...editingEmployee,
@@ -348,7 +356,7 @@ export const EmployeesTab: React.FC = () => {
             Kỹ Thuật Viên / Vận Hành
           </div>
           <p className="text-[11px] text-slate-400">
-            Thực hiện bảo trì, chụp ảnh trước/sau, xử lý sự cố và chỉ nhìn thấy các view được Admin/Owner cấp phép.
+            Thực hiện bảo trì, chụp ảnh trước/sau, chỉnh sửa thiết bị, tickets, dụng cụ, phụ tùng &amp; lịch sử bảo trì (không xóa; chỉ xem kế hoạch bảo trì; ẩn thông tin chi phí).
           </p>
         </div>
       </div>
@@ -532,6 +540,7 @@ export const EmployeesTab: React.FC = () => {
                       setEditChucVu(nextRole);
                       const allowAdmin = isAdminRole(nextRole, editingEmployee.maNhanVien);
                       const costRestricted = isCostRestrictedRole(nextRole, editingEmployee.maNhanVien);
+                      const planEditRestricted = isPlanEditRestrictedRole(nextRole, editingEmployee.maNhanVien);
                       setEditAllowedViews((prev) =>
                         prev.filter(
                           (id) =>
@@ -539,8 +548,14 @@ export const EmployeesTab: React.FC = () => {
                             (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
                         )
                       );
-                      if (costRestricted) {
-                        setEditRules((prev) => prev.filter((r) => r !== 'MANAGE_COSTS'));
+                      if (costRestricted || planEditRestricted) {
+                        setEditRules((prev) =>
+                          prev.filter((r) => {
+                            if (costRestricted && r === 'MANAGE_COSTS') return false;
+                            if (planEditRestricted && (r === 'MANAGE_PLANS' || r === 'ALL')) return false;
+                            return true;
+                          })
+                        );
                       }
                     }}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
@@ -758,9 +773,11 @@ export const EmployeesTab: React.FC = () => {
                     'PROCESS_TICKETS',
                     'REQUEST_SPARE_PARTS',
                   ].map((rule) => {
+                    const costRestricted = isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien);
+                    const planEditRestricted = isPlanEditRestrictedRole(editChucVu, editingEmployee.maNhanVien);
                     const ruleLocked =
-                      rule === 'MANAGE_COSTS' &&
-                      isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien);
+                      (rule === 'MANAGE_COSTS' && costRestricted) ||
+                      ((rule === 'MANAGE_PLANS' || rule === 'ALL') && planEditRestricted);
                     const isChecked = !ruleLocked && editRules.includes(rule);
                     return (
                       <label

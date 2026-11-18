@@ -228,7 +228,7 @@ export interface AuditLog {
   id: string;
   thoiGian: string; // ISO / formatted
   nguoiThaoTac: string;
-  hanhDong: 'Thêm' | 'Sửa' | 'Xóa' | 'Xuất kho' | 'Nhập kho' | 'Hoàn thành' | 'Chốt số' | 'Đăng nhập' | 'Cập nhật';
+  hanhDong: 'Thêm' | 'Sửa' | 'Xóa' | 'Xuất kho' | 'Nhập kho' | 'Hoàn thành' | 'Chốt số' | 'Đăng nhập' | 'Đăng xuất' | 'Cập nhật';
   chucNang: string;
   doiTuong: string;
   chiTietNoiDung: string;
@@ -336,6 +336,7 @@ export const APP_VIEW_OPTIONS: AppViewOption[] = [
   { id: 'dashboard', label: 'Tổng Quan O&M', desc: 'Bảng điều hành nhà máy' },
   { id: 'admin_dashboard', label: 'Dashboard Admin', desc: 'OEE, MTBF, MTTR & KPI vận hành' },
   { id: 'my_tasks', label: 'Việc Được Giao', desc: 'Nhiệm vụ của tôi' },
+  { id: 'morning_checks', label: 'Công Việc Đầu Ngày', desc: 'Kiểm tra Vòng trong, Vòng Ngoài & Phòng Utility' },
   { id: 'profile', label: 'Hồ Sơ Cá Nhân', desc: 'Thông tin & Phép năm' },
   { id: 'equipment', label: 'Danh Sách Thiết Bị', desc: 'Máy móc & Mã QR' },
   { id: 'maintenance', label: 'Kế Hoạch & Lịch Sử', desc: 'Bảo trì định kỳ' },
@@ -618,5 +619,33 @@ export interface ToolBorrowLog {
   tinhTrangKhiTra?: ToolCondition;
   ghiChu?: string;
 }
+
+// Công Việc Đầu Ngày (Kiểm tra 3 khu vực: Vòng trong, Vòng Ngoài, Phòng Utility)
+export type DailyInspectionArea = 'Vòng trong' | 'Vòng Ngoài' | 'Phòng Utility';
+
+export type DailyAreaCheckShift = 'Ca Sáng' | 'Ca Chiều' | 'Ca Đêm';
+
+export type DailyAreaCheckStatus = 'Chờ kiểm tra' | 'Đang kiểm tra' | 'Đã hoàn thành';
+
+export type DailyAreaCheckResult = 'Chưa đánh giá' | 'Bình thường' | 'Cần theo dõi' | 'Có sự cố';
+
+export interface DailyAreaCheck {
+  id: string;
+  ngayKiemTra: string; // YYYY-MM-DD
+  caLamViec: DailyAreaCheckShift;
+  khuVuc: DailyInspectionArea;
+  tieuDe: string;
+  moTaCongViec: string;
+  nguoiDuocGiao: string;
+  nguoiPhanQuyen?: string;
+  hanHoanThanh?: string; // e.g., '08:30'
+  trangThai: DailyAreaCheckStatus;
+  ketQua: DailyAreaCheckResult;
+  baoCaoThucTe?: string;
+  nguoiBaoCao?: string;
+  thoiGianBaoCao?: string;
+  anhHienTruong?: string;
+}
+
 
 

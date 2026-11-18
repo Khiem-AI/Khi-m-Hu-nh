@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { SparePart, StockTransaction } from '../../types/cmms';
-import { canViewCosts, formatVND, formatDateVN } from '../../utils/cmmsLogic';
+import { canDeleteRecords, canViewCosts, formatVND, formatDateVN } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Package,
@@ -32,6 +32,7 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
 }) => {
   const { spareParts, stockTransactions, deleteSparePart, currentUser } = useCMMS();
   const showCosts = canViewCosts(currentUser);
+  const canDelete = canDeleteRecords(currentUser);
 
   const [activeSubTab, setActiveSubTab] = useState<'inventory' | 'transactions'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
@@ -347,17 +348,19 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Bạn có chắc chắn muốn xóa vật tư ${part.tenVatTu}?`)) {
-                                deleteSparePart(part.maVatTu);
-                              }
-                            }}
-                            title="Xóa vật tư"
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canDelete && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm(`Bạn có chắc chắn muốn xóa vật tư ${part.tenVatTu}?`)) {
+                                  deleteSparePart(part.maVatTu);
+                                }
+                              }}
+                              title="Xóa vật tư"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -514,6 +514,33 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "thoiGian", "nguoiThaoTac", "hanhDong", "chucNang", "doiTuong", "chiTietNoiDung", "ownerUid", "allowedEmails", "createdAt", "updatedAt"]
+    },
+    "DailyAreaCheck": {
+      "title": "DailyAreaCheck",
+      "description": "Start-of-day area inspection assignment and technician report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "ngayKiemTra": { "type": "string", "maxLength": 32 },
+        "caLamViec": { "type": "string", "enum": ["Ca Sáng", "Ca Chiều", "Ca Đêm"] },
+        "khuVuc": { "type": "string", "enum": ["Vòng trong", "Vòng Ngoài", "Phòng Utility"] },
+        "tieuDe": { "type": "string", "maxLength": 300 },
+        "moTaCongViec": { "type": "string", "maxLength": 4000 },
+        "nguoiDuocGiao": { "type": "string", "maxLength": 300 },
+        "nguoiPhanQuyen": { "type": "string", "maxLength": 160 },
+        "hanHoanThanh": { "type": "string", "maxLength": 32 },
+        "trangThai": { "type": "string", "enum": ["Chờ kiểm tra", "Đang kiểm tra", "Đã hoàn thành"] },
+        "ketQua": { "type": "string", "enum": ["Chưa đánh giá", "Bình thường", "Cần theo dõi", "Có sự cố"] },
+        "baoCaoThucTe": { "type": "string", "maxLength": 4000 },
+        "nguoiBaoCao": { "type": "string", "maxLength": 160 },
+        "thoiGianBaoCao": { "type": "string", "maxLength": 40 },
+        "anhHienTruong": { "type": "string", "maxLength": 450000 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "allowedEmails": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ngayKiemTra", "caLamViec", "khuVuc", "tieuDe", "moTaCongViec", "nguoiDuocGiao", "trangThai", "ketQua", "ownerUid", "allowedEmails", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -537,6 +564,7 @@
     "/tools/{docId}": { "schema": { "$ref": "#/entities/ToolItem" }, "description": "Tools and instruments" },
     "/tool_logs/{docId}": { "schema": { "$ref": "#/entities/ToolBorrowLog" }, "description": "Tool borrow and return logs" },
     "/email_logs/{docId}": { "schema": { "$ref": "#/entities/EmailLog" }, "description": "Email dispatch history logs" },
-    "/audit_logs/{docId}": { "schema": { "$ref": "#/entities/AuditLog" }, "description": "System audit trail" }
+    "/audit_logs/{docId}": { "schema": { "$ref": "#/entities/AuditLog" }, "description": "System audit trail" },
+    "/daily_area_checks/{docId}": { "schema": { "$ref": "#/entities/DailyAreaCheck" }, "description": "Start-of-day inspection assignments and field reports" }
   }
 }

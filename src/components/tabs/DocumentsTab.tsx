@@ -8,7 +8,7 @@ import {
   DocumentStep,
   FacilityDocument,
 } from '../../types/cmms';
-import { formatDateVN } from '../../utils/cmmsLogic';
+import { canDeleteRecords, formatDateVN } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   BookOpen,
@@ -74,6 +74,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
     updateDocument,
     deleteDocument,
   } = useCMMS();
+  const canDelete = canDeleteRecords(currentUser);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
@@ -590,14 +591,16 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
                         >
                           <Edit className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDocToDelete(doc)}
-                          title="Xóa tài liệu"
-                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => setDocToDelete(doc)}
+                            title="Xóa tài liệu"
+                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -786,14 +789,16 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
                             >
                               <Edit className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setDocToDelete(doc)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
-                              title="Xóa tài liệu"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setDocToDelete(doc)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                                title="Xóa tài liệu"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1357,7 +1362,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
       )}
 
       {/* Delete Confirmation Modal (No window.alert / window.confirm) */}
-      {docToDelete && (
+      {docToDelete && canDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
           <div className="w-full max-w-md rounded-2xl bg-slate-900 border border-slate-700 p-6 space-y-4 shadow-2xl">
             <div className="flex items-center gap-3">

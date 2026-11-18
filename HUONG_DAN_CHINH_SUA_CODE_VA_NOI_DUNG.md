@@ -31,8 +31,13 @@ Tài liệu này hướng dẫn cách chỉnh sửa giao diện chữ, dữ li�
 #### Nghiệp vụ & Tính toán (`src/utils`)
 - `src/utils/cmmsLogic.test.ts`: Unit test kiểm tra logic nghiệp vụ CMMS
 - `src/utils/cmmsLogic.ts`: Nghiệp vụ chu kỳ bảo trì/kiểm định, tách người thực hiện, phân quyền & tiến độ dự án
+- `src/utils/codeExport.ts`: Module mới được phát hiện tự động trong mã nguồn
 - `src/utils/costForecasting.ts`: Mô hình dự báo chi phí bảo trì 6 tháng & hồi quy tuyến tính (OLS)
+- `src/utils/emailTemplates.ts`: Module mới được phát hiện tự động trong mã nguồn
 - `src/utils/excelExport.ts`: Xuất Excel (.xlsx) đa Sheet định dạng đẹp kèm khung ký duyệt
+- `src/utils/firebaseClient.ts`: Module mới được phát hiện tự động trong mã nguồn
+- `src/utils/firestoreSync.ts`: Module mới được phát hiện tự động trong mã nguồn
+- `src/utils/gmailAuth.ts`: Module mới được phát hiện tự động trong mã nguồn
 - `src/utils/imageUtils.tsx`: Xử lý ảnh Google Drive, nén ảnh chụp và ảnh dự phòng
 
 #### Layout & Modals (`src/components`)
@@ -54,9 +59,12 @@ Tài liệu này hướng dẫn cách chỉnh sửa giao diện chữ, dữ li�
 
 #### Component dùng chung (`src/components/common`)
 - `src/components/common/CameraCaptureInput.tsx`: Component chụp ảnh camera hoặc tải tệp ảnh
+- `src/components/common/EmailDispatchModal.tsx`: Module mới được phát hiện tự động trong mã nguồn
+- `src/components/common/GoogleSignInButton.tsx`: Module mới được phát hiện tự động trong mã nguồn
 - `src/components/common/MultiAssigneePicker.tsx`: Bộ chọn nhiều nhân viên thực hiện cùng lúc
 - `src/components/common/NumericInput.tsx`: Ô nhập số định dạng chuẩn
 - `src/components/common/SmartHorizontalScroll.tsx`: Thanh cuộn ngang đồng bộ đầu/cuối bảng dữ liệu lớn
+- `src/components/common/WebNotificationToast.tsx`: Module mới được phát hiện tự động trong mã nguồn
 - `src/components/common/WorkAssignmentModal.tsx`: Form Giao việc nhiều người & gửi Email thông báo
 
 #### Biểu đồ Dashboard (`src/components/dashboard`)
@@ -66,8 +74,11 @@ Tài liệu này hướng dẫn cách chỉnh sửa giao diện chữ, dữ li�
 - `src/components/energy/DailyPowerModal.tsx`: Nhập liệu chỉ số điện hàng ngày
 - `src/components/energy/DailyReadingsWithAlerts.tsx`: Bảng chỉ số điện/nước hàng ngày & cảnh báo vượt ngưỡng
 - `src/components/energy/EnergyCompareDashboard.tsx`: Dashboard phân tích & so sánh tiêu thụ điện EVN / Solar theo khung giờ
+- `src/components/energy/MeterReadingEditModal.tsx`: Module mới được phát hiện tự động trong mã nguồn
+- `src/components/energy/MonthlyEnergyTrendChart.tsx`: Module mới được phát hiện tự động trong mã nguồn
 - `src/components/energy/Power10DaysModal.tsx`: Nhập liệu điện chu kỳ 10 ngày
 - `src/components/energy/TariffConfigModal.tsx`: Cấu hình đơn giá điện EVN, Solar, Nước & tỷ giá USD
+- `src/components/energy/WaterCompareDashboard.tsx`: Module mới được phát hiện tự động trong mã nguồn
 - `src/components/energy/WaterRecordingModal.tsx`: Nhập liệu chỉ số nước tháng
 
 #### Các Tab chức năng (`src/components/tabs`)
@@ -82,7 +93,9 @@ Tài liệu này hướng dẫn cách chỉnh sửa giao diện chữ, dữ li�
 - `src/components/tabs/EnergyTab.tsx`: Giám sát & phân tích năng lượng Điện - Nước
 - `src/components/tabs/EquipmentTab.tsx`: Danh mục máy móc thiết bị & QR Code
 - `src/components/tabs/MaintenanceTab.tsx`: Kế hoạch định kỳ, Lịch sử (Bảo trì vs Sửa chữa), Lịch kéo thả & Xuất Excel
+- `src/components/tabs/MorningChecksTab.tsx`: Module mới được phát hiện tự động trong mã nguồn
 - `src/components/tabs/MyTasksTab.tsx`: Danh sách công việc được giao cho tài khoản đang đăng nhập
+- `src/components/tabs/ProfileTab.tsx`: Module mới được phát hiện tự động trong mã nguồn
 - `src/components/tabs/ProjectsTab.tsx`: Quản lý Dự án kỹ thuật (WBS, Kanban, Cột mốc, Rủi ro, Ngân sách)
 - `src/components/tabs/SafetyInspectionTab.tsx`: Quản lý Kiểm định an toàn & Hiệu chuẩn có nhắc lịch & gửi mail tự động
 - `src/components/tabs/SparePartsTab.tsx`: Kho phụ tùng & Nhật ký xuất nhập kho
@@ -115,6 +128,8 @@ Tài liệu này hướng dẫn cách chỉnh sửa giao diện chữ, dữ li�
 | `dashboard` | Tổng Quan O&M | `DashboardTab` | `src/components/tabs/DashboardTab.tsx` |
 | `admin_dashboard` | Dashboard Admin | `AdminDashboardTab` | `src/components/tabs/AdminDashboardTab.tsx` |
 | `my_tasks` | Việc Được Giao | `MyTasksTab` | `src/components/tabs/MyTasksTab.tsx` |
+| `morning_checks` | Công Việc Đầu Ngày | `MorningChecksTab` | `src/components/tabs/MorningChecksTab.tsx` |
+| `profile` | Hồ Sơ Cá Nhân | `ProfileTab` | `src/components/tabs/ProfileTab.tsx` |
 | `equipment` | Danh Sách Thiết Bị | `EquipmentTab` | `src/components/tabs/EquipmentTab.tsx` |
 | `maintenance` | Kế Hoạch & Lịch Sử | `MaintenanceTab` | `src/components/tabs/MaintenanceTab.tsx` |
 | `inspection_calibration` | Kiểm Định & Hiệu Chuẩn | `SafetyInspectionTab` | `src/components/tabs/SafetyInspectionTab.tsx` |

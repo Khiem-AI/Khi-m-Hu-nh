@@ -17,6 +17,7 @@ import { auth, db } from './firebaseClient';
 import {
   AuditLog,
   CostRecord,
+  DailyAreaCheck,
   EmailConfig,
   EmailLog,
   Employee,
@@ -568,6 +569,26 @@ export function sanitizeAuditLog(a: AuditLog): Record<string, unknown> {
   });
 }
 
+export function sanitizeDailyAreaCheck(c: DailyAreaCheck): Record<string, unknown> {
+  return stripUndefined({
+    id: clampString(c.id, 80),
+    ngayKiemTra: clampString(c.ngayKiemTra || '', 32),
+    caLamViec: c.caLamViec || 'Ca Sáng',
+    khuVuc: c.khuVuc || 'Vòng trong',
+    tieuDe: clampString((c.tieuDe || '').trim() || 'Kiểm tra khu vực', 300),
+    moTaCongViec: clampString(c.moTaCongViec || '', 4000),
+    nguoiDuocGiao: clampString(c.nguoiDuocGiao || '', 300),
+    nguoiPhanQuyen: c.nguoiPhanQuyen ? clampString(c.nguoiPhanQuyen, 160) : undefined,
+    hanHoanThanh: c.hanHoanThanh ? clampString(c.hanHoanThanh, 32) : undefined,
+    trangThai: c.trangThai || 'Chờ kiểm tra',
+    ketQua: c.ketQua || 'Chưa đánh giá',
+    baoCaoThucTe: c.baoCaoThucTe ? clampString(c.baoCaoThucTe, 4000) : undefined,
+    nguoiBaoCao: c.nguoiBaoCao ? clampString(c.nguoiBaoCao, 160) : undefined,
+    thoiGianBaoCao: c.thoiGianBaoCao ? clampString(c.thoiGianBaoCao, 40) : undefined,
+    anhHienTruong: clampDataUrl(c.anhHienTruong),
+  });
+}
+
 const IMMUTABLE_KEYS_BY_COL: Record<string, Set<string>> = {
   settings: new Set(['key']),
   equipment: new Set(['maThietBi']),
@@ -613,6 +634,7 @@ const IMMUTABLE_KEYS_BY_COL: Record<string, Set<string>> = {
     'doiTuong',
     'chiTietNoiDung',
   ]),
+  daily_area_checks: new Set(['id']),
 };
 
 function buildUpdatePayload(
@@ -761,6 +783,7 @@ export interface WorkspaceSnapshotData {
   safetyInspections: SafetyInspectionItem[];
   tools: ToolItem[];
   toolLogs: ToolBorrowLog[];
+  dailyAreaChecks: DailyAreaCheck[];
   emailLogs: EmailLog[];
   auditLogs: AuditLog[];
   emailConfig: EmailConfig;
@@ -838,6 +861,9 @@ export async function seedOrPushWorkspaceToFirestore(
   }
   for (const item of snapshotData.toolLogs) {
     ops.push({ col: 'tool_logs', id: item.id, data: sanitizeToolLog(item) });
+  }
+  for (const item of snapshotData.dailyAreaChecks) {
+    ops.push({ col: 'daily_area_checks', id: item.id, data: sanitizeDailyAreaCheck(item) });
   }
   for (const item of snapshotData.emailLogs) {
     ops.push({ col: 'email_logs', id: item.id, data: sanitizeEmailLog(item) });
@@ -1038,6 +1064,7 @@ export async function propagateAllowedEmails(allowedEmails: string[]): Promise<v
     'safety_inspections',
     'tools',
     'tool_logs',
+    'daily_area_checks',
     'email_logs',
     'audit_logs',
   ];

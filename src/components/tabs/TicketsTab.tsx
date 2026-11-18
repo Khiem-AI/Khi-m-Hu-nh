@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Ticket, TicketStatus, TicketPriority } from '../../types/cmms';
-import { formatDateVN, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { canDeleteRecords, formatDateVN, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import { exportTicketsRepairExcel } from '../../utils/excelExport';
 import { WorkAssignmentModal } from '../common/WorkAssignmentModal';
@@ -33,6 +33,7 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
   onOpenEditTicket,
 }) => {
   const { tickets, equipment, currentUser, updateTicket, deleteTicket, employees, addAuditLog } = useCMMS();
+  const canDelete = canDeleteRecords(currentUser);
 
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [searchTerm, setSearchTerm] = useState('');
@@ -469,14 +470,16 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
                       >
                         <Edit className="w-3.5 h-3.5" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => setDeletingTicket(ticket)}
-                        className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
-                        title="Xóa ticket"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingTicket(ticket)}
+                          className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition"
+                          title="Xóa ticket"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -651,13 +654,15 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
                           >
                             <Edit className="w-3.5 h-3.5" />
                           </button>
-                          <button
-                            onClick={() => setDeletingTicket(ticket)}
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition"
-                            title="Xóa ticket"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canDelete && (
+                            <button
+                              onClick={() => setDeletingTicket(ticket)}
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition"
+                              title="Xóa ticket"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -694,7 +699,7 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
       )}
 
       {/* Confirm Delete Ticket Modal */}
-      {deletingTicket && (
+      {deletingTicket && canDelete && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center gap-3 text-rose-400">

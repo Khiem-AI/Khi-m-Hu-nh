@@ -11,33 +11,35 @@ Tài liệu này hướng dẫn chi tiết cách vận hành toàn bộ phân h�
 <!-- AUTO-SYNC:SYSTEM-SNAPSHOT:START -->
 - **Phiên bản dữ liệu (`CMMS_DATA_VERSION`)**: `v18_calendar_dnd_inspection_tools`
 - **Số liệu mẫu tích hợp sẵn**: 131 thiết bị · 131 kế hoạch bảo trì · 115 biên bản lịch sử · 8 hồ sơ kiểm định/hiệu chuẩn · 8 bộ dụng cụ & đồ nghề · 4 dự án kỹ thuật · 56 mã phụ tùng · 6 tài liệu SOP/Checklist · 8 nhân sự.
-- **Tài khoản quản lý & quản trị mẫu**: `ID1460` (Khiêm Huỳnh — Admin), `ID0344` (Tuấn Lê — Người quản lý).
+- **Tài khoản quản lý & quản trị mẫu**: `ID1460` (Khiem Huynh — Admin).
 <!-- AUTO-SYNC:SYSTEM-SNAPSHOT:END -->
 
 ### Danh Mục Toàn Bộ Phân Hệ (Tự Động Đồng Bộ)
 
 <!-- AUTO-SYNC:MENU-CATALOG:START -->
-> *Bảng này được script `scripts/syncDocs.ts` tự động sinh từ `APP_VIEW_OPTIONS` & `UI_TEXTS` (17 phân hệ đang hoạt động).*
+> *Bảng này được script `scripts/syncDocs.ts` tự động sinh từ `APP_VIEW_OPTIONS` & `UI_TEXTS` (19 phân hệ đang hoạt động).*
 
 | STT | Mã View (`id`) | Tên Menu Hiển Thị | Chức Năng Chính | Phạm Vi Truy Cập | Component |
 | :---: | :--- | :--- | :--- | :--- | :--- |
 | 1 | `dashboard` | **Tổng Quan O&M** | Bảng điều hành nhà máy | Tất cả nhân sự (tùy chỉnh theo View) | `DashboardTab` |
 | 2 | `admin_dashboard` | **Dashboard Admin** | OEE, MTBF, MTTR & KPI vận hành | Chỉ Admin / Owner (`ID1460`) | `AdminDashboardTab` |
 | 3 | `my_tasks` | **Việc Được Giao** | Nhiệm vụ của tôi | Tất cả nhân sự (tùy chỉnh theo View) | `MyTasksTab` |
-| 4 | `equipment` | **Danh Sách Thiết Bị** | Máy móc & Mã QR | Tất cả nhân sự (tùy chỉnh theo View) | `EquipmentTab` |
-| 5 | `maintenance` | **Kế Hoạch & Lịch Sử** | Bảo trì định kỳ | Tất cả nhân sự (tùy chỉnh theo View) | `MaintenanceTab` |
-| 6 | `inspection_calibration` | **Kiểm Định & Hiệu Chuẩn** | An toàn, hiệu chuẩn & nhắc hạn | Tất cả nhân sự (tùy chỉnh theo View) | `SafetyInspectionTab` |
-| 7 | `tools` | **Dụng Cụ & Đồ Nghề** | Cấp phát, mượn trả & kiểm kê | Tất cả nhân sự (tùy chỉnh theo View) | `ToolsManagementTab` |
-| 8 | `tickets` | **Quản Lý Tickets** | Yêu cầu & sự cố | Tất cả nhân sự (tùy chỉnh theo View) | `TicketsTab` |
-| 9 | `projects` | **Quản Lý Dự Án** | Tiến độ, WBS, Kanban & Ngân sách | Tất cả nhân sự (tùy chỉnh theo View) | `ProjectsTab` |
-| 10 | `spare_parts` | **Kho Phụ Tùng** | Xuất nhập tồn kho | Tất cả nhân sự (tùy chỉnh theo View) | `SparePartsTab` |
-| 11 | `documents` | **Tra Cứu Tài Liệu** | SOP & Checklist | Tất cả nhân sự (tùy chỉnh theo View) | `DocumentsTab` |
-| 12 | `energy` | **Năng Lượng Điện - Nước** | EVN, Solar & Đồng hồ | Tất cả nhân sự (tùy chỉnh theo View) | `EnergyTab` |
-| 13 | `costs` | **Quản Lý Chi Phí** | Mua sắm & Sửa chữa | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `CostTab` |
-| 14 | `employees` | **Nhân Viên & Phân Quyền** | Tài khoản & Chức vụ | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `EmployeesTab` |
-| 15 | `employee_performance` | **Đánh Giá Hiệu Quả NV** | Khối lượng & hiệu suất (Admin) | Chỉ Admin / Owner (`ID1460`) | `EmployeePerformanceTab` |
-| 16 | `logs` | **Nhật Ký Hệ Thống** | Lịch sử thao tác | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `AuditLogTab` |
-| 17 | `email_alerts` | **Thông Báo Email** | Cấu hình thông báo | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `EmailAlertsTab` |
+| 4 | `morning_checks` | **Công Việc Đầu Ngày** | Kiểm tra Vòng trong, Vòng Ngoài & Phòng Utility | Tất cả nhân sự (tùy chỉnh theo View) | `MorningChecksTab` |
+| 5 | `profile` | **Hồ Sơ Cá Nhân** | Thông tin & Phép năm | Tất cả nhân sự (tùy chỉnh theo View) | `ProfileTab` |
+| 6 | `equipment` | **Danh Sách Thiết Bị** | Máy móc & Mã QR | Tất cả nhân sự (tùy chỉnh theo View) | `EquipmentTab` |
+| 7 | `maintenance` | **Kế Hoạch & Lịch Sử** | Bảo trì định kỳ | Tất cả nhân sự (tùy chỉnh theo View) | `MaintenanceTab` |
+| 8 | `inspection_calibration` | **Kiểm Định & Hiệu Chuẩn** | An toàn, hiệu chuẩn & nhắc hạn | Tất cả nhân sự (tùy chỉnh theo View) | `SafetyInspectionTab` |
+| 9 | `tools` | **Dụng Cụ & Đồ Nghề** | Cấp phát, mượn trả & kiểm kê | Tất cả nhân sự (tùy chỉnh theo View) | `ToolsManagementTab` |
+| 10 | `tickets` | **Quản Lý Tickets** | Yêu cầu & sự cố | Tất cả nhân sự (tùy chỉnh theo View) | `TicketsTab` |
+| 11 | `projects` | **Quản Lý Dự Án** | Tiến độ, WBS, Kanban & Ngân sách | Tất cả nhân sự (tùy chỉnh theo View) | `ProjectsTab` |
+| 12 | `spare_parts` | **Kho Phụ Tùng** | Xuất nhập tồn kho | Tất cả nhân sự (tùy chỉnh theo View) | `SparePartsTab` |
+| 13 | `documents` | **Tra Cứu Tài Liệu** | SOP & Checklist | Tất cả nhân sự (tùy chỉnh theo View) | `DocumentsTab` |
+| 14 | `energy` | **Năng Lượng Điện - Nước** | EVN, Solar & Đồng hồ | Tất cả nhân sự (tùy chỉnh theo View) | `EnergyTab` |
+| 15 | `costs` | **Quản Lý Chi Phí** | Mua sắm & Sửa chữa | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `CostTab` |
+| 16 | `employees` | **Nhân Viên & Phân Quyền** | Tài khoản & Chức vụ | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `EmployeesTab` |
+| 17 | `employee_performance` | **Đánh Giá Hiệu Quả NV** | Khối lượng & hiệu suất (Admin) | Chỉ Admin / Owner (`ID1460`) | `EmployeePerformanceTab` |
+| 18 | `logs` | **Nhật Ký Hệ Thống** | Lịch sử thao tác | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `AuditLogTab` |
+| 19 | `email_alerts` | **Thông Báo Email** | Cấu hình thông báo | Quản lý / Kỹ sư / Admin (hoặc cấp quyền View) | `EmailAlertsTab` |
 <!-- AUTO-SYNC:MENU-CATALOG:END -->
 
 ---
@@ -221,5 +223,7 @@ Phân hệ gồm 3 chế độ xem chuyển đổi ở góc trên:
 ---
 
 <!-- AUTO-SYNC:NEW-FEATURES:START -->
-- Trạng thái đồng bộ: Toàn bộ **17 phân hệ** và **17 module Tab** hiện tại đã có hướng dẫn chi tiết ở các mục trên.
+### Tính Năng Mới Tự Động Phát Hiện
+- **Công Việc Đầu Ngày** (`morning_checks` · Component `MorningChecksTab`): Kiểm tra Vòng trong, Vòng Ngoài & Phòng Utility *(Phạm vi: Tất cả nhân sự (tùy chỉnh theo View))*
+- **Hồ Sơ Cá Nhân** (`profile` · Component `ProfileTab`): Thông tin & Phép năm *(Phạm vi: Tất cả nhân sự (tùy chỉnh theo View))*
 <!-- AUTO-SYNC:NEW-FEATURES:END -->

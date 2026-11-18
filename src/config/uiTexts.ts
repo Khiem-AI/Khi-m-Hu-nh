@@ -22,6 +22,7 @@ export const UI_TEXTS = {
       dashboard: { label: 'Tổng Quan O&M', desc: '' },
       admin_dashboard: { label: 'Dashboard Admin', desc: '' },
       my_tasks: { label: 'Việc Được Giao', desc: '' },
+      morning_checks: { label: 'Công Việc Đầu Ngày', desc: '' },
       profile: { label: 'Hồ Sơ Cá Nhân', desc: '' },
       equipment: { label: 'Danh Sách Thiết Bị', desc: '' },
       maintenance: { label: 'Kế Hoạch & Lịch Sử', desc: '' },
@@ -54,6 +55,10 @@ export const UI_TEXTS = {
     myTasks: {
       badge: 'Công Việc Của Tôi',
       title: 'Danh Sách Công Việc Được Giao',
+    },
+    morningChecks: {
+      badge: 'Kiểm Tra Đầu Ngày',
+      title: 'Công Việc Đầu Ngày — Kiểm Tra Khu Vực Vòng Trong, Vòng Ngoài & Phòng Utility',
     },
     equipment: {
       title: 'Danh Mục Quản Lý Máy Móc & Thiết Bị',

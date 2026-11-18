@@ -7,7 +7,7 @@ import {
   ToolCondition,
   ToolItem,
 } from '../../types/cmms';
-import { formatDateVN, getInspectionDaysRemaining } from '../../utils/cmmsLogic';
+import { canDeleteRecords, formatDateVN, getInspectionDaysRemaining } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Wrench,
@@ -51,11 +51,13 @@ export const ToolsManagementTab: React.FC = () => {
     tools,
     toolLogs,
     employees,
+    currentUser,
     addTool,
     updateTool,
     deleteTool,
     recordToolTransaction,
   } = useCMMS();
+  const canDelete = canDeleteRecords(currentUser);
 
   const [subTab, setSubTab] = useState<'inventory' | 'logs'>('inventory');
   const [searchTerm, setSearchTerm] = useState('');
@@ -618,13 +620,16 @@ export const ToolsManagementTab: React.FC = () => {
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setDeletingTool(tool)}
-                      className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTool(tool)}
+                        className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400"
+                        title="Xóa"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -741,14 +746,16 @@ export const ToolsManagementTab: React.FC = () => {
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeletingTool(tool)}
-                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition"
-                              title="Xóa"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => setDeletingTool(tool)}
+                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition"
+                                title="Xóa"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1218,7 +1225,7 @@ export const ToolsManagementTab: React.FC = () => {
       )}
 
       {/* MODAL 3: Confirm Delete Tool */}
-      {deletingTool && (
+      {deletingTool && canDelete && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center gap-3 text-rose-400">

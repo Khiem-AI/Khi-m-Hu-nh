@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenancePlan, MaintenanceHistory, Equipment, MaintenanceWorkType } from '../../types/cmms';
-import { canViewCosts, formatDateVN, formatVND, getHistoryWorkType, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { canDeleteRecords, canManageMaintenancePlans, canViewCosts, formatDateVN, formatVND, getHistoryWorkType, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import {
   exportMaintenanceHistoryExcel,
@@ -269,7 +269,11 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
     };
   }, [filteredPlans, maintenanceHistory, activeMonthPrefix]);
 
+  const canDelete = canDeleteRecords(currentUser);
+  const canEditPlans = canManageMaintenancePlans(currentUser);
+
   const handleMovePlanToDate = (planId: string, newDate: string) => {
+    if (!canEditPlans) return;
     const plan = maintenancePlans.find((p) => p.id === planId);
     if (!plan || !newDate || plan.ngayBaoTriTiepTheo === newDate) return;
     const oldDate = plan.ngayBaoTriTiepTheo;
@@ -285,7 +289,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
   };
 
   const handleUndoLastMove = () => {
-    if (!undoMove) return;
+    if (!canEditPlans || !undoMove) return;
     rescheduleMaintenancePlan(undoMove.planId, undoMove.oldDate);
     setSelectedDate(undoMove.oldDate);
     showToast(`Đã hoàn tác lịch ${undoMove.label} về ${formatDateVN(undoMove.oldDate)}`);
@@ -293,6 +297,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
   };
 
   const handleConfirmDelete = () => {
+    if (!canDelete) return;
     if (deletingRecord) {
       deleteMaintenanceHistory(deletingRecord.id);
       setDeletingRecord(null);
@@ -747,14 +752,16 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-                      <button
-                        type="button"
-                        onClick={() => setPlanToAssign(plan)}
-                        className="flex-1 min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition whitespace-nowrap"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        Giao Việc
-                      </button>
+                      {canEditPlans && (
+                        <button
+                          type="button"
+                          onClick={() => setPlanToAssign(plan)}
+                          className="flex-1 min-h-[40px] inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition whitespace-nowrap"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          Giao Việc
+                        </button>
+                      )}
                       {eq ? (
                         <>
                           <button
@@ -847,14 +854,16 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                         </td>
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
-                            <button
-                              onClick={() => setPlanToAssign(plan)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition"
-                              title="Giao việc & Gửi email tới người phụ trách"
-                            >
-                              <Send className="w-3.5 h-3.5" />
-                              Giao Việc
-                            </button>
+                            {canEditPlans && (
+                              <button
+                                onClick={() => setPlanToAssign(plan)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition"
+                                title="Giao việc & Gửi email tới người phụ trách"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                Giao Việc
+                              </button>
+                            )}
                             {eq ? (
                               <button
                                 onClick={() => onOpenMaintenanceModal(eq)}
@@ -1051,13 +1060,15 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
-                              <button
-                                onClick={() => setDeletingRecord(item)}
-                                className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition"
-                                title="Xóa biên bản"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canDelete && (
+                                <button
+                                  onClick={() => setDeletingRecord(item)}
+                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition"
+                                  title="Xóa biên bản"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -1235,14 +1246,16 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                         >
                           <Edit2 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingRecord(item)}
-                          className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition"
-                          title="Xóa biên bản"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => setDeletingRecord(item)}
+                            className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-lg bg-slate-800 hover:bg-rose-950/60 text-slate-400 hover:text-rose-400 transition"
+                            title="Xóa biên bản"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1378,19 +1391,27 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center gap-1 text-cyan-400 font-semibold">
-                    <GripVertical className="w-3.5 h-3.5" />
-                    Kéo thẻ công việc sang ngày khác để dời lịch
-                  </span>
-                  {undoMove && (
-                    <button
-                      type="button"
-                      onClick={handleUndoLastMove}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold transition"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      Hoàn tác
-                    </button>
+                  {canEditPlans ? (
+                    <>
+                      <span className="inline-flex items-center gap-1 text-cyan-400 font-semibold">
+                        <GripVertical className="w-3.5 h-3.5" />
+                        Kéo thẻ công việc sang ngày khác để dời lịch
+                      </span>
+                      {undoMove && (
+                        <button
+                          type="button"
+                          onClick={handleUndoLastMove}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/30 font-bold transition"
+                        >
+                          <RotateCcw className="w-3 h-3" />
+                          Hoàn tác
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-slate-400 font-semibold">
+                      Chế độ chỉ xem kế hoạch (Không sửa / dời lịch)
+                    </span>
                   )}
                 </div>
               </div>
@@ -1427,25 +1448,37 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                           setSelectedDate(dateStr);
                         }
                       }}
-                      onDragOver={(e) => {
-                        e.preventDefault();
-                        e.dataTransfer.dropEffect = 'move';
-                        if (dragOverDate !== dateStr) setDragOverDate(dateStr);
-                      }}
-                      onDragLeave={(e) => {
-                        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                          setDragOverDate((prev) => (prev === dateStr ? null : prev));
-                        }
-                      }}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        const droppedPlanId = e.dataTransfer.getData('text/plain') || draggingPlanId;
-                        setDragOverDate(null);
-                        setDraggingPlanId(null);
-                        if (droppedPlanId) {
-                          handleMovePlanToDate(droppedPlanId, dateStr);
-                        }
-                      }}
+                      onDragOver={
+                        canEditPlans
+                          ? (e) => {
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = 'move';
+                              if (dragOverDate !== dateStr) setDragOverDate(dateStr);
+                            }
+                          : undefined
+                      }
+                      onDragLeave={
+                        canEditPlans
+                          ? (e) => {
+                              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                setDragOverDate((prev) => (prev === dateStr ? null : prev));
+                              }
+                            }
+                          : undefined
+                      }
+                      onDrop={
+                        canEditPlans
+                          ? (e) => {
+                              e.preventDefault();
+                              const droppedPlanId = e.dataTransfer.getData('text/plain') || draggingPlanId;
+                              setDragOverDate(null);
+                              setDraggingPlanId(null);
+                              if (droppedPlanId) {
+                                handleMovePlanToDate(droppedPlanId, dateStr);
+                              }
+                            }
+                          : undefined
+                      }
                       className={`text-left rounded-xl p-1.5 sm:p-2 border transition flex flex-col justify-between cursor-pointer select-none ${
                         calendarMode === 'week' ? 'min-h-[200px]' : 'min-h-[94px] sm:min-h-[114px]'
                       } ${
@@ -1484,22 +1517,32 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                           return (
                             <div
                               key={p.id}
-                              draggable
-                              onDragStart={(e) => {
-                                e.stopPropagation();
-                                e.dataTransfer.setData('text/plain', p.id);
-                                e.dataTransfer.effectAllowed = 'move';
-                                setDraggingPlanId(p.id);
-                              }}
-                              onDragEnd={() => {
-                                setDraggingPlanId(null);
-                                setDragOverDate(null);
-                              }}
+                              draggable={canEditPlans}
+                              onDragStart={
+                                canEditPlans
+                                  ? (e) => {
+                                      e.stopPropagation();
+                                      e.dataTransfer.setData('text/plain', p.id);
+                                      e.dataTransfer.effectAllowed = 'move';
+                                      setDraggingPlanId(p.id);
+                                    }
+                                  : undefined
+                              }
+                              onDragEnd={
+                                canEditPlans
+                                  ? () => {
+                                      setDraggingPlanId(null);
+                                      setDragOverDate(null);
+                                    }
+                                  : undefined
+                              }
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setSelectedDate(dateStr);
                               }}
-                              className={`group/chip flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-grab active:cursor-grabbing transition ${
+                              className={`group/chip flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border transition ${
+                                canEditPlans ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                              } ${
                                 isBeingDragged ? 'opacity-40 scale-95' : 'hover:brightness-110'
                               } ${
                                 p.trangThai === 'Quá hạn'
@@ -1510,9 +1553,15 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                                   ? 'bg-blue-500/20 text-blue-200 border-blue-500/35'
                                   : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/35'
                               }`}
-                              title={`Kéo để dời lịch: ${p.maThietBi} - ${p.tenThietBi} (${p.trangThai})`}
+                              title={
+                                canEditPlans
+                                  ? `Kéo để dời lịch: ${p.maThietBi} - ${p.tenThietBi} (${p.trangThai})`
+                                  : `${p.maThietBi} - ${p.tenThietBi} (${p.trangThai})`
+                              }
                             >
-                              <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-60 group-hover/chip:opacity-100 hidden sm:inline" />
+                              {canEditPlans && (
+                                <GripVertical className="w-2.5 h-2.5 shrink-0 opacity-60 group-hover/chip:opacity-100 hidden sm:inline" />
+                              )}
                               <span className="truncate font-mono">{p.maThietBi}</span>
                             </div>
                           );
@@ -1561,7 +1610,10 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                   <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 text-center space-y-2">
                     <Calendar className="w-7 h-7 text-slate-600 mx-auto" />
                     <p className="text-xs text-slate-400">
-                      Chưa có lịch bảo trì vào ngày <strong>{formatDateVN(selectedDate)}</strong>. Kéo một thẻ công việc từ lịch hoặc danh sách chờ bên dưới thả vào ngày này để xếp lịch.
+                      Chưa có lịch bảo trì vào ngày <strong>{formatDateVN(selectedDate)}</strong>.
+                      {canEditPlans
+                        ? ' Kéo một thẻ công việc từ lịch hoặc danh sách chờ bên dưới thả vào ngày này để xếp lịch.'
+                        : ''}
                     </p>
                   </div>
                 ) : (
@@ -1572,21 +1624,33 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                       return (
                         <div
                           key={plan.id}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData('text/plain', plan.id);
-                            e.dataTransfer.effectAllowed = 'move';
-                            setDraggingPlanId(plan.id);
-                          }}
-                          onDragEnd={() => {
-                            setDraggingPlanId(null);
-                            setDragOverDate(null);
-                          }}
-                          className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-cyan-500/40 space-y-2.5 cursor-grab active:cursor-grabbing transition"
+                          draggable={canEditPlans}
+                          onDragStart={
+                            canEditPlans
+                              ? (e) => {
+                                  e.dataTransfer.setData('text/plain', plan.id);
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  setDraggingPlanId(plan.id);
+                                }
+                              : undefined
+                          }
+                          onDragEnd={
+                            canEditPlans
+                              ? () => {
+                                  setDraggingPlanId(null);
+                                  setDragOverDate(null);
+                                }
+                              : undefined
+                          }
+                          className={`p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 hover:border-cyan-500/40 space-y-2.5 transition ${
+                            canEditPlans ? 'cursor-grab active:cursor-grabbing' : ''
+                          }`}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-start gap-2 min-w-0">
-                              <GripVertical className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
+                              {canEditPlans && (
+                                <GripVertical className="w-4 h-4 text-slate-500 mt-0.5 shrink-0" />
+                              )}
                               <div className="min-w-0">
                                 <span className="font-mono text-xs font-bold text-cyan-400">
                                   {plan.maThietBi}
@@ -1628,27 +1692,29 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                           </div>
 
                           {/* Quick date reschedule fallback (touch/keyboard friendly) */}
-                          <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/80">
-                            <input
-                              type="date"
-                              value={draftDate}
-                              onChange={(e) =>
-                                setRescheduleDrafts((prev) => ({
-                                  ...prev,
-                                  [plan.id]: e.target.value,
-                                }))
-                              }
-                              className="flex-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
-                            />
-                            <button
-                              type="button"
-                              disabled={!draftDate || draftDate === plan.ngayBaoTriTiepTheo}
-                              onClick={() => handleMovePlanToDate(plan.id, draftDate)}
-                              className="px-2.5 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/35 disabled:opacity-40 disabled:cursor-not-allowed text-cyan-300 border border-cyan-500/35 text-[11px] font-bold transition whitespace-nowrap"
-                            >
-                              Dời ngày
-                            </button>
-                          </div>
+                          {canEditPlans && (
+                            <div className="flex items-center gap-1.5 pt-2 border-t border-slate-800/80">
+                              <input
+                                type="date"
+                                value={draftDate}
+                                onChange={(e) =>
+                                  setRescheduleDrafts((prev) => ({
+                                    ...prev,
+                                    [plan.id]: e.target.value,
+                                  }))
+                                }
+                                className="flex-1 px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-200 text-[11px] font-mono focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                              />
+                              <button
+                                type="button"
+                                disabled={!draftDate || draftDate === plan.ngayBaoTriTiepTheo}
+                                onClick={() => handleMovePlanToDate(plan.id, draftDate)}
+                                className="px-2.5 py-1 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/35 disabled:opacity-40 disabled:cursor-not-allowed text-cyan-300 border border-cyan-500/35 text-[11px] font-bold transition whitespace-nowrap"
+                              >
+                                Dời ngày
+                              </button>
+                            </div>
+                          )}
 
                           <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-800">
                             {eq && (
@@ -1661,15 +1727,17 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                                 Bảo Trì Ngay
                               </button>
                             )}
-                            <button
-                              type="button"
-                              onClick={() => setPlanToAssign(plan)}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition whitespace-nowrap"
-                              title="Giao việc & Gửi email"
-                            >
-                              <Send className="w-3.5 h-3.5" />
-                              Giao Việc
-                            </button>
+                            {canEditPlans && (
+                              <button
+                                type="button"
+                                onClick={() => setPlanToAssign(plan)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 text-xs font-bold transition whitespace-nowrap"
+                                title="Giao việc & Gửi email"
+                              >
+                                <Send className="w-3.5 h-3.5" />
+                                Giao Việc
+                              </button>
+                            )}
                             {eq && (
                               <button
                                 type="button"
@@ -1718,7 +1786,9 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                       Việc Chưa Thực Hiện Cần Sắp Xếp ({monthSummary.draggableBacklog.length})
                     </h4>
                     <p className="text-[11px] text-slate-400">
-                      Kéo thả thẻ bên dưới vào một ô ngày trên lịch
+                      {canEditPlans
+                        ? 'Kéo thả thẻ bên dưới vào một ô ngày trên lịch'
+                        : 'Nhấn vào công việc để chọn ngày tương ứng trên lịch'}
                     </p>
                   </div>
                 </div>
@@ -1732,26 +1802,38 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                     {monthSummary.draggableBacklog.map((plan) => (
                       <div
                         key={`queue-${plan.id}`}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/plain', plan.id);
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDraggingPlanId(plan.id);
-                        }}
-                        onDragEnd={() => {
-                          setDraggingPlanId(null);
-                          setDragOverDate(null);
-                        }}
+                        draggable={canEditPlans}
+                        onDragStart={
+                          canEditPlans
+                            ? (e) => {
+                                e.dataTransfer.setData('text/plain', plan.id);
+                                e.dataTransfer.effectAllowed = 'move';
+                                setDraggingPlanId(plan.id);
+                              }
+                            : undefined
+                        }
+                        onDragEnd={
+                          canEditPlans
+                            ? () => {
+                                setDraggingPlanId(null);
+                                setDragOverDate(null);
+                              }
+                            : undefined
+                        }
                         onClick={() => {
                           setSelectedDate(plan.ngayBaoTriTiepTheo);
                           setCalendarRefDate(plan.ngayBaoTriTiepTheo);
                         }}
-                        className={`flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/60 border cursor-grab active:cursor-grabbing hover:border-cyan-500/40 transition ${
+                        className={`flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950/60 border hover:border-cyan-500/40 transition ${
+                          canEditPlans ? 'cursor-grab active:cursor-grabbing' : 'cursor-pointer'
+                        } ${
                           draggingPlanId === plan.id ? 'opacity-50 border-cyan-500' : 'border-slate-800'
                         }`}
                       >
                         <div className="flex items-center gap-2 min-w-0">
-                          <GripVertical className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          {canEditPlans && (
+                            <GripVertical className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          )}
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-slate-100 truncate">
                               <span className="font-mono text-cyan-400 mr-1.5">{plan.maThietBi}</span>
@@ -1801,7 +1883,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
       />
 
       {/* MODAL 3: Confirm Delete Modal */}
-      {deletingRecord && (
+      {deletingRecord && canDelete && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <div className="flex items-center gap-3 text-rose-400">
@@ -1834,7 +1916,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
       )}
 
       {/* MODAL 4: Work Assignment & Email Notification */}
-      {planToAssign && (
+      {planToAssign && canEditPlans && (
         <WorkAssignmentModal
           isOpen={Boolean(planToAssign)}
           onClose={() => setPlanToAssign(null)}

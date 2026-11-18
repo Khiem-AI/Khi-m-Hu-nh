@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Equipment, MaintenanceWorkType, RiskLevel, EquipmentStatus } from '../../types/cmms';
-import { formatDateVN } from '../../utils/cmmsLogic';
+import { canDeleteRecords, formatDateVN } from '../../utils/cmmsLogic';
 import { EquipmentImage, isDirectUploadedImage } from '../../utils/imageUtils';
 import { EquipmentDetailModal } from '../EquipmentDetailModal';
 import { WorkAssignmentModal } from '../common/WorkAssignmentModal';
@@ -41,7 +41,8 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
   onOpenAddEquipment,
   onOpenEditEquipment,
 }) => {
-  const { equipment, deleteEquipment } = useCMMS();
+  const { equipment, deleteEquipment, currentUser } = useCMMS();
+  const canDelete = canDeleteRecords(currentUser);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSystem, setSelectedSystem] = useState<string>('ALL');
@@ -497,15 +498,17 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
                           >
                             <Edit className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => {
-                              deleteEquipment(item.maThietBi);
-                            }}
-                            title="Xóa máy"
-                            className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          {canDelete && (
+                            <button
+                              onClick={() => {
+                                deleteEquipment(item.maThietBi);
+                              }}
+                              title="Xóa máy"
+                              className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>

@@ -32,6 +32,7 @@ import {
   PinOff,
   PanelLeftClose,
   ChevronRight,
+  Sunrise,
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -55,7 +56,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   isDesktopHoverOpen = false,
   onDesktopHoverChange,
 }) => {
-  const { maintenancePlans, tickets, spareParts, projects, safetyInspections, tools, currentUser } = useCMMS();
+  const { maintenancePlans, tickets, spareParts, projects, safetyInspections, tools, dailyAreaChecks, currentUser } = useCMMS();
   const hoverCloseTimerRef = React.useRef<number | null>(null);
 
   const clearHoverTimer = React.useCallback(() => {
@@ -127,6 +128,11 @@ export const Navigation: React.FC<NavigationProps> = ({
       t.trangThai !== 'Hủy'
   ).length;
   const myPendingCount = myPendingPlansCount + myOpenTicketsCount;
+  const pendingMorningChecksCount = dailyAreaChecks.filter(
+    (c) =>
+      c.trangThai !== 'Đã hoàn thành' &&
+      (isAdminLevel(currentUser) || matchesAssignee(c.nguoiDuocGiao, currentUser))
+  ).length;
 
   const navItems = [
     {
@@ -152,6 +158,14 @@ export const Navigation: React.FC<NavigationProps> = ({
       icon: ClipboardCheck,
       badge: myPendingCount > 0 ? `${myPendingCount} việc` : null,
       badgeColor: 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30',
+    },
+    {
+      id: 'morning_checks',
+      label: UI_TEXTS.navigation.items.morning_checks.label,
+      desc: UI_TEXTS.navigation.items.morning_checks.desc,
+      icon: Sunrise,
+      badge: pendingMorningChecksCount > 0 ? `${pendingMorningChecksCount} khu` : null,
+      badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     },
     {
       id: 'profile',

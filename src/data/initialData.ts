@@ -18,6 +18,7 @@ import {
   SafetyInspectionItem,
   ToolItem,
   ToolBorrowLog,
+  DailyAreaCheck,
 } from '../types/cmms';
 
 // Sheet 1: Danh_sach_thiet_bi (131 equipments from official factory master list)
@@ -11058,4 +11059,57 @@ export const INITIAL_TOOL_LOGS: ToolBorrowLog[] = [
     ghiChu: 'Đã chụp ảnh nhiệt định kỳ tủ phân phối MSB2, pin sạc đầy 100%.',
   },
 ];
+
+export const INITIAL_DAILY_AREA_CHECKS: DailyAreaCheck[] = [
+  {
+    id: 'DAC-20261110-VT',
+    ngayKiemTra: '2026-11-10',
+    caLamViec: 'Ca Sáng',
+    khuVuc: 'Vòng trong',
+    tieuDe: 'Kiểm tra đầu ngày khu vực sản xuất & văn phòng (Vòng trong)',
+    moTaCongViec:
+      '1. Kiểm tra nhiệt độ & độ ẩm khu vực xưởng sản xuất, kho nguyên liệu và phòng sạch qua màn hình AHU/BMS.\n2. Kiểm tra áp suất chênh áp phòng Coating, phòng IQC và trạng thái hoạt động quạt hút/quạt cấp.\n3. Kiểm tra chiếu sáng nhà xưởng, văn phòng tầng 1–2, đèn Exit & cửa thoát hiểm không bị che chắn.\n4. Kiểm tra rò rỉ nước/dầu sàn nhà xưởng, khu vực FCU và nhà vệ sinh sản xuất.',
+    nguoiDuocGiao: 'Trương Quang Sơn',
+    nguoiPhanQuyen: 'Khiem Huynh',
+    hanHoanThanh: '08:30',
+    trangThai: 'Đã hoàn thành',
+    ketQua: 'Bình thường',
+    baoCaoThucTe:
+      'Nhiệt độ xưởng 24.5°C, độ ẩm 56% đạt chuẩn. Các AHU 01–06 chạy ổn định, áp suất lọc không báo nghẹt. Đèn Exit và lối thoát hiểm thông thoáng, không phát hiện rò rỉ nước.',
+    nguoiBaoCao: 'Trương Quang Sơn',
+    thoiGianBaoCao: '2026-11-10 08:15',
+  },
+  {
+    id: 'DAC-20261110-VN',
+    ngayKiemTra: '2026-11-10',
+    caLamViec: 'Ca Sáng',
+    khuVuc: 'Vòng Ngoài',
+    tieuDe: 'Kiểm tra đầu ngày khuôn viên ngoài xưởng & trạm phụ (Vòng Ngoài)',
+    moTaCongViec:
+      '1. Kiểm tra hệ thống bơm nước sinh hoạt (WAT-DBV-01/02), mực nước bể ngầm 200m³ và rò rỉ đường ống cấp thoát nước ngoài trời.\n2. Kiểm tra khu vực trạm xử lý nước thải, đầu ra nước thải DI và hệ thống cống rãnh xung quanh nhà máy.\n3. Kiểm tra tủ điện chiếu sáng ngoài trời, hàng rào an toàn, cổng bảo vệ 1 & 2, hệ thống điều hòa nhà bảo vệ.\n4. Kiểm tra khu vực kho hóa chất, mái che, bảng cảnh báo an toàn & bình chữa cháy vòng ngoài.',
+    nguoiDuocGiao: 'Lê Văn Thắng',
+    nguoiPhanQuyen: 'Khiem Huynh',
+    hanHoanThanh: '08:45',
+    trangThai: 'Đang kiểm tra',
+    ketQua: 'Chưa đánh giá',
+    baoCaoThucTe: 'Đang kiểm tra khu vực bể nước sinh hoạt và trạm xử lý nước thải.',
+    nguoiBaoCao: 'Lê Văn Thắng',
+    thoiGianBaoCao: '2026-11-10 08:05',
+  },
+  {
+    id: 'DAC-20261110-UT',
+    ngayKiemTra: '2026-11-10',
+    caLamViec: 'Ca Sáng',
+    khuVuc: 'Phòng Utility',
+    tieuDe: 'Kiểm tra đầu ngày hệ thống trung tâm Phòng Utility',
+    moTaCongViec:
+      '1. Kiểm tra thông số vận hành Chiller 01, Chiller 02, Mini Chiller: nhiệt độ nước cấp/hồi, áp suất gas, độ rung và tiếng ồn bất thường.\n2. Kiểm tra cụm bơm nước lạnh (CHWP), bơm giải nhiệt (CLWP) và tháp giải nhiệt Cooling Tower 01–02.\n3. Kiểm tra cụm máy nén khí GA90-1/2, GA75-1, máy sấy khí FD220 và áp suất khí nén đường ống chính.\n4. Kiểm tra tủ điện phân phối MSB1–MSB5, nhiệt độ thanh cái, điện áp 3 pha, máy phát điện dự phòng & hệ thống nước DI.',
+    nguoiDuocGiao: 'Đỗ Hữu Thịnh, Trương Quang Sơn',
+    nguoiPhanQuyen: 'Khiem Huynh',
+    hanHoanThanh: '08:30',
+    trangThai: 'Chờ kiểm tra',
+    ketQua: 'Chưa đánh giá',
+  },
+];
+
 

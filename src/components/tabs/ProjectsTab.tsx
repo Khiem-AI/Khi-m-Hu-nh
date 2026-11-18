@@ -15,6 +15,7 @@ import {
 } from '../../types/cmms';
 import {
   calculateProjectProgress,
+  canDeleteRecords,
   canViewCosts,
   formatDateVN,
   formatVND,
@@ -151,6 +152,7 @@ export const ProjectsTab: React.FC = () => {
     sendEmailNotification,
   } = useCMMS();
   const showCosts = canViewCosts(currentUser);
+  const canDelete = canDeleteRecords(currentUser);
 
   // Portfolio Filters & View State
   const [searchTerm, setSearchTerm] = useState('');
@@ -398,7 +400,7 @@ export const ProjectsTab: React.FC = () => {
   };
 
   const handleConfirmDeleteProject = () => {
-    if (!projectToDelete) return;
+    if (!projectToDelete || !canDelete) return;
     if (selectedProjectId === projectToDelete.id) {
       setSelectedProjectId(null);
     }
@@ -566,7 +568,7 @@ export const ProjectsTab: React.FC = () => {
   };
 
   const handleDeleteTask = (taskId: string) => {
-    if (!selectedProject) return;
+    if (!selectedProject || !canDelete) return;
     updateProject({
       ...selectedProject,
       congViec: selectedProject.congViec.filter((t) => t.id !== taskId),
@@ -633,7 +635,7 @@ export const ProjectsTab: React.FC = () => {
   };
 
   const handleDeleteMilestone = (msId: string) => {
-    if (!selectedProject) return;
+    if (!selectedProject || !canDelete) return;
     updateProject({
       ...selectedProject,
       cotMoc: selectedProject.cotMoc.filter((m) => m.id !== msId),
@@ -687,7 +689,7 @@ export const ProjectsTab: React.FC = () => {
   };
 
   const handleDeleteExpense = (expId: string) => {
-    if (!selectedProject) return;
+    if (!selectedProject || !canDelete) return;
     const nextExpenses = selectedProject.khoanChi.filter((ex) => ex.id !== expId);
     updateProject({
       ...selectedProject,
@@ -736,7 +738,7 @@ export const ProjectsTab: React.FC = () => {
   };
 
   const handleDeleteRisk = (riskId: string) => {
-    if (!selectedProject) return;
+    if (!selectedProject || !canDelete) return;
     updateProject({
       ...selectedProject,
       ruiRo: selectedProject.ruiRo.filter((r) => r.id !== riskId),
@@ -845,14 +847,16 @@ export const ProjectsTab: React.FC = () => {
               <span>Sửa Dự Án</span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => setProjectToDelete(project)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 text-xs font-semibold transition min-h-[38px]"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-              <span>Xóa</span>
-            </button>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => setProjectToDelete(project)}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-rose-950/50 hover:bg-rose-900/60 text-rose-300 border border-rose-500/30 text-xs font-semibold transition min-h-[38px]"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Xóa</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -1112,14 +1116,16 @@ export const ProjectsTab: React.FC = () => {
                             </div>
                           </div>
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteMilestone(ms.id)}
-                          aria-label="Xóa cột mốc"
-                          className="p-1 text-slate-500 hover:text-rose-400 transition shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteMilestone(ms.id)}
+                            aria-label="Xóa cột mốc"
+                            className="p-1 text-slate-500 hover:text-rose-400 transition shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     );
                   })
@@ -1336,14 +1342,16 @@ export const ProjectsTab: React.FC = () => {
                                     >
                                       <Edit3 className="w-3.5 h-3.5" />
                                     </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteTask(task.id)}
-                                      title="Xóa đầu việc"
-                                      className="p-1.5 rounded-md bg-slate-900 hover:bg-rose-950/60 text-rose-400 transition"
-                                    >
-                                      <Trash2 className="w-3.5 h-3.5" />
-                                    </button>
+                                    {canDelete && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteTask(task.id)}
+                                        title="Xóa đầu việc"
+                                        className="p-1.5 rounded-md bg-slate-900 hover:bg-rose-950/60 text-rose-400 transition"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1420,13 +1428,15 @@ export const ProjectsTab: React.FC = () => {
                             >
                               <Edit3 className="w-4 h-4" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteTask(task.id)}
-                              className="p-2 rounded-lg bg-rose-950/60 text-rose-400"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            {canDelete && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteTask(task.id)}
+                                className="p-2 rounded-lg bg-rose-950/60 text-rose-400"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1529,14 +1539,16 @@ export const ProjectsTab: React.FC = () => {
                                   >
                                     <Edit3 className="w-3.5 h-3.5" />
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteTask(task.id)}
-                                    title="Xóa đầu việc"
-                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-rose-400 transition"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  {canDelete && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteTask(task.id)}
+                                      title="Xóa đầu việc"
+                                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-rose-400 transition"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -1793,13 +1805,15 @@ export const ProjectsTab: React.FC = () => {
                           >
                             {exp.trangThai}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteExpense(exp.id)}
-                            className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 transition"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {canDelete && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteExpense(exp.id)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -1933,13 +1947,15 @@ export const ProjectsTab: React.FC = () => {
                         >
                           {risk.trangThai === 'Đang theo dõi' ? 'Đánh dấu đã xử lý' : 'Mở lại'}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteRisk(risk.id)}
-                          className="p-1.5 rounded-md text-slate-500 hover:text-rose-400 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRisk(risk.id)}
+                            className="p-1.5 rounded-md text-slate-500 hover:text-rose-400 transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                     <div className="text-xs font-bold text-slate-100">{risk.moTa}</div>
@@ -2558,13 +2574,15 @@ export const ProjectsTab: React.FC = () => {
                                 >
                                   <Edit3 className="w-3.5 h-3.5" />
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setProjectToDelete(p)}
-                                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-rose-400 transition"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                {canDelete && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setProjectToDelete(p)}
+                                    className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-rose-400 transition"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -2717,14 +2735,16 @@ export const ProjectsTab: React.FC = () => {
                         >
                           <Edit3 className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => setProjectToDelete(p)}
-                          aria-label="Xóa dự án"
-                          className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-rose-400 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => setProjectToDelete(p)}
+                            aria-label="Xóa dự án"
+                            className="p-2 rounded-lg bg-slate-800 hover:bg-rose-950/60 text-rose-400 transition"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -3167,7 +3187,7 @@ export const ProjectsTab: React.FC = () => {
       )}
 
       {/* IN-APP DELETE CONFIRMATION MODAL */}
-      {projectToDelete && (
+      {projectToDelete && canDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
           <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4 shadow-2xl">
             <div className="flex items-center gap-3 text-rose-400">

@@ -256,6 +256,44 @@ export function canViewCosts(user?: Employee | null): boolean {
 }
 
 /**
+ * Technicians ('Kỹ thuật viên') and Operators ('Nhân viên vận hành') can edit operational records
+ * (equipment, tickets, tools, spare parts, maintenance history) but cannot delete them.
+ */
+export function canDeleteRecords(user?: Employee | null): boolean {
+  if (!user) return false;
+  if (isAdminLevel(user)) return true;
+  if (user.chucVu === 'Kỹ thuật viên' || user.chucVu === 'Nhân viên vận hành') {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Technicians ('Kỹ thuật viên') and Operators ('Nhân viên vận hành') have read-only access
+ * to maintenance plans (cannot edit, reschedule, assign, or delete plans).
+ */
+export function canManageMaintenancePlans(user?: Employee | null): boolean {
+  if (!user) return false;
+  if (isAdminLevel(user)) return true;
+  if (user.chucVu === 'Kỹ thuật viên' || user.chucVu === 'Nhân viên vận hành') {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Technicians ('Kỹ thuật viên') and Operators ('Nhân viên vận hành') cannot export CSV reports on Dashboard.
+ */
+export function canExportCSV(user?: Employee | null): boolean {
+  if (!user) return false;
+  if (isAdminLevel(user)) return true;
+  if (user.chucVu === 'Kỹ thuật viên' || user.chucVu === 'Nhân viên vận hành') {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Returns the effective list of tab/view IDs an employee is authorized to see.
  */
 export function getEffectiveAllowedViews(user?: Employee | null): string[] {
@@ -291,6 +329,7 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
   return filterRestrictedViews([
     'dashboard',
     'my_tasks',
+    'morning_checks',
     'profile',
     'equipment',
     'maintenance',

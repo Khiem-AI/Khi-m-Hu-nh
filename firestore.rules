@@ -453,6 +453,27 @@ service cloud.firestore {
         data.chiTietNoiDung is string && data.chiTietNoiDung.size() <= 2000;
     }
 
+    function isValidDailyAreaCheck(data) {
+      return data.keys().hasAll(['id', 'ngayKiemTra', 'caLamViec', 'khuVuc', 'tieuDe', 'moTaCongViec', 'nguoiDuocGiao', 'trangThai', 'ketQua', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'ngayKiemTra', 'caLamViec', 'khuVuc', 'tieuDe', 'moTaCongViec', 'nguoiDuocGiao', 'nguoiPhanQuyen', 'hanHoanThanh', 'trangThai', 'ketQua', 'baoCaoThucTe', 'nguoiBaoCao', 'thoiGianBaoCao', 'anhHienTruong', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.ngayKiemTra is string && data.ngayKiemTra.size() <= 32 &&
+        data.caLamViec in ['Ca Sáng', 'Ca Chiều', 'Ca Đêm'] &&
+        data.khuVuc in ['Vòng trong', 'Vòng Ngoài', 'Phòng Utility'] &&
+        data.tieuDe is string && data.tieuDe.size() >= 1 && data.tieuDe.size() <= 300 &&
+        data.moTaCongViec is string && data.moTaCongViec.size() <= 4000 &&
+        data.nguoiDuocGiao is string && data.nguoiDuocGiao.size() <= 300 &&
+        data.trangThai in ['Chờ kiểm tra', 'Đang kiểm tra', 'Đã hoàn thành'] &&
+        data.ketQua in ['Chưa đánh giá', 'Bình thường', 'Cần theo dõi', 'Có sự cố'] &&
+        (!('nguoiPhanQuyen' in data) || (data.nguoiPhanQuyen is string && data.nguoiPhanQuyen.size() <= 160)) &&
+        (!('hanHoanThanh' in data) || (data.hanHoanThanh is string && data.hanHoanThanh.size() <= 32)) &&
+        (!('baoCaoThucTe' in data) || (data.baoCaoThucTe is string && data.baoCaoThucTe.size() <= 4000)) &&
+        (!('nguoiBaoCao' in data) || (data.nguoiBaoCao is string && data.nguoiBaoCao.size() <= 160)) &&
+        (!('thoiGianBaoCao' in data) || (data.thoiGianBaoCao is string && data.thoiGianBaoCao.size() <= 40)) &&
+        (!('anhHienTruong' in data) || (data.anhHienTruong is string && data.anhHienTruong.size() <= 450000));
+    }
+
     // Collection Rules
     match /admins/{uid} {
       allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isBootstrappedAdmin());
@@ -631,6 +652,14 @@ service cloud.firestore {
       allow list: if isSignedIn() && isMemberOnDoc(existing());
       allow create: if isValidId(docId) && isSignedIn() && isValidAuditLog(incoming()) && isValidCreateMeta(incoming());
       allow update: if isValidId(docId) && isAdmin() && isValidAuditLog(incoming()) && isValidUpdateMeta() && incoming().diff(existing()).affectedKeys().hasOnly(['allowedEmails', 'updatedAt']);
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /daily_area_checks/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidDailyAreaCheck(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidDailyAreaCheck(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['ngayKiemTra', 'caLamViec', 'khuVuc', 'tieuDe', 'moTaCongViec', 'nguoiDuocGiao', 'nguoiPhanQuyen', 'hanHoanThanh', 'trangThai', 'ketQua', 'baoCaoThucTe', 'nguoiBaoCao', 'thoiGianBaoCao', 'anhHienTruong', 'allowedEmails', 'updatedAt'])));
       allow delete: if isValidId(docId) && isAdmin();
     }
   }

@@ -29,6 +29,9 @@ import {
   EmailSendResult,
   AutoEmailServerStatus,
   WebNotificationItem,
+  DailyAreaCheck,
+  DailyAreaCheckResult,
+  DailyAreaCheckStatus,
 } from '../types/cmms';
 import { buildProfessionalEmailHtml } from '../utils/emailTemplates';
 import {
@@ -51,6 +54,7 @@ import {
   INITIAL_SAFETY_INSPECTIONS,
   INITIAL_TOOLS,
   INITIAL_TOOL_LOGS,
+  INITIAL_DAILY_AREA_CHECKS,
 } from '../data/initialData';
 import {
   calculateNextMaintenanceDate,
@@ -70,6 +74,8 @@ import {
   isValidEmailFormat,
   isAdminLevel,
   canAccessBackup,
+  canDeleteRecords,
+  canManageMaintenancePlans,
 } from '../utils/cmmsLogic';
 import {
   GmailAccountInfo,
@@ -110,6 +116,7 @@ import {
   sanitizeToolItem,
   sanitizeToolLog,
   sanitizeWaterMonthly,
+  sanitizeDailyAreaCheck,
   WATER_MONTHLY_SEED_VERSION,
   seedOrPushWorkspaceToFirestore,
   subscribeCloudCollection,
@@ -146,6 +153,7 @@ interface CMMSContextType {
   safetyInspections: SafetyInspectionItem[];
   tools: ToolItem[];
   toolLogs: ToolBorrowLog[];
+  dailyAreaChecks: DailyAreaCheck[];
   currentUser: Employee;
 
   // Equipment Actions
@@ -247,6 +255,18 @@ interface CMMSContextType {
   addProject: (project: Omit<FacilityProject, 'id'>) => void;
   updateProject: (project: FacilityProject) => void;
   deleteProject: (id: string) => void;
+
+  // Daily Start-Of-Day Area Checks ("Công Việc Đầu Ngày")
+  addDailyAreaCheck: (check: Omit<DailyAreaCheck, 'id'>) => DailyAreaCheck | null;
+  updateDailyAreaCheck: (check: DailyAreaCheck) => void;
+  submitDailyAreaCheckReport: (params: {
+    id: string;
+    trangThai: DailyAreaCheckStatus;
+    ketQua: DailyAreaCheckResult;
+    baoCaoThucTe: string;
+    anhHienTruong?: string;
+  }) => void;
+  deleteDailyAreaCheck: (id: string) => void;
 
   // Email & Alert Service
   emailConfig: EmailConfig;
@@ -356,7 +376,13 @@ interface CMMSContextType {
   forceSyncLocalToCloud: () => Promise<{ success: boolean; message: string }>;
 
   // System Actions
-  addAuditLog: (action: AuditLog['hanhDong'], chucNang: string, doiTuong: string, details: string) => void;
+  addAuditLog: (
+    action: AuditLog['hanhDong'],
+    chucNang: string,
+    doiTuong: string,
+    details: string,
+    actorOverride?: Employee
+  ) => void;
   resetToDefaultData: () => void;
   exportDatabaseJSON: () => void;
   restoreFullBackup: (data: any) => boolean;
@@ -627,12 +653,24 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   );
   const [tools, setTools] = useState<ToolItem[]>(() => loadStorage('tools', INITIAL_TOOLS));
   const [toolLogs, setToolLogs] = useState<ToolBorrowLog[]>(() => loadStorage('toolLogs', INITIAL_TOOL_LOGS));
+  const [dailyAreaChecks, setDailyAreaChecks] = useState<DailyAreaCheck[]>(() =>
+    loadStorage('dailyAreaChecks', INITIAL_DAILY_AREA_CHECKS)
+  );
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('cmms_authenticated') === 'true';
   });
 
   const [currentUser, setCurrentUserState] = useState<Employee>(() => {
+    const authCode =
+      typeof sessionStorage !== 'undefined'
+        ? sessionStorage.getItem('cmms_auth_user')?.trim().toUpperCase()
+        : '';
+    if (authCode) {
+      const empList = loadStorage<Employee[]>('employees', INITIAL_EMPLOYEES);
+      const matched = empList.find((e) => e.maNhanVien.trim().toUpperCase() === authCode);
+      if (matched) return matched;
+    }
     const saved = loadStorage<Employee | null>('currentUser', null);
     return saved && saved.maNhanVien ? saved : INITIAL_EMPLOYEES[0];
   });
@@ -652,6 +690,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const workspaceReadyRef = useRef<boolean>(false);
   const inFlightEmailSignaturesRef = useRef<Set<string>>(new Set());
   const autoInspectionCheckedDateRef = useRef<string>('');
+  const pendingGoogleLoginAuditRef = useRef<boolean>(false);
+
+  const applyCurrentUser = (nextUser: Employee, persistSession = false) => {
+    currentUserRef.current = nextUser;
+    setCurrentUserState(nextUser);
+    saveStorage('currentUser', nextUser);
+    if (persistSession) {
+      sessionStorage.setItem('cmms_authenticated', 'true');
+      sessionStorage.setItem('cmms_auth_user', nextUser.maNhanVien);
+    }
+  };
 
   useEffect(() => {
     employeesRef.current = employees;
@@ -678,6 +727,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     safetyInspections,
     tools,
     toolLogs,
+    dailyAreaChecks,
     emailLogs,
     auditLogs,
     emailConfig,
@@ -702,6 +752,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       safetyInspections,
       tools,
       toolLogs,
+      dailyAreaChecks,
       emailLogs,
       auditLogs,
       emailConfig,
@@ -724,6 +775,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     safetyInspections,
     tools,
     toolLogs,
+    dailyAreaChecks,
     emailLogs,
     auditLogs,
     emailConfig,
@@ -809,13 +861,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (activeCode) {
       const refreshedCurrent = sorted.find((e) => e.maNhanVien === activeCode);
       if (refreshedCurrent) {
-        setCurrentUserState(refreshedCurrent);
-        saveStorage('currentUser', refreshedCurrent);
+        applyCurrentUser(refreshedCurrent, false);
       }
     }
   };
 
-  const matchOrApplyCloudUser = (fbUser: User): boolean => {
+  const matchOrApplyCloudUser = (fbUser: User, recordLoginAudit = false): boolean => {
     const emailLower = (fbUser.email || '').trim().toLowerCase();
     if (!emailLower) return false;
 
@@ -830,10 +881,19 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return false;
     }
 
-    setCurrentUserState(matched);
-    saveStorage('currentUser', matched);
+    const prevCode = currentUserRef.current?.maNhanVien;
+    const wasAuthed = sessionStorage.getItem('cmms_authenticated') === 'true';
+    applyCurrentUser(matched, true);
     setIsAuthenticated(true);
-    sessionStorage.setItem('cmms_authenticated', 'true');
+    if (recordLoginAudit && (!wasAuthed || prevCode !== matched.maNhanVien)) {
+      addAuditLog(
+        'Đăng nhập',
+        'Hệ thống',
+        matched.maNhanVien,
+        `Người dùng ${matched.tenNhanVien} (${matched.maNhanVien} - ${matched.chucVu}) đăng nhập bằng Google thành công`,
+        matched
+      );
+    }
     return true;
   };
 
@@ -899,8 +959,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCloudSyncStatus('syncing');
       setCloudSyncError(null);
 
-      if (sessionStorage.getItem('cmms_authenticated') !== 'true' || isBootAdmin) {
-        matchOrApplyCloudUser(fbUser);
+      const wasAuthed = sessionStorage.getItem('cmms_authenticated') === 'true';
+      const shouldAuditGoogleLogin = pendingGoogleLoginAuditRef.current || !wasAuthed;
+      pendingGoogleLoginAuditRef.current = false;
+      if (!wasAuthed || isBootAdmin) {
+        matchOrApplyCloudUser(fbUser, shouldAuditGoogleLogin);
       }
 
       if (isBootAdmin) {
@@ -1230,6 +1293,22 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           onSnapError
         ),
+        subscribeCloudCollection<DailyAreaCheck>(
+          'daily_area_checks',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setDailyAreaChecks(
+                [...items].sort((a, b) =>
+                  (b.ngayKiemTra || '').localeCompare(a.ngayKiemTra || '')
+                )
+              );
+            }
+          },
+          onSnapError
+        ),
         subscribeCloudCollection<EmailLog>(
           'email_logs',
           fbUser.email,
@@ -1278,6 +1357,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const connectCloudWithGoogle = async (): Promise<{ success: boolean; message: string }> => {
     setCloudSyncStatus('connecting');
     setCloudSyncError(null);
+    pendingGoogleLoginAuditRef.current = true;
     try {
       const { user } = await signInWithGoogleAccount();
       const emailLower = (user.email || '').trim().toLowerCase();
@@ -1285,6 +1365,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         emailLower === BOOTSTRAPPED_ADMIN_EMAIL ||
         employeesRef.current.some((e) => (e.email || '').trim().toLowerCase() === emailLower);
       if (!isAuthorized) {
+        pendingGoogleLoginAuditRef.current = false;
         await signOutGmail();
         const msg = `Tài khoản Google (${user.email || ''}) không phải Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) và chưa được cấp quyền Cloud. Vui lòng đăng nhập bằng tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}).`;
         setCloudSyncStatus('error');
@@ -1296,6 +1377,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         message: `Đã kết nối đồng bộ Cloud (${user.email}) thành công!`,
       };
     } catch (err) {
+      pendingGoogleLoginAuditRef.current = false;
       const msg = formatFirestoreSyncError(err);
       setCloudSyncError(msg);
       setCloudSyncStatus(cloudUserRef.current ? 'error' : 'offline');
@@ -1368,6 +1450,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveStorage('safetyInspections', safetyInspections), [safetyInspections]);
   useEffect(() => saveStorage('tools', tools), [tools]);
   useEffect(() => saveStorage('toolLogs', toolLogs), [toolLogs]);
+  useEffect(() => saveStorage('dailyAreaChecks', dailyAreaChecks), [dailyAreaChecks]);
   useEffect(() => saveStorage('webNotifications', webNotifications), [webNotifications]);
 
   useEffect(() => {
@@ -1391,14 +1474,19 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     hanhDong: AuditLog['hanhDong'],
     chucNang: string,
     doiTuong: string,
-    details: string
+    details: string,
+    actorOverride?: Employee
   ) => {
+    const actor = actorOverride || currentUserRef.current || currentUser;
+    const actorLabel = actor?.maNhanVien
+      ? `${actor.tenNhanVien} (${actor.maNhanVien})`
+      : actor?.tenNhanVien || 'Hệ thống';
     const now = new Date();
     const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     const newLog: AuditLog = {
       id: nextUniqueId('LOG'),
       thoiGian: timeStr,
-      nguoiThaoTac: currentUser.tenNhanVien,
+      nguoiThaoTac: actorLabel,
       hanhDong,
       chucNang,
       doiTuong,
@@ -1452,6 +1540,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteEquipment = (maThietBi: string) => {
+    if (!canDeleteRecords(currentUser)) return;
     const item = equipment.find((e) => e.maThietBi === maThietBi);
     const plansToDelete = maintenancePlans.filter((p) => p.maThietBi === maThietBi);
     setEquipment((prev) => prev.filter((e) => e.maThietBi !== maThietBi));
@@ -1463,18 +1552,21 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Maintenance Actions
   const addMaintenancePlan = (plan: MaintenancePlan) => {
+    if (!canManageMaintenancePlans(currentUser)) return;
     setMaintenancePlans((prev) => [plan, ...prev]);
     syncDoc('maintenance_plans', plan.id, sanitizeMaintenancePlan(plan));
     addAuditLog('Thêm', 'Kế hoạch bảo trì', plan.maThietBi, `Thêm kế hoạch bảo trì: ${plan.tenThietBi}`);
   };
 
   const updateMaintenancePlan = (plan: MaintenancePlan) => {
+    if (!canManageMaintenancePlans(currentUser)) return;
     setMaintenancePlans((prev) => prev.map((p) => (p.id === plan.id ? plan : p)));
     syncDoc('maintenance_plans', plan.id, sanitizeMaintenancePlan(plan));
     addAuditLog('Sửa', 'Kế hoạch bảo trì', plan.maThietBi, `Cập nhật kế hoạch bảo trì: ${plan.tenThietBi}`);
   };
 
   const rescheduleMaintenancePlan = (planId: string, newDate: string) => {
+    if (!canManageMaintenancePlans(currentUser)) return;
     const target = maintenancePlans.find((p) => p.id === planId);
     if (!target || !newDate || target.ngayBaoTriTiepTheo === newDate) return;
 
@@ -1652,6 +1744,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteMaintenanceHistory = (id: string) => {
+    if (!canDeleteRecords(currentUser)) return;
     const target = maintenanceHistory.find((h) => h.id === id);
     if (!target) return;
 
@@ -1771,6 +1864,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteTicket = (maTicket: string) => {
+    if (!canDeleteRecords(currentUser)) return;
     setTickets((prev) => prev.filter((t) => t.maTicket !== maTicket));
     removeDocCloud('tickets', maTicket);
     addAuditLog('Xóa', 'Tickets', maTicket, `Xóa ticket: ${maTicket}`);
@@ -1790,6 +1884,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteSparePart = (maVatTu: string) => {
+    if (!canDeleteRecords(currentUser)) return;
     setSpareParts((prev) => prev.filter((p) => p.maVatTu !== maVatTu));
     removeDocCloud('spare_parts', maVatTu);
     addAuditLog('Xóa', 'Kho vật tư', maVatTu, `Xóa vật tư: ${maVatTu}`);
@@ -1979,8 +2074,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // Employees & Current User
   const setCurrentUser = (emp: Employee) => {
-    setCurrentUserState(emp);
-    addAuditLog('Đăng nhập', 'Hệ thống', emp.maNhanVien, `Người dùng ${emp.tenNhanVien} (${emp.chucVu}) đăng nhập vào hệ thống`);
+    applyCurrentUser(emp, true);
+    addAuditLog(
+      'Đăng nhập',
+      'Hệ thống',
+      emp.maNhanVien,
+      `Người dùng ${emp.tenNhanVien} (${emp.maNhanVien} - ${emp.chucVu}) đăng nhập vào hệ thống`,
+      emp
+    );
   };
 
   const addEmployee = (emp: Employee) => {
@@ -2004,9 +2105,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const prevEmp = employeesRef.current.find((e) => e.maNhanVien === emp.maNhanVien);
     const nextEmployees = employeesRef.current.map((e) => (e.maNhanVien === emp.maNhanVien ? emp : e));
     setEmployees(nextEmployees);
-    if (currentUser.maNhanVien === emp.maNhanVien) {
-      setCurrentUserState(emp);
-      saveStorage('currentUser', emp);
+    if (currentUserRef.current.maNhanVien === emp.maNhanVien) {
+      applyCurrentUser(emp, false);
     }
 
     const isBootAdmin =
@@ -2051,6 +2151,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteDocument = (id: string) => {
+    if (!canDeleteRecords(currentUserRef.current)) return;
     const target = documents.find((d) => d.id === id);
     setDocuments((prev) => prev.filter((d) => d.id !== id));
     removeDocCloud('documents', id);
@@ -2075,10 +2176,97 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteProject = (id: string) => {
+    if (!canDeleteRecords(currentUserRef.current)) return;
     const target = projects.find((p) => p.id === id);
     setProjects((prev) => prev.filter((p) => p.id !== id));
     removeDocCloud('projects', id);
     addAuditLog('Xóa', 'Quản Lý Dự Án', target?.maDuAn || id, `Xóa dự án: ${target?.tenDuAn || id}`);
+  };
+
+  // Daily Start-Of-Day Area Checks ("Công Việc Đầu Ngày")
+  const addDailyAreaCheck = (checkData: Omit<DailyAreaCheck, 'id'>): DailyAreaCheck | null => {
+    if (!canManageMaintenancePlans(currentUserRef.current)) return null;
+    const newCheck: DailyAreaCheck = {
+      ...checkData,
+      id: nextUniqueId('DAC'),
+      nguoiPhanQuyen: checkData.nguoiPhanQuyen || currentUserRef.current.tenNhanVien,
+    };
+    setDailyAreaChecks((prev) => [newCheck, ...prev]);
+    syncDoc('daily_area_checks', newCheck.id, sanitizeDailyAreaCheck(newCheck));
+    addAuditLog(
+      'Thêm',
+      'Công Việc Đầu Ngày',
+      newCheck.khuVuc,
+      `Phân công kiểm tra ${newCheck.khuVuc} (${newCheck.ngayKiemTra} - ${newCheck.caLamViec}) cho ${newCheck.nguoiDuocGiao || 'Chưa phân công'}`
+    );
+    return newCheck;
+  };
+
+  const updateDailyAreaCheck = (check: DailyAreaCheck) => {
+    setDailyAreaChecks((prev) => prev.map((item) => (item.id === check.id ? check : item)));
+    syncDoc('daily_area_checks', check.id, sanitizeDailyAreaCheck(check));
+    addAuditLog(
+      'Sửa',
+      'Công Việc Đầu Ngày',
+      check.khuVuc,
+      `Cập nhật công việc đầu ngày ${check.khuVuc} (${check.ngayKiemTra}): ${check.trangThai} - ${check.ketQua}`
+    );
+  };
+
+  const submitDailyAreaCheckReport = (params: {
+    id: string;
+    trangThai: DailyAreaCheckStatus;
+    ketQua: DailyAreaCheckResult;
+    baoCaoThucTe: string;
+    anhHienTruong?: string;
+  }) => {
+    const existing = dailyAreaChecks.find((c) => c.id === params.id);
+    if (!existing) return;
+    const actor = currentUserRef.current;
+    const now = new Date();
+    const formattedTime = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(
+      now.getDate()
+    ).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const updated: DailyAreaCheck = {
+      ...existing,
+      trangThai: params.trangThai,
+      ketQua: params.ketQua,
+      baoCaoThucTe: params.baoCaoThucTe.trim(),
+      nguoiBaoCao: actor.tenNhanVien,
+      thoiGianBaoCao: formattedTime,
+      anhHienTruong: params.anhHienTruong !== undefined ? params.anhHienTruong : existing.anhHienTruong,
+    };
+    setDailyAreaChecks((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    syncDoc('daily_area_checks', updated.id, sanitizeDailyAreaCheck(updated));
+    addAuditLog(
+      params.trangThai === 'Đã hoàn thành' ? 'Hoàn thành' : 'Cập nhật',
+      'Công Việc Đầu Ngày',
+      updated.khuVuc,
+      `${actor.tenNhanVien} ghi nhận báo cáo ${updated.khuVuc} (${updated.ngayKiemTra}): ${updated.ketQua} — ${updated.baoCaoThucTe || 'Không có ghi chú'}`
+    );
+
+    if (params.ketQua === 'Có sự cố' || params.ketQua === 'Cần theo dõi') {
+      triggerWebNotification({
+        type: 'BAO_CAO_HOAN_THANH',
+        title: `[Kiểm Tra Đầu Ngày] ${updated.khuVuc} — ${params.ketQua}`,
+        message: `${actor.tenNhanVien} vừa báo cáo ${updated.khuVuc} (${updated.caLamViec}): ${params.baoCaoThucTe || params.ketQua}`,
+        relatedId: updated.id,
+        targetTab: 'morning_checks',
+      });
+    }
+  };
+
+  const deleteDailyAreaCheck = (id: string) => {
+    if (!canDeleteRecords(currentUserRef.current)) return;
+    const target = dailyAreaChecks.find((c) => c.id === id);
+    setDailyAreaChecks((prev) => prev.filter((c) => c.id !== id));
+    removeDocCloud('daily_area_checks', id);
+    addAuditLog(
+      'Xóa',
+      'Công Việc Đầu Ngày',
+      target?.khuVuc || id,
+      `Xóa phiếu kiểm tra đầu ngày ${target?.khuVuc || id} (${target?.ngayKiemTra || ''})`
+    );
   };
 
   // Safety Inspection & Calibration Actions
@@ -2198,6 +2386,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteTool = (id: string) => {
+    if (!canDeleteRecords(currentUser)) return;
     const target = tools.find((t) => t.id === id);
     setTools((prev) => prev.filter((t) => t.id !== id));
     removeDocCloud('tools', id);
@@ -2336,12 +2525,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' };
     }
 
-    setCurrentUserState(found);
+    applyCurrentUser(found, true);
     setIsAuthenticated(true);
-    sessionStorage.setItem('cmms_authenticated', 'true');
-    sessionStorage.setItem('cmms_auth_user', found.maNhanVien);
-    saveStorage('currentUser', found);
-    addAuditLog('Đăng nhập', 'Hệ thống', found.maNhanVien, `Người dùng ${found.tenNhanVien} (${found.chucVu}) đăng nhập thành công`);
+    addAuditLog(
+      'Đăng nhập',
+      'Hệ thống',
+      found.maNhanVien,
+      `Người dùng ${found.tenNhanVien} (${found.maNhanVien} - ${found.chucVu}) đăng nhập thành công`,
+      found
+    );
     return { success: true };
   };
 
@@ -2379,32 +2571,33 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const updatedEmp: Employee = { ...found, password: newPasswordInput.trim() };
     setEmployees((prev) => prev.map((e) => (e.maNhanVien === found.maNhanVien ? updatedEmp : e)));
-    if (currentUser.maNhanVien === found.maNhanVien) {
-      setCurrentUserState(updatedEmp);
-      saveStorage('currentUser', updatedEmp);
+    if (currentUserRef.current.maNhanVien === found.maNhanVien) {
+      applyCurrentUser(updatedEmp, false);
     }
 
-    const now = new Date();
-    const timeStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
-    const logItem: AuditLog = {
-      id: nextUniqueId('LOG'),
-      thoiGian: timeStr,
-      nguoiThaoTac: found.tenNhanVien,
-      hanhDong: 'Cập nhật',
-      chucNang: 'Bảo mật tài khoản',
-      doiTuong: found.maNhanVien,
-      chiTietNoiDung: `Người dùng ${found.tenNhanVien} (${found.maNhanVien}) đã đổi mật khẩu đăng nhập.`,
-    };
-    setAuditLogs((prev) => [logItem, ...prev]);
+    addAuditLog(
+      'Cập nhật',
+      'Bảo mật tài khoản',
+      found.maNhanVien,
+      `Người dùng ${found.tenNhanVien} (${found.maNhanVien}) đã đổi mật khẩu đăng nhập.`,
+      found
+    );
 
     return { success: true, message: 'Đổi mật khẩu thành công! Bạn có thể sử dụng mật khẩu mới ngay.' };
   };
 
   const logout = () => {
+    const actor = currentUserRef.current || currentUser;
+    addAuditLog(
+      'Đăng xuất',
+      'Hệ thống',
+      actor.maNhanVien,
+      `Người dùng ${actor.tenNhanVien} (${actor.maNhanVien} - ${actor.chucVu}) đăng xuất khỏi hệ thống`,
+      actor
+    );
     setIsAuthenticated(false);
     sessionStorage.removeItem('cmms_authenticated');
     sessionStorage.removeItem('cmms_auth_user');
-    addAuditLog('Đăng xuất' as any, 'Hệ thống', currentUser.maNhanVien, `Người dùng ${currentUser.tenNhanVien} đăng xuất khỏi hệ thống`);
     void signOutGmail();
   };
 
@@ -3115,6 +3308,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     recipientEmailOverride?: string;
     saveEmailToProfile?: boolean;
   }): Promise<EmailSendResult | null> => {
+    if (params.module === 'KE_HOACH_BAO_TRI' && !canManageMaintenancePlans(currentUser)) {
+      return null;
+    }
     const parsedList =
       params.assigneeNames && params.assigneeNames.length > 0
         ? Array.from(new Set(params.assigneeNames.map((n) => n.trim()).filter(Boolean)))
@@ -3145,10 +3341,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setEmployees(updatedEmployeesList);
       if (
-        currentUser.tenNhanVien.trim().toLowerCase() === targetNameLower ||
-        currentUser.maNhanVien.trim().toLowerCase() === targetNameLower
+        currentUserRef.current.tenNhanVien.trim().toLowerCase() === targetNameLower ||
+        currentUserRef.current.maNhanVien.trim().toLowerCase() === targetNameLower
       ) {
-        setCurrentUserState((prev) => ({ ...prev, email: overrideEmail }));
+        applyCurrentUser({ ...currentUserRef.current, email: overrideEmail }, false);
       }
       if (cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
         void propagateAllowedEmails(buildAllowedEmails(updatedEmployeesList, cloudUserRef.current.email));
@@ -3501,7 +3697,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSafetyInspections(INITIAL_SAFETY_INSPECTIONS);
     setTools(INITIAL_TOOLS);
     setToolLogs(INITIAL_TOOL_LOGS);
-    setCurrentUserState(INITIAL_EMPLOYEES[0]);
+    setDailyAreaChecks(INITIAL_DAILY_AREA_CHECKS);
+    applyCurrentUser(INITIAL_EMPLOYEES[0], false);
     localStorage.clear();
     if (cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
       void seedOrPushWorkspaceToFirestore(
@@ -3524,6 +3721,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           safetyInspections: INITIAL_SAFETY_INSPECTIONS,
           tools: INITIAL_TOOLS,
           toolLogs: INITIAL_TOOL_LOGS,
+          dailyAreaChecks: INITIAL_DAILY_AREA_CHECKS,
           emailLogs: INITIAL_EMAIL_LOGS,
           auditLogs: INITIAL_AUDIT_LOGS,
           emailConfig: INITIAL_EMAIL_CONFIG,
@@ -3555,6 +3753,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       safetyInspections,
       tools,
       toolLogs,
+      dailyAreaChecks,
       emailConfig,
       emailLogs,
       tariffConfig,
@@ -3587,6 +3786,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Array.isArray(data.safetyInspections)) setSafetyInspections(data.safetyInspections);
       if (Array.isArray(data.tools)) setTools(data.tools);
       if (Array.isArray(data.toolLogs)) setToolLogs(data.toolLogs);
+      if (Array.isArray(data.dailyAreaChecks)) setDailyAreaChecks(data.dailyAreaChecks);
       if (data.tariffConfig && typeof data.tariffConfig === 'object') setTariffConfig(data.tariffConfig);
       if (data.emailConfig && typeof data.emailConfig === 'object') setEmailConfig(data.emailConfig);
       addAuditLog('Cập nhật', 'Sao Lưu & Khôi Phục', 'Toàn bộ dữ liệu', 'Khôi phục thành công từ file sao lưu');
@@ -3608,6 +3808,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           safetyInspections: Array.isArray(data.safetyInspections) ? data.safetyInspections : safetyInspections,
           tools: Array.isArray(data.tools) ? data.tools : tools,
           toolLogs: Array.isArray(data.toolLogs) ? data.toolLogs : toolLogs,
+          dailyAreaChecks: Array.isArray(data.dailyAreaChecks) ? data.dailyAreaChecks : dailyAreaChecks,
           emailLogs: Array.isArray(data.emailLogs) ? data.emailLogs : emailLogs,
           auditLogs,
           emailConfig:
@@ -3649,6 +3850,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         safetyInspections,
         tools,
         toolLogs,
+        dailyAreaChecks,
         currentUser,
         emailConfig,
         emailLogs,
@@ -3725,6 +3927,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         addProject,
         updateProject,
         deleteProject,
+        addDailyAreaCheck,
+        updateDailyAreaCheck,
+        submitDailyAreaCheckReport,
+        deleteDailyAreaCheck,
         isAuthenticated,
         theme,
         toggleTheme,

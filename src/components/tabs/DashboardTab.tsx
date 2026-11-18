@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenanceD3Summary } from '../dashboard/MaintenanceD3Summary';
-import { canViewCosts, formatVND, formatDateVN, getHistoryWorkType, matchesAssignee } from '../../utils/cmmsLogic';
+import { canExportCSV, canViewCosts, formatVND, formatDateVN, getHistoryWorkType, matchesAssignee } from '../../utils/cmmsLogic';
 import {
   Cpu,
   Wrench,
@@ -107,6 +107,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     auditLogs,
   } = useCMMS();
   const showCosts = canViewCosts(currentUser);
+  const showExportCSV = canExportCSV(currentUser);
 
   // Metrics calculation
   const totalEquipment = equipment.length;
@@ -518,15 +519,17 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               <Gauge className="w-4 h-4" />
               Chốt Đồng Hồ
             </button>
-            <button
-              type="button"
-              onClick={handleDownloadMonthlyCSV}
-              title={`Tải xuống báo cáo CSV tổng hợp bảo trì & ticket tháng ${String(calendarMonth.month + 1).padStart(2, '0')}/${calendarMonth.year}`}
-              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-900/30 transition border border-indigo-400/40 whitespace-nowrap"
-            >
-              <Download className="w-4 h-4" />
-              Download CSV
-            </button>
+            {showExportCSV && (
+              <button
+                type="button"
+                onClick={handleDownloadMonthlyCSV}
+                title={`Tải xuống báo cáo CSV tổng hợp bảo trì & ticket tháng ${String(calendarMonth.month + 1).padStart(2, '0')}/${calendarMonth.year}`}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs sm:text-sm shadow-lg shadow-indigo-900/30 transition border border-indigo-400/40 whitespace-nowrap"
+              >
+                <Download className="w-4 h-4" />
+                Download CSV
+              </button>
+            )}
           </div>
         </div>
       </div>
