@@ -304,6 +304,7 @@ interface CMMSContextType {
     ketQua: DailyAreaCheckResult;
     baoCaoThucTe: string;
     anhHienTruong?: string;
+    anhDinhKem?: string[];
   }) => void;
   deleteDailyAreaCheck: (id: string) => void;
 
@@ -2372,6 +2373,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ketQua: DailyAreaCheckResult;
     baoCaoThucTe: string;
     anhHienTruong?: string;
+    anhDinhKem?: string[];
   }) => {
     const existing = dailyAreaChecks.find((c) => c.id === params.id);
     if (!existing) return;
@@ -2406,11 +2408,35 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         nguoiBaoCao: existing.nguoiBaoCao,
         thoiGianBaoCao: existing.thoiGianBaoCao,
         anhHienTruong: existing.anhHienTruong,
+        anhDinhKem: existing.anhHienTruong ? [existing.anhHienTruong] : undefined,
       });
     }
 
     const existingDayIdx = baseReports.findIndex((r) => r.ngay === targetDate);
     const existingDay = existingDayIdx >= 0 ? baseReports[existingDayIdx] : undefined;
+
+    const hasExplicitPhotos =
+      params.anhDinhKem !== undefined || params.anhHienTruong !== undefined;
+
+    let resolvedPhotos: string[] = [];
+    if (hasExplicitPhotos) {
+      const combined = [
+        ...(Array.isArray(params.anhDinhKem) ? params.anhDinhKem : []),
+        ...(params.anhHienTruong ? [params.anhHienTruong] : []),
+      ]
+        .map((u) => (typeof u === 'string' ? u.trim() : ''))
+        .filter(Boolean);
+      resolvedPhotos = Array.from(new Set(combined)).slice(0, 4);
+    } else {
+      const prevCombined = [
+        ...(Array.isArray(existingDay?.anhDinhKem) ? existingDay.anhDinhKem : []),
+        ...(existingDay?.anhHienTruong ? [existingDay.anhHienTruong] : []),
+      ]
+        .map((u) => (typeof u === 'string' ? u.trim() : ''))
+        .filter(Boolean);
+      resolvedPhotos = Array.from(new Set(prevCombined)).slice(0, 4);
+    }
+
     const newDayReport: DailyAreaDayReport = {
       ngay: targetDate,
       trangThai: params.trangThai,
@@ -2418,8 +2444,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       baoCaoThucTe: params.baoCaoThucTe.trim(),
       nguoiBaoCao: actor.tenNhanVien,
       thoiGianBaoCao: formattedTime,
-      anhHienTruong:
-        params.anhHienTruong !== undefined ? params.anhHienTruong : existingDay?.anhHienTruong,
+      anhHienTruong: resolvedPhotos[0] || undefined,
+      anhDinhKem: resolvedPhotos.length > 0 ? resolvedPhotos : undefined,
     };
 
     if (existingDayIdx >= 0) {
@@ -2466,10 +2492,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       baoCaoThucTe: newDayReport.baoCaoThucTe,
       nguoiBaoCao: actor.tenNhanVien,
       thoiGianBaoCao: formattedTime,
-      anhHienTruong:
-        newDayReport.anhHienTruong !== undefined
-          ? newDayReport.anhHienTruong
-          : existing.anhHienTruong,
+      anhHienTruong: hasExplicitPhotos ? newDayReport.anhHienTruong : existing.anhHienTruong,
       baoCaoTheoNgay: baseReports,
     };
     setDailyAreaChecks((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));

@@ -9,6 +9,7 @@ import {
   FacilityDocument,
 } from '../../types/cmms';
 import { canDeleteRecords, formatDateVN } from '../../utils/cmmsLogic';
+import { compressImageFile } from '../../utils/imageUtils';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   BookOpen,
@@ -276,11 +277,38 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
     setIsFormOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFormError('');
     setUploadNotice('');
+
+    if (file.type.startsWith('image/')) {
+      try {
+        const compressed = await compressImageFile(file, {
+          maxDimension: 1200,
+          maxBytes: 120 * 1024,
+          initialQuality: 0.74,
+        });
+        if (compressed.dataUrl) {
+          const origKb = Math.max(1, Math.round(file.size / 1024));
+          setFileName(file.name.replace(/\.[^/.]+$/, '') + '.jpg');
+          setFileType('image/jpeg');
+          setFileSizeKb(compressed.approxKb);
+          setFileDataUrl(compressed.dataUrl);
+          setLoaiNguon('upload');
+          if (!tieuDe.trim()) {
+            setTieuDe(file.name.replace(/\.[^/.]+$/, ''));
+          }
+          setUploadNotice(
+            `Đã nén ảnh "${file.name}" từ ${origKb} KB xuống ~${compressed.approxKb} KB sẵn sàng lưu trữ.`
+          );
+          return;
+        }
+      } catch {
+        // Fallback below if image decode fails
+      }
+    }
 
     if (file.size > 2 * 1024 * 1024) {
       setUploadNotice(

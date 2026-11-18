@@ -572,16 +572,39 @@ export function sanitizeAuditLog(a: AuditLog): Record<string, unknown> {
 }
 
 export function sanitizeDailyAreaCheck(c: DailyAreaCheck): Record<string, unknown> {
-  const topPhoto = clampDataUrl(c.anhHienTruong);
-  let remainingPhotoBudget = Math.max(0, 650000 - (topPhoto ? topPhoto.length : 0));
+  const seenPhotoKeys = new Set<string>();
+  let remainingPhotoBudget = 650000;
+
+  const takePhotoWithinBudget = (raw?: string): string | undefined => {
+    const candidate = clampDataUrl(raw);
+    if (!candidate) return undefined;
+    if (seenPhotoKeys.has(candidate)) {
+      return candidate;
+    }
+    if (candidate.length <= remainingPhotoBudget) {
+      seenPhotoKeys.add(candidate);
+      remainingPhotoBudget -= candidate.length;
+      return candidate;
+    }
+    return undefined;
+  };
 
   const sanitizedDailyReports = Array.isArray(c.baoCaoTheoNgay)
     ? c.baoCaoTheoNgay.slice(0, 31).map((r) => {
-        let dayPhoto: string | undefined;
-        const candidate = clampDataUrl(r.anhHienTruong);
-        if (candidate && candidate.length <= remainingPhotoBudget) {
-          dayPhoto = candidate;
-          remainingPhotoBudget -= candidate.length;
+        const rawCandidates: string[] = [];
+        if (Array.isArray(r.anhDinhKem)) {
+          rawCandidates.push(...r.anhDinhKem);
+        }
+        if (r.anhHienTruong) {
+          rawCandidates.push(r.anhHienTruong);
+        }
+        const dayPhotos: string[] = [];
+        for (const item of rawCandidates) {
+          const accepted = takePhotoWithinBudget(item);
+          if (accepted && !dayPhotos.includes(accepted)) {
+            dayPhotos.push(accepted);
+            if (dayPhotos.length >= 4) break;
+          }
         }
         return stripUndefined({
           ngay: clampString(r.ngay || '', 32),
@@ -590,10 +613,13 @@ export function sanitizeDailyAreaCheck(c: DailyAreaCheck): Record<string, unknow
           baoCaoThucTe: clampString(r.baoCaoThucTe || '', 4000),
           nguoiBaoCao: r.nguoiBaoCao ? clampString(r.nguoiBaoCao, 160) : undefined,
           thoiGianBaoCao: r.thoiGianBaoCao ? clampString(r.thoiGianBaoCao, 40) : undefined,
-          anhHienTruong: dayPhoto,
+          anhHienTruong: dayPhotos[0],
+          anhDinhKem: dayPhotos.length > 0 ? dayPhotos : undefined,
         });
       })
     : undefined;
+
+  const topPhoto = takePhotoWithinBudget(c.anhHienTruong);
 
   const sanitizedWeekdays = Array.isArray(c.ngayTrongTuan)
     ? Array.from(

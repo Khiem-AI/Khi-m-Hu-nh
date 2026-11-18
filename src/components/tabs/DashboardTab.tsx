@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenanceD3Summary } from '../dashboard/MaintenanceD3Summary';
+import { MonthlyTicketsMaintenanceChart } from '../dashboard/MonthlyTicketsMaintenanceChart';
 import { canExportCSV, canViewCosts, formatVND, formatDateVN, getHistoryWorkType, matchesAssignee } from '../../utils/cmmsLogic';
 import {
   Cpu,
@@ -868,6 +869,13 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       {/* Visual Summary View: Overdue & Critical Upcoming Schedules (D3) */}
       <MaintenanceD3Summary
         onOpenMaintenanceModal={onOpenMaintenanceModal}
+        onNavigateTab={onNavigateTab}
+      />
+
+      {/* Recharts Visual Analytics: Ticket Severity & Monthly Maintenance Status Trends */}
+      <MonthlyTicketsMaintenanceChart
+        calendarMonth={calendarMonth}
+        onShiftMonth={handleShiftMonth}
         onNavigateTab={onNavigateTab}
       />
 

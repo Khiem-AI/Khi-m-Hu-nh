@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import {
@@ -21,7 +22,7 @@ import {
   matchesAssignee,
   WEEK_DAYS_MON_SAT,
 } from '../../utils/cmmsLogic';
-import { resolveImageUrl } from '../../utils/imageUtils';
+import { estimateDataUrlKb, resolveImageUrl } from '../../utils/imageUtils';
 import { MultiAssigneePicker } from '../common/MultiAssigneePicker';
 import { CameraCaptureInput } from '../common/CameraCaptureInput';
 import {
@@ -49,6 +50,8 @@ import {
   Send,
   RotateCcw,
   SlidersHorizontal,
+  Maximize2,
+  ImagePlus,
 } from 'lucide-react';
 
 const AREAS: DailyInspectionArea[] = ['Vòng trong', 'Vòng Ngoài', 'Phòng Utility'];
@@ -163,6 +166,24 @@ function getDayReportMap(item: DailyAreaCheck): Map<string, DailyAreaDayReport> 
   return map;
 }
 
+function getDayPhotos(report?: DailyAreaDayReport | null, fallbackTopPhoto?: string): string[] {
+  const combined: string[] = [];
+  if (report) {
+    if (Array.isArray(report.anhDinhKem)) {
+      combined.push(...report.anhDinhKem);
+    }
+    if (report.anhHienTruong) {
+      combined.push(report.anhHienTruong);
+    }
+  }
+  if (combined.length === 0 && fallbackTopPhoto) {
+    combined.push(fallbackTopPhoto);
+  }
+  return Array.from(
+    new Set(combined.map((u) => (typeof u === 'string' ? u.trim() : '')).filter(Boolean))
+  ).slice(0, 4);
+}
+
 export const MorningChecksTab: React.FC = () => {
   const {
     dailyAreaChecks,
@@ -243,7 +264,9 @@ export const MorningChecksTab: React.FC = () => {
   const [reportStatus, setReportStatus] = useState<DailyAreaCheckStatus>('Đã hoàn thành');
   const [reportResult, setReportResult] = useState<DailyAreaCheckResult>('Bình thường');
   const [reportText, setReportText] = useState<string>('');
-  const [reportPhoto, setReportPhoto] = useState<string>('');
+  const [reportPhotos, setReportPhotos] = useState<string[]>([]);
+  const [reportPhotoDraft, setReportPhotoDraft] = useState<string>('');
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; title: string } | null>(null);
 
   // Modal 4: Delete Confirmation Modal
   const [checkToDelete, setCheckToDelete] = useState<DailyAreaCheck | null>(null);
@@ -614,7 +637,8 @@ export const MorningChecksTab: React.FC = () => {
         : 'Bình thường'
     );
     setReportText(dayEntry?.baoCaoThucTe || '');
-    setReportPhoto(dayEntry?.anhHienTruong || '');
+    setReportPhotos(getDayPhotos(dayEntry));
+    setReportPhotoDraft('');
   };
 
   const handleOpenReportModal = (item: DailyAreaCheck, specificDay?: string) => {
@@ -637,16 +661,35 @@ export const MorningChecksTab: React.FC = () => {
     loadDayFieldsIntoReportModal(reportingCheck, targetDay);
   };
 
+  const handleAppendReportPhotos = (incoming: string[]) => {
+    const clean = incoming.map((u) => u.trim()).filter(Boolean);
+    if (clean.length === 0) return;
+    setReportPhotos((prev) => Array.from(new Set([...prev, ...clean])).slice(0, 4));
+    setReportPhotoDraft('');
+  };
+
+  const handleRemoveReportPhoto = (idx: number) => {
+    setReportPhotos((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmitReport = (e: React.FormEvent) => {
     e.preventDefault();
     if (!reportingCheck) return;
+    const finalPhotos = Array.from(
+      new Set([
+        ...reportPhotos,
+        ...(reportPhotoDraft.trim() ? [reportPhotoDraft.trim()] : []),
+      ])
+    ).slice(0, 4);
+
     submitDailyAreaCheckReport({
       id: reportingCheck.id,
       ngayBaoCao: reportDate,
       trangThai: reportStatus,
       ketQua: reportResult,
       baoCaoThucTe: reportText,
-      anhHienTruong: reportPhoto,
+      anhHienTruong: finalPhotos[0] || '',
+      anhDinhKem: finalPhotos,
     });
     setSelectedPreviewDayByCheck((prev) => ({ ...prev, [reportingCheck.id]: reportDate }));
     showToast(
@@ -1006,10 +1049,10 @@ export const MorningChecksTab: React.FC = () => {
             const displayReportTime =
               activeDayReport?.thoiGianBaoCao ||
               (!isWeeklyOrMulti ? item.thoiGianBaoCao : undefined);
-            const rawPhoto =
-              activeDayReport?.anhHienTruong ||
-              (!isWeeklyOrMulti ? item.anhHienTruong : undefined);
-            const photoUrl = rawPhoto ? resolveImageUrl(rawPhoto) : '';
+            const displayPhotos = getDayPhotos(
+              activeDayReport,
+              !isWeeklyOrMulti ? item.anhHienTruong : undefined
+            );
 
             return (
               <div
@@ -1135,6 +1178,7 @@ export const MorningChecksTab: React.FC = () => {
                       <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5">
                         {scheduledDates.map((d) => {
                           const rep = dayMap.get(d);
+                          const dayPhotosCount = getDayPhotos(rep).length;
                           const isDayActive = d === activePreviewDay;
                           const isDone = rep?.trangThai === 'Đã hoàn thành';
                           const isProgress = rep?.trangThai === 'Đang kiểm tra';
@@ -1168,19 +1212,27 @@ export const MorningChecksTab: React.FC = () => {
                                 <span className="text-[11px] font-bold text-white tabular-nums">
                                   {getWeekdayLabelVN(d)}
                                 </span>
-                                <span
-                                  className={`w-2 h-2 rounded-full ${
-                                    rep?.ketQua === 'Có sự cố'
-                                      ? 'bg-rose-400'
-                                      : rep?.ketQua === 'Cần theo dõi'
-                                      ? 'bg-amber-400'
-                                      : isDone
-                                      ? 'bg-emerald-400'
-                                      : isProgress
-                                      ? 'bg-cyan-400'
-                                      : 'bg-slate-600'
-                                  }`}
-                                />
+                                <div className="flex items-center gap-1">
+                                  {dayPhotosCount > 0 && (
+                                    <Camera
+                                      className="w-2.5 h-2.5 text-cyan-300"
+                                      aria-label={`${dayPhotosCount} ảnh đính kèm`}
+                                    />
+                                  )}
+                                  <span
+                                    className={`w-2 h-2 rounded-full ${
+                                      rep?.ketQua === 'Có sự cố'
+                                        ? 'bg-rose-400'
+                                        : rep?.ketQua === 'Cần theo dõi'
+                                        ? 'bg-amber-400'
+                                        : isDone
+                                        ? 'bg-emerald-400'
+                                        : isProgress
+                                        ? 'bg-cyan-400'
+                                        : 'bg-slate-600'
+                                    }`}
+                                  />
+                                </div>
                               </div>
                               <div className="text-[10px] text-slate-300 tabular-nums">
                                 {formatShortDate(d)}
@@ -1254,23 +1306,68 @@ export const MorningChecksTab: React.FC = () => {
                           </p>
                         )}
 
-                        {photoUrl && (
-                          <div className="pt-1">
-                            <div className="text-[11px] text-slate-400 mb-1 flex items-center gap-1">
-                              <Camera className="w-3.5 h-3.5 text-cyan-400" />
-                              <span>Ảnh hiện trường ngày {formatShortDate(activePreviewDay)}</span>
+                        {displayPhotos.length > 0 && (
+                          <div className="pt-1.5 space-y-1.5">
+                            <div className="text-[11px] text-slate-400 flex items-center justify-between gap-2">
+                              <span className="flex items-center gap-1">
+                                <Camera className="w-3.5 h-3.5 text-cyan-400" />
+                                <span>
+                                  Ảnh đính kèm ngày {formatShortDate(activePreviewDay)} (
+                                  {displayPhotos.length})
+                                </span>
+                              </span>
                             </div>
-                            <img
-                              src={photoUrl}
-                              alt={`Hiện trường ${item.khuVuc} ngày ${activePreviewDay}`}
-                              className="max-h-40 rounded-lg border border-slate-700 object-cover"
-                            />
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                              {displayPhotos.map((rawUrl, photoIdx) => {
+                                const resolved = resolveImageUrl(rawUrl);
+                                return (
+                                  <button
+                                    key={`${activePreviewDay}-photo-${photoIdx}`}
+                                    type="button"
+                                    onClick={() =>
+                                      setLightboxPhoto({
+                                        url: resolved,
+                                        title: `${item.khuVuc} · ${formatDateVN(
+                                          activePreviewDay
+                                        )} (Ảnh ${photoIdx + 1})`,
+                                      })
+                                    }
+                                    className="group relative rounded-lg overflow-hidden border border-slate-700 bg-slate-950 aspect-[4/3] focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                                  >
+                                    <img
+                                      src={resolved}
+                                      alt={`Hiện trường ${item.khuVuc} ngày ${activePreviewDay} (${
+                                        photoIdx + 1
+                                      })`}
+                                      referrerPolicy="no-referrer"
+                                      className="w-full h-full object-cover group-hover:scale-105 transition"
+                                    />
+                                    <span className="absolute inset-0 bg-black/35 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                                      <Maximize2 className="w-4 h-4 text-white" />
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
                       </div>
                     </div>
 
                     <div className="pt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenReportModal(item, activePreviewDay)}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-cyan-500/35 text-xs font-semibold transition min-h-[38px]"
+                      >
+                        <ImagePlus className="w-3.5 h-3.5" />
+                        <span>
+                          {displayPhotos.length > 0
+                            ? `Ảnh Báo Cáo (${displayPhotos.length}/4)`
+                            : 'Đính Kèm Ảnh'}
+                        </span>
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => handleOpenReportModal(item, activePreviewDay)}
@@ -2075,12 +2172,91 @@ export const MorningChecksTab: React.FC = () => {
                 />
               </div>
 
-              <CameraCaptureInput
-                label="Ảnh Hiện Trường (Tùy chọn)"
-                value={reportPhoto}
-                onChange={setReportPhoto}
-                compact
-              />
+              {/* Image Attachments for Morning Report (Up to 4 compressed photos) */}
+              <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-cyan-300 flex items-center gap-1.5">
+                    <ImagePlus className="w-4 h-4" />
+                    <span>Đính Kèm Hình Ảnh Báo Cáo ({reportPhotos.length}/4 ảnh)</span>
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    Tự động giảm dung lượng
+                  </span>
+                </div>
+
+                {reportPhotos.length > 0 && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                    {reportPhotos.map((rawUrl, idx) => {
+                      const resolved = resolveImageUrl(rawUrl);
+                      const kb = rawUrl.startsWith('data:image/') ? estimateDataUrlKb(rawUrl) : 0;
+                      return (
+                        <div
+                          key={`report-photo-thumb-${idx}`}
+                          className="relative group rounded-xl overflow-hidden border border-slate-700 bg-slate-900 aspect-[4/3]"
+                        >
+                          <img
+                            src={resolved}
+                            alt={`Ảnh báo cáo ${idx + 1}`}
+                            referrerPolicy="no-referrer"
+                            onClick={() =>
+                              setLightboxPhoto({
+                                url: resolved,
+                                title: `${reportingCheck.khuVuc} · ${formatDateVN(
+                                  reportDate
+                                )} (Ảnh ${idx + 1})`,
+                              })
+                            }
+                            className="w-full h-full object-cover cursor-pointer"
+                          />
+                          {kb > 0 && (
+                            <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-black/75 text-[10px] font-mono text-emerald-300">
+                              ~{kb}KB
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveReportPhoto(idx)}
+                            aria-label={`Xóa ảnh ${idx + 1}`}
+                            className="absolute top-1 right-1 p-1 rounded-lg bg-black/75 hover:bg-rose-600 text-white transition"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {reportPhotos.length < 4 ? (
+                  <CameraCaptureInput
+                    label={
+                      reportPhotos.length === 0
+                        ? 'Chụp trực tiếp hoặc chọn ảnh từ thiết bị'
+                        : 'Thêm ảnh khác (tối đa 4 ảnh)'
+                    }
+                    value={reportPhotoDraft}
+                    onChange={(val) => {
+                      if (!val) {
+                        setReportPhotoDraft('');
+                        return;
+                      }
+                      if (val.startsWith('data:image/')) {
+                        handleAppendReportPhotos([val]);
+                      } else {
+                        setReportPhotoDraft(val);
+                      }
+                    }}
+                    onPickMultiple={(urls) => handleAppendReportPhotos(urls)}
+                    hidePreview
+                    compact
+                    placeholder="Hoặc dán URL ảnh rồi bấm Lưu báo cáo..."
+                  />
+                ) : (
+                  <div className="text-[11px] text-amber-300 font-medium">
+                    Đã đạt tối đa 4 ảnh đính kèm cho ngày {formatShortDate(reportDate)}. Xóa bớt ảnh nếu muốn thay thế.
+                  </div>
+                )}
+              </div>
 
               <div className="pt-3 border-t border-slate-800 flex items-center justify-end gap-2">
                 <button
@@ -2138,6 +2314,38 @@ export const MorningChecksTab: React.FC = () => {
           </div>
         </div>
       )}
+      {/* LIGHTBOX FOR REPORT ATTACHED PHOTOS */}
+      {lightboxPhoto &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[130] bg-black/92 backdrop-blur-sm flex flex-col p-3 sm:p-6"
+            onClick={() => setLightboxPhoto(null)}
+          >
+            <div className="flex items-center justify-between pb-3 text-white">
+              <span className="text-sm font-bold truncate">{lightboxPhoto.title}</span>
+              <button
+                type="button"
+                onClick={() => setLightboxPhoto(null)}
+                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div
+              className="flex-1 min-h-0 flex items-center justify-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img
+                src={lightboxPhoto.url}
+                alt={lightboxPhoto.title}
+                referrerPolicy="no-referrer"
+                className="max-h-full max-w-full object-contain rounded-xl border border-slate-800 shadow-2xl"
+              />
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

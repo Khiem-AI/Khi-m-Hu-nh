@@ -637,6 +637,7 @@ export interface DailyAreaDayReport {
   nguoiBaoCao?: string;
   thoiGianBaoCao?: string;
   anhHienTruong?: string;
+  anhDinhKem?: string[];
 }
 
 export interface MorningCheckAreaTemplate {

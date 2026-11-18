@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { SparePart } from '../types/cmms';
 import { canViewCosts } from '../utils/cmmsLogic';
@@ -23,18 +23,52 @@ export const SparePartModal: React.FC<SparePartModalProps> = ({
   const [thongSo, setThongSo] = useState(partToEdit?.thongSo || '');
   const [maThietBi, setMaThietBi] = useState(partToEdit?.maThietBi || '');
   const [tenThietBiSuDung, setTenThietBiSuDung] = useState(partToEdit?.tenThietBiSuDung || '');
-  const [tonToiThieu, setTonToiThieu] = useState(partToEdit?.tonToiThieu || 2);
-  const [tonThucTe, setTonThucTe] = useState(partToEdit?.tonThucTe || 5);
+  const [tonToiThieu, setTonToiThieu] = useState(partToEdit?.tonToiThieu ?? 2);
+  const [tonThucTe, setTonThucTe] = useState(partToEdit?.tonThucTe ?? 5);
   const [donViTinh, setDonViTinh] = useState(partToEdit?.donViTinh || 'Cái');
   const [viTriLuu, setViTriLuu] = useState(partToEdit?.viTriLuu || 'Kệ A - Kho Phụ Tùng');
   const [ghiChu, setGhiChu] = useState(partToEdit?.ghiChu || '');
-  const [donGia, setDonGia] = useState(partToEdit?.donGia || 500000);
+  const [donGia, setDonGia] = useState(partToEdit?.donGia ?? 500000);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (partToEdit) {
+      setMaVatTu(partToEdit.maVatTu || '');
+      setTenVatTu(partToEdit.tenVatTu || '');
+      setThongSo(partToEdit.thongSo || '');
+      setMaThietBi(partToEdit.maThietBi || '');
+      setTenThietBiSuDung(partToEdit.tenThietBiSuDung || '');
+      setTonToiThieu(partToEdit.tonToiThieu ?? 0);
+      setTonThucTe(partToEdit.tonThucTe ?? 0);
+      setDonViTinh(partToEdit.donViTinh || 'Cái');
+      setViTriLuu(partToEdit.viTriLuu || '');
+      setGhiChu(partToEdit.ghiChu || '');
+      setDonGia(partToEdit.donGia ?? 0);
+    } else {
+      setMaVatTu('');
+      setTenVatTu('');
+      setThongSo('');
+      setMaThietBi('');
+      setTenThietBiSuDung('');
+      setTonToiThieu(2);
+      setTonThucTe(5);
+      setDonViTinh('Cái');
+      setViTriLuu('Kệ A - Kho Phụ Tùng');
+      setGhiChu('');
+      setDonGia(500000);
+    }
+    setError('');
+  }, [isOpen, partToEdit]);
 
   if (!isOpen) return null;
 
   const handleEquipmentChange = (selectedCode: string) => {
     setMaThietBi(selectedCode);
+    if (!selectedCode) {
+      setTenThietBiSuDung('Nhiều thiết bị');
+      return;
+    }
     const matched = equipment.find((e) => e.maThietBi === selectedCode);
     if (matched) {
       setTenThietBiSuDung(matched.tenThietBi);
@@ -43,13 +77,14 @@ export const SparePartModal: React.FC<SparePartModalProps> = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!maVatTu.trim() || !tenVatTu.trim()) {
+    const resolvedMaVatTu = (partToEdit ? partToEdit.maVatTu : maVatTu).trim().toUpperCase();
+    if (!resolvedMaVatTu || !tenVatTu.trim()) {
       setError('Vui lòng nhập mã và tên vật tư');
       return;
     }
 
     const payload: SparePart = {
-      maVatTu: maVatTu.trim().toUpperCase(),
+      maVatTu: resolvedMaVatTu,
       tenVatTu: tenVatTu.trim(),
       thongSo,
       maThietBi,
