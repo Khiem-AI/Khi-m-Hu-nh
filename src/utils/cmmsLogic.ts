@@ -296,6 +296,42 @@ export function canExportCSV(user?: Employee | null): boolean {
 }
 
 /**
+ * Work Assignment ("Giao Việc") permission:
+ * - Admin-level users always have it.
+ * - Explicitly denied if 'DENY_ASSIGN_WORK' rule is set.
+ * - Technicians ('Kỹ thuật viên') & Operators ('Nhân viên vận hành') have it OFF by default,
+ *   unless explicitly granted 'ASSIGN_WORK' by Admin in EmployeesTab.
+ * - Engineers / Managers / Directors have it ON by default unless explicitly revoked.
+ */
+export function canAssignWork(user?: Employee | null): boolean {
+  if (!user) return false;
+  if (isAdminLevel(user)) return true;
+  if (Array.isArray(user.quyenHan) && user.quyenHan.includes('DENY_ASSIGN_WORK')) {
+    return false;
+  }
+  if (Array.isArray(user.quyenHan) && user.quyenHan.includes('ASSIGN_WORK')) {
+    return true;
+  }
+  if (user.chucVu === 'Kỹ thuật viên' || user.chucVu === 'Nhân viên vận hành') {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Only Admin/Owner/Director/Manager/Chief Engineer/Equipment Engineer can approve, reject,
+ * place orders, or confirm receipt on Purchase Requests.
+ */
+export function canApprovePurchaseRequests(user?: Employee | null): boolean {
+  if (!user) return false;
+  if (isAdminLevel(user)) return true;
+  if (user.chucVu === 'Kỹ thuật viên' || user.chucVu === 'Nhân viên vận hành') {
+    return false;
+  }
+  return true;
+}
+
+/**
  * Returns the effective list of tab/view IDs an employee is authorized to see.
  */
 export function getEffectiveAllowedViews(user?: Employee | null): string[] {

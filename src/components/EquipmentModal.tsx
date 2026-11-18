@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Equipment, MaintenanceFrequency, RiskLevel, EquipmentStatus } from '../types/cmms';
-import { parseAssigneeNames, resolveAssigneeEmails, isAdminLevel, isPlaceholderEmail, isValidEmailFormat } from '../utils/cmmsLogic';
+import { canAssignWork, parseAssigneeNames, resolveAssigneeEmails, isAdminLevel, isPlaceholderEmail, isValidEmailFormat } from '../utils/cmmsLogic';
 import { BOOTSTRAPPED_ADMIN_EMAIL } from '../utils/firestoreSync';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
@@ -31,6 +31,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     autoEmailServerStatus,
   } = useCMMS();
 
+  const allowAssignWork = canAssignWork(currentUser);
   const defaultEngineer =
     employees.find((e) => e.chucVu === 'Kỹ sư thiết bị')?.tenNhanVien || currentUser.tenNhanVien;
 
@@ -45,10 +46,11 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
     equipmentToEdit?.hanBaoTriTiepTheo || '2026-11-25'
   );
   const [nguoiPhuTrach, setNguoiPhuTrach] = useState(
-    equipmentToEdit?.nguoiPhuTrach || currentUser.tenNhanVien || employees[0]?.tenNhanVien || ''
+    equipmentToEdit?.nguoiPhuTrach ||
+      (allowAssignWork ? currentUser.tenNhanVien || employees[0]?.tenNhanVien || '' : currentUser.tenNhanVien)
   );
   const [nguoiGiaoViec, setNguoiGiaoViec] = useState(
-    equipmentToEdit?.nguoiGiaoViec || defaultEngineer
+    equipmentToEdit ? equipmentToEdit.nguoiGiaoViec || '' : allowAssignWork ? defaultEngineer : ''
   );
   const [email, setEmail] = useState(
     equipmentToEdit?.email || currentUser.email || 'khiemhuynhggs@gmail.com'
@@ -74,7 +76,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       setTanSuat(equipmentToEdit.tanSuat);
       setHanBaoTriTiepTheo(equipmentToEdit.hanBaoTriTiepTheo);
       setNguoiPhuTrach(equipmentToEdit.nguoiPhuTrach);
-      setNguoiGiaoViec(equipmentToEdit.nguoiGiaoViec || defaultEngineer);
+      setNguoiGiaoViec(equipmentToEdit.nguoiGiaoViec || (allowAssignWork ? defaultEngineer : ''));
       setEmail(equipmentToEdit.email);
       setThongSoKyThuat(equipmentToEdit.thongSoKyThuat);
       setHinhAnh(equipmentToEdit.hinhAnh || '');
@@ -88,18 +90,20 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       setTrangThai('Hoạt động');
       setTanSuat('Monthly');
       setHanBaoTriTiepTheo('2026-11-25');
-      setNguoiPhuTrach(currentUser.tenNhanVien || employees[0]?.tenNhanVien || '');
-      setNguoiGiaoViec(defaultEngineer);
+      setNguoiPhuTrach(
+        allowAssignWork ? currentUser.tenNhanVien || employees[0]?.tenNhanVien || '' : currentUser.tenNhanVien
+      );
+      setNguoiGiaoViec(allowAssignWork ? defaultEngineer : '');
       setEmail(currentUser.email || 'khiemhuynhggs@gmail.com');
       setThongSoKyThuat('');
       setHinhAnh(
         'https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=600&q=80'
       );
-      setSendAssignmentEmail(true);
+      setSendAssignmentEmail(allowAssignWork);
     }
     setError('');
     setEmailFailure(null);
-  }, [isOpen, equipmentToEdit, currentUser, defaultEngineer, employees]);
+  }, [isOpen, equipmentToEdit, currentUser, defaultEngineer, employees, allowAssignWork]);
 
   if (!isOpen) return null;
 
@@ -196,7 +200,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
       addEquipment(payload);
     }
 
-    if (sendAssignmentEmail && nguoiPhuTrach) {
+    if (allowAssignWork && sendAssignmentEmail && nguoiPhuTrach) {
       const ok = await sendEquipmentAssignment(code, payload.tenThietBi, payload.viTri);
       if (!ok) return;
     }
@@ -333,7 +337,7 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 ${allowAssignWork ? 'sm:grid-cols-2' : ''} gap-4`}>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">Hạn Bảo Trì Kế Tiếp</label>
               <input
@@ -345,31 +349,48 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">Người Giao Việc</label>
-              <select
-                value={nguoiGiaoViec}
-                onChange={(e) => setNguoiGiaoViec(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
-              >
-                {employees.map((emp) => (
-                  <option key={emp.maNhanVien} value={emp.tenNhanVien}>
-                    [{emp.maNhanVien}] {emp.tenNhanVien}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {allowAssignWork && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">Người Giao Việc</label>
+                <select
+                  value={nguoiGiaoViec}
+                  onChange={(e) => setNguoiGiaoViec(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                >
+                  {employees.map((emp) => (
+                    <option key={emp.maNhanVien} value={emp.tenNhanVien}>
+                      [{emp.maNhanVien}] {emp.tenNhanVien}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">
-            <MultiAssigneePicker
-              employees={employees}
-              value={nguoiPhuTrach}
-              onChange={(formatted) => handleAssigneeChange(formatted)}
-              label="Người Phụ Trách Thiết Bị (Chọn 1 hoặc nhiều người)"
-              accentColor="cyan"
-              required
-            />
+            {allowAssignWork ? (
+              <MultiAssigneePicker
+                employees={employees}
+                value={nguoiPhuTrach}
+                onChange={(formatted) => handleAssigneeChange(formatted)}
+                label="Người Phụ Trách Thiết Bị (Chọn 1 hoặc nhiều người)"
+                accentColor="cyan"
+                required
+              />
+            ) : equipmentToEdit ? (
+              <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/70 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  <span className="text-slate-400">Phụ trách hiện tại:</span>{' '}
+                  <strong className="text-cyan-300">{nguoiPhuTrach || '—'}</strong>
+                </span>
+                {nguoiGiaoViec && (
+                  <span>
+                    <span className="text-slate-400">Người giao việc:</span>{' '}
+                    <strong className="text-slate-200">{nguoiGiaoViec}</strong>
+                  </span>
+                )}
+              </div>
+            ) : null}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">
@@ -386,41 +407,43 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
             </div>
           </div>
 
-          <div className="rounded-xl bg-cyan-950/30 border border-cyan-500/30 p-3 space-y-2">
-            <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300">
-              <input
-                type="checkbox"
-                checked={sendAssignmentEmail}
-                onChange={(e) => setSendAssignmentEmail(e.target.checked)}
-                className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500"
-              />
-              <span className="flex items-center gap-1.5 font-semibold text-cyan-300">
-                <Mail className="w-4 h-4" />
-                Gửi email giao việc tới người phụ trách ({email})
-              </span>
-            </label>
-            {sendAssignmentEmail && !isAutoSendReady && (
-              isAdminLevel(currentUser) ? (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
-                  <span>
-                    Chưa bật SMTP/Webhook dùng chung. Admin có thể bấm Sign in with Google ({BOOTSTRAPPED_ADMIN_EMAIL}) để gửi trực tiếp qua Gmail.
-                  </span>
-                  <GoogleSignInButton
-                    compact
-                    label="Sign in with Google"
-                    onClick={async () => {
-                      const res = await connectGmail(true);
-                      if (!res.success) setError(res.message);
-                    }}
-                  />
-                </div>
-              ) : (
-                <div className="pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200/90">
-                  Email gửi qua 1 tài khoản Admin (<span className="font-mono">{BOOTSTRAPPED_ADMIN_EMAIL}</span>) khi Admin bật SMTP/Webhook dùng chung.
-                </div>
-              )
-            )}
-          </div>
+          {allowAssignWork && (
+            <div className="rounded-xl bg-cyan-950/30 border border-cyan-500/30 p-3 space-y-2">
+              <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300">
+                <input
+                  type="checkbox"
+                  checked={sendAssignmentEmail}
+                  onChange={(e) => setSendAssignmentEmail(e.target.checked)}
+                  className="w-4 h-4 rounded text-cyan-600 focus:ring-cyan-500"
+                />
+                <span className="flex items-center gap-1.5 font-semibold text-cyan-300">
+                  <Mail className="w-4 h-4" />
+                  Gửi email giao việc tới người phụ trách ({email})
+                </span>
+              </label>
+              {sendAssignmentEmail && !isAutoSendReady && (
+                isAdminLevel(currentUser) ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200">
+                    <span>
+                      Chưa bật SMTP/Webhook dùng chung. Admin có thể bấm Sign in with Google ({BOOTSTRAPPED_ADMIN_EMAIL}) để gửi trực tiếp qua Gmail.
+                    </span>
+                    <GoogleSignInButton
+                      compact
+                      label="Sign in with Google"
+                      onClick={async () => {
+                        const res = await connectGmail(true);
+                        if (!res.success) setError(res.message);
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="pt-2 border-t border-cyan-500/20 text-[11px] text-amber-200/90">
+                    Email gửi qua 1 tài khoản Admin (<span className="font-mono">{BOOTSTRAPPED_ADMIN_EMAIL}</span>) khi Admin bật SMTP/Webhook dùng chung.
+                  </div>
+                )
+              )}
+            </div>
+          )}
 
           {/* Thông số kỹ thuật */}
           <div className="space-y-1.5">

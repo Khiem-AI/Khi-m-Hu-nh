@@ -67,6 +67,7 @@ Tài liệu này hướng dẫn chi tiết cấu trúc mã nguồn mới nhất,
 - `src/components/common/GoogleSignInButton.tsx`: Nút đăng nhập / kết nối tài khoản Google đồng bộ Cloud
 - `src/components/common/MultiAssigneePicker.tsx`: Bộ chọn nhiều nhân viên thực hiện cùng lúc
 - `src/components/common/NumericInput.tsx`: Ô nhập số định dạng chuẩn
+- `src/components/common/PurchaseRequestSection.tsx`: Module mới được phát hiện tự động trong mã nguồn
 - `src/components/common/SmartHorizontalScroll.tsx`: Thanh cuộn ngang đồng bộ đầu/cuối bảng dữ liệu lớn
 - `src/components/common/WebNotificationToast.tsx`: Hiển thị thông báo nổi trực tiếp trên Web (miễn phí)
 - `src/components/common/WorkAssignmentModal.tsx`: Form Giao việc nhiều người & gửi Email thông báo

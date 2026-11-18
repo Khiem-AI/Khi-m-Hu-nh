@@ -26,7 +26,9 @@ import {
   PackageCheck,
   User,
   MapPin,
+  ShoppingCart,
 } from 'lucide-react';
+import { PurchaseRequestSection, PurchaseRequestDraft } from '../common/PurchaseRequestSection';
 
 const APP_TODAY = '2026-11-10';
 
@@ -50,6 +52,7 @@ export const ToolsManagementTab: React.FC = () => {
   const {
     tools,
     toolLogs,
+    purchaseRequests,
     employees,
     currentUser,
     addTool,
@@ -58,8 +61,11 @@ export const ToolsManagementTab: React.FC = () => {
     recordToolTransaction,
   } = useCMMS();
   const canDelete = canDeleteRecords(currentUser);
+  const toolPurchaseCount = purchaseRequests.filter((r) => r.loaiYeuCau === 'DUNG_CU').length;
 
-  const [subTab, setSubTab] = useState<'inventory' | 'logs'>('inventory');
+  const [subTab, setSubTab] = useState<'inventory' | 'logs' | 'purchase'>('inventory');
+  const [purchaseDraft, setPurchaseDraft] = useState<PurchaseRequestDraft | null>(null);
+  const [openPurchaseModalTick, setOpenPurchaseModalTick] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('ALL');
   const [conditionFilter, setConditionFilter] = useState<string>('ALL');
@@ -412,7 +418,32 @@ export const ToolsManagementTab: React.FC = () => {
               <History className="w-3.5 h-3.5" />
               Sổ Mượn - Trả ({toolLogs.length})
             </button>
+            <button
+              type="button"
+              onClick={() => setSubTab('purchase')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap ${
+                subTab === 'purchase'
+                  ? 'bg-cyan-600 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              Yêu Cầu Mua ({toolPurchaseCount})
+            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setPurchaseDraft(null);
+              setSubTab('purchase');
+              setOpenPurchaseModalTick((prev) => prev + 1);
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold shadow transition whitespace-nowrap"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            <span>+ Yêu Cầu Mua Dụng Cụ</span>
+          </button>
 
           <button
             type="button"
@@ -424,6 +455,9 @@ export const ToolsManagementTab: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {subTab !== 'purchase' && (
+        <>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -523,6 +557,8 @@ export const ToolsManagementTab: React.FC = () => {
           Xuất CSV
         </button>
       </div>
+        </>
+      )}
 
       {/* SUB-TAB 1: Inventory */}
       {subTab === 'inventory' && (
@@ -612,6 +648,24 @@ export const ToolsManagementTab: React.FC = () => {
                     >
                       <ArrowDownLeft className="w-3.5 h-3.5" />
                       Trả
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPurchaseDraft({
+                          maMatHang: tool.maDungCu,
+                          tenMatHang: tool.tenDungCu,
+                          danhMuc: tool.danhMuc,
+                          quyCachThongSo: tool.thuongHieu,
+                          donViTinh: tool.donViTinh,
+                          triggerKey: Date.now(),
+                        });
+                        setSubTab('purchase');
+                      }}
+                      title="Đề xuất mua thêm"
+                      className="min-w-[38px] min-h-[38px] inline-flex items-center justify-center rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                    >
+                      <ShoppingCart className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
@@ -737,6 +791,24 @@ export const ToolsManagementTab: React.FC = () => {
                             >
                               <ArrowDownLeft className="w-3.5 h-3.5" />
                               Trả
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPurchaseDraft({
+                                  maMatHang: tool.maDungCu,
+                                  tenMatHang: tool.tenDungCu,
+                                  danhMuc: tool.danhMuc,
+                                  quyCachThongSo: tool.thuongHieu,
+                                  donViTinh: tool.donViTinh,
+                                  triggerKey: Date.now(),
+                                });
+                                setSubTab('purchase');
+                              }}
+                              className="p-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 transition"
+                              title="Đề xuất mua thêm"
+                            >
+                              <ShoppingCart className="w-3.5 h-3.5" />
                             </button>
                             <button
                               type="button"
@@ -893,6 +965,16 @@ export const ToolsManagementTab: React.FC = () => {
             </SmartHorizontalScroll>
           </div>
         </>
+      )}
+
+      {/* SUB-TAB 3: Purchase Requests for Tools */}
+      {subTab === 'purchase' && (
+        <PurchaseRequestSection
+          type="DUNG_CU"
+          preselectedDraft={purchaseDraft}
+          onClearPreselected={() => setPurchaseDraft(null)}
+          openCreateSignal={openPurchaseModalTick}
+        />
       )}
 
       {/* MODAL 1: Add / Edit Tool */}

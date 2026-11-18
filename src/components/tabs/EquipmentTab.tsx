@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Equipment, MaintenanceWorkType, RiskLevel, EquipmentStatus } from '../../types/cmms';
-import { canDeleteRecords, formatDateVN } from '../../utils/cmmsLogic';
+import { canAssignWork, canDeleteRecords, formatDateVN } from '../../utils/cmmsLogic';
 import { EquipmentImage, isDirectUploadedImage } from '../../utils/imageUtils';
 import { EquipmentDetailModal } from '../EquipmentDetailModal';
 import { WorkAssignmentModal } from '../common/WorkAssignmentModal';
@@ -43,6 +43,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
 }) => {
   const { equipment, deleteEquipment, currentUser } = useCMMS();
   const canDelete = canDeleteRecords(currentUser);
+  const allowAssignWork = canAssignWork(currentUser);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSystem, setSelectedSystem] = useState<string>('ALL');
@@ -463,13 +464,15 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          <button
-                            onClick={() => setEquipmentToAssign(item)}
-                            title="Giao việc & Gửi email tới người phụ trách"
-                            className="p-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-400 transition"
-                          >
-                            <Send className="w-4 h-4" />
-                          </button>
+                          {allowAssignWork && (
+                            <button
+                              onClick={() => setEquipmentToAssign(item)}
+                              title="Giao việc & Gửi email tới người phụ trách"
+                              className="p-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-400 transition"
+                            >
+                              <Send className="w-4 h-4" />
+                            </button>
+                          )}
                           <button
                             onClick={() => onOpenMaintenance(item, 'Bảo trì theo kế hoạch')}
                             title="Bảo trì theo kế hoạch (lưu lịch sử & tạo lịch kế tiếp)"
@@ -653,14 +656,16 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
                   </span>
 
                   <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => setEquipmentToAssign(item)}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition"
-                      title="Giao việc & Gửi email"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      Giao Việc
-                    </button>
+                    {allowAssignWork && (
+                      <button
+                        onClick={() => setEquipmentToAssign(item)}
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition"
+                        title="Giao việc & Gửi email"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                        Giao Việc
+                      </button>
+                    )}
                     <button
                       onClick={() => onOpenMaintenance(item, 'Bảo trì theo kế hoạch')}
                       title="Bảo trì theo kế hoạch (lưu lịch sử & tạo lịch kế tiếp)"
@@ -711,7 +716,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
       )}
 
       {/* Work Assignment & Email Dispatch Modal */}
-      {equipmentToAssign && (
+      {equipmentToAssign && allowAssignWork && (
         <WorkAssignmentModal
           isOpen={Boolean(equipmentToAssign)}
           onClose={() => setEquipmentToAssign(null)}

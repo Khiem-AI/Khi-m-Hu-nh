@@ -3,6 +3,7 @@ import { Equipment, MaintenanceHistory, MaintenanceResult, MaintenanceWorkType }
 import { useCMMS } from '../context/CMMSContext';
 import {
   calculateNextMaintenanceDate,
+  canAssignWork,
   canViewCosts,
   formatDateVN,
   getHistoryWorkType,
@@ -47,6 +48,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
 
   const isEditMode = Boolean(initialRecord && initialRecord.id);
   const shouldOpen = isOpen !== undefined ? isOpen : Boolean(propEquipment || initialRecord);
+  const allowAssignWork = canAssignWork(currentUser);
 
   const defaultEngineer =
     employees.find((e) => e.chucVu === 'Kỹ sư thiết bị')?.tenNhanVien || currentUser.tenNhanVien;
@@ -64,10 +66,14 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
   );
   const [ngayThucHien, setNgayThucHien] = useState(initialRecord?.ngayThucHien || today);
   const [nguoiThucHien, setNguoiThucHien] = useState(
-    initialRecord?.nguoiThucHien || propEquipment?.nguoiPhuTrach || ''
+    initialRecord?.nguoiThucHien ||
+      propEquipment?.nguoiPhuTrach ||
+      (!allowAssignWork ? currentUser.tenNhanVien : '')
   );
   const [nguoiGiaoViec, setNguoiGiaoViec] = useState(
-    initialRecord?.nguoiGiaoViec || propEquipment?.nguoiGiaoViec || defaultEngineer
+    initialRecord?.nguoiGiaoViec ||
+      propEquipment?.nguoiGiaoViec ||
+      (allowAssignWork ? defaultEngineer : '')
   );
   const [moTaCongViec, setMoTaCongViec] = useState(initialRecord?.moTaCongViec || '');
   const [thoiGianDungMay, setThoiGianDungMay] = useState<number>(initialRecord?.thoiGianDungMay ?? 60);
@@ -94,8 +100,8 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
       setSelectedCode(initialRecord.maThietBi);
       setLoaiCongViec(getHistoryWorkType(initialRecord));
       setNgayThucHien(initialRecord.ngayThucHien);
-      setNguoiThucHien(initialRecord.nguoiThucHien || '');
-      setNguoiGiaoViec(initialRecord.nguoiGiaoViec || defaultEngineer);
+      setNguoiThucHien(initialRecord.nguoiThucHien || (!allowAssignWork ? currentUser.tenNhanVien : ''));
+      setNguoiGiaoViec(initialRecord.nguoiGiaoViec || (allowAssignWork ? defaultEngineer : ''));
       setMoTaCongViec(initialRecord.moTaCongViec);
       setThoiGianDungMay(initialRecord.thoiGianDungMay);
       setKetQua(initialRecord.ketQua);
@@ -107,8 +113,8 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
       setSelectedCode(propEquipment.maThietBi);
       setLoaiCongViec(defaultWorkType);
       setNgayThucHien(today);
-      setNguoiThucHien(propEquipment.nguoiPhuTrach || '');
-      setNguoiGiaoViec(propEquipment.nguoiGiaoViec || defaultEngineer);
+      setNguoiThucHien(propEquipment.nguoiPhuTrach || (!allowAssignWork ? currentUser.tenNhanVien : ''));
+      setNguoiGiaoViec(propEquipment.nguoiGiaoViec || (allowAssignWork ? defaultEngineer : ''));
       setMoTaCongViec('');
       setAnhTruocXuLy('');
       setChiPhiUocTinh(0);
@@ -116,13 +122,13 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
     } else {
       setLoaiCongViec(defaultWorkType);
       setNgayThucHien(today);
-      setNguoiThucHien('');
-      setNguoiGiaoViec(defaultEngineer);
+      setNguoiThucHien(!allowAssignWork ? currentUser.tenNhanVien : '');
+      setNguoiGiaoViec(allowAssignWork ? defaultEngineer : '');
       setMoTaCongViec('');
       setAnhTruocXuLy('');
       setChiPhiUocTinh(0);
     }
-  }, [shouldOpen, initialRecord, propEquipment, defaultEngineer, defaultWorkType]);
+  }, [shouldOpen, initialRecord, propEquipment, defaultEngineer, defaultWorkType, allowAssignWork, currentUser.tenNhanVien, emailConfig.enabled]);
 
   if (!shouldOpen || !activeEquipment) return null;
 
@@ -341,7 +347,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className={`grid grid-cols-1 ${allowAssignWork ? 'sm:grid-cols-2' : ''} gap-4`}>
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
                 <Calendar className="w-3.5 h-3.5 text-emerald-400" />
@@ -356,35 +362,52 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
               />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">
-                Người Giao Việc
-              </label>
-              <select
-                value={nguoiGiaoViec}
-                onChange={(e) => setNguoiGiaoViec(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
-              >
-                {employees.map((emp) => (
-                  <option key={emp.maNhanVien} value={emp.tenNhanVien}>
-                    [{emp.maNhanVien}] {emp.tenNhanVien}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {allowAssignWork && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">
+                  Người Giao Việc
+                </label>
+                <select
+                  value={nguoiGiaoViec}
+                  onChange={(e) => setNguoiGiaoViec(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 font-medium"
+                >
+                  {employees.map((emp) => (
+                    <option key={emp.maNhanVien} value={emp.tenNhanVien}>
+                      [{emp.maNhanVien}] {emp.tenNhanVien}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          <MultiAssigneePicker
-            employees={employees}
-            value={nguoiThucHien}
-            onChange={(formatted) => {
-              setNguoiThucHien(formatted);
-              if (formatted && error) setError('');
-            }}
-            label="Người Thực Hiện"
-            accentColor="emerald"
-            required
-          />
+          {allowAssignWork ? (
+            <MultiAssigneePicker
+              employees={employees}
+              value={nguoiThucHien}
+              onChange={(formatted) => {
+                setNguoiThucHien(formatted);
+                if (formatted && error) setError('');
+              }}
+              label="Người Thực Hiện"
+              accentColor="emerald"
+              required
+            />
+          ) : (isEditMode || propEquipment) && (
+            <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/70 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-2">
+              <span>
+                <span className="text-slate-400">Người thực hiện:</span>{' '}
+                <strong className="text-emerald-300">{nguoiThucHien || currentUser.tenNhanVien}</strong>
+              </span>
+              {nguoiGiaoViec && (
+                <span>
+                  <span className="text-slate-400">Người giao việc:</span>{' '}
+                  <strong className="text-slate-200">{nguoiGiaoViec}</strong>
+                </span>
+              )}
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-300">

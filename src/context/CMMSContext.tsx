@@ -36,6 +36,8 @@ import {
   DailyInspectionArea,
   MorningCheckAreaTemplate,
   MorningCheckTemplatesMap,
+  PurchaseRequest,
+  PurchaseRequestStatus,
 } from '../types/cmms';
 import { buildProfessionalEmailHtml } from '../utils/emailTemplates';
 import {
@@ -59,6 +61,7 @@ import {
   INITIAL_TOOLS,
   INITIAL_TOOL_LOGS,
   INITIAL_DAILY_AREA_CHECKS,
+  INITIAL_PURCHASE_REQUESTS,
 } from '../data/initialData';
 import {
   calculateNextMaintenanceDate,
@@ -80,6 +83,9 @@ import {
   canAccessBackup,
   canDeleteRecords,
   canManageMaintenancePlans,
+  canViewCosts,
+  canAssignWork,
+  canApprovePurchaseRequests,
   DEFAULT_MORNING_CHECK_TEMPLATES,
   getScheduledDatesForAreaCheck,
 } from '../utils/cmmsLogic';
@@ -123,6 +129,7 @@ import {
   sanitizeToolLog,
   sanitizeWaterMonthly,
   sanitizeDailyAreaCheck,
+  sanitizePurchaseRequest,
   WATER_MONTHLY_SEED_VERSION,
   seedOrPushWorkspaceToFirestore,
   subscribeCloudCollection,
@@ -161,6 +168,7 @@ interface CMMSContextType {
   toolLogs: ToolBorrowLog[];
   dailyAreaChecks: DailyAreaCheck[];
   morningCheckTemplates: MorningCheckTemplatesMap;
+  purchaseRequests: PurchaseRequest[];
   currentUser: Employee;
 
   // Equipment Actions
@@ -210,6 +218,23 @@ interface CMMSContextType {
     tinhTrangKhiTra?: ToolCondition;
     ghiChu?: string;
   }) => { success: boolean; message?: string };
+
+  // Purchase Request Actions ("Yêu Cầu Mua Dụng Cụ & Vật Tư")
+  addPurchaseRequest: (
+    req: Omit<PurchaseRequest, 'id' | 'maPhieu' | 'trangThai' | 'ngayYeuCau' | 'nguoiYeuCau'> & {
+      maPhieu?: string;
+      ngayYeuCau?: string;
+      nguoiYeuCau?: string;
+    }
+  ) => PurchaseRequest;
+  updatePurchaseRequest: (req: PurchaseRequest) => void;
+  updatePurchaseRequestStatus: (params: {
+    id: string;
+    trangThai: PurchaseRequestStatus;
+    ghiChuDuyet?: string;
+    autoReceiveToInventory?: boolean;
+  }) => { success: boolean; message?: string };
+  deletePurchaseRequest: (id: string) => void;
 
   // Ticket Actions
   addTicket: (
@@ -674,6 +699,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ...DEFAULT_MORNING_CHECK_TEMPLATES,
     ...loadStorage<Partial<MorningCheckTemplatesMap>>('morningCheckTemplates', {}),
   }));
+  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>(() =>
+    deduplicateById(loadStorage('purchaseRequests', INITIAL_PURCHASE_REQUESTS), 'PR')
+  );
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('cmms_authenticated') === 'true';
@@ -747,6 +775,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toolLogs,
     dailyAreaChecks,
     morningCheckTemplates,
+    purchaseRequests,
     emailLogs,
     auditLogs,
     emailConfig,
@@ -773,6 +802,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toolLogs,
       dailyAreaChecks,
       morningCheckTemplates,
+      purchaseRequests,
       emailLogs,
       auditLogs,
       emailConfig,
@@ -797,6 +827,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toolLogs,
     dailyAreaChecks,
     morningCheckTemplates,
+    purchaseRequests,
     emailLogs,
     auditLogs,
     emailConfig,
@@ -1336,6 +1367,22 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           },
           onSnapError
         ),
+        subscribeCloudCollection<PurchaseRequest>(
+          'purchase_requests',
+          fbUser.email,
+          fbUser.uid,
+          (items, paths) => {
+            markSynced(paths);
+            if (items.length > 0 || workspaceReadyRef.current) {
+              setPurchaseRequests(
+                [...items].sort((a, b) =>
+                  (b.ngayYeuCau || '').localeCompare(a.ngayYeuCau || '')
+                )
+              );
+            }
+          },
+          onSnapError
+        ),
         subscribeCloudCollection<EmailLog>(
           'email_logs',
           fbUser.email,
@@ -1479,6 +1526,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveStorage('toolLogs', toolLogs), [toolLogs]);
   useEffect(() => saveStorage('dailyAreaChecks', dailyAreaChecks), [dailyAreaChecks]);
   useEffect(() => saveStorage('morningCheckTemplates', morningCheckTemplates), [morningCheckTemplates]);
+  useEffect(() => saveStorage('purchaseRequests', purchaseRequests), [purchaseRequests]);
   useEffect(() => saveStorage('webNotifications', webNotifications), [webNotifications]);
 
   useEffect(() => {
@@ -2687,6 +2735,250 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
+  // Purchase Request Actions ("Yêu Cầu Mua Dụng Cụ & Vật Tư")
+  const addPurchaseRequest = (
+    reqData: Omit<PurchaseRequest, 'id' | 'maPhieu' | 'trangThai' | 'ngayYeuCau' | 'nguoiYeuCau'> & {
+      maPhieu?: string;
+      ngayYeuCau?: string;
+      nguoiYeuCau?: string;
+    }
+  ): PurchaseRequest => {
+    const actor = currentUserRef.current;
+    const prefix = reqData.loaiYeuCau === 'DUNG_CU' ? 'PR-DC' : 'PR-VT';
+    const existingCount = purchaseRequests.filter((r) => r.loaiYeuCau === reqData.loaiYeuCau).length;
+    let candidateCode = (reqData.maPhieu || '').trim();
+    if (!candidateCode) {
+      let seq = existingCount + 1;
+      candidateCode = `${prefix}-${String(seq).padStart(3, '0')}`;
+      const usedCodes = new Set(purchaseRequests.map((r) => r.maPhieu.toUpperCase()));
+      while (usedCodes.has(candidateCode.toUpperCase())) {
+        seq += 1;
+        candidateCode = `${prefix}-${String(seq).padStart(3, '0')}`;
+      }
+    }
+    const allowCostField = canViewCosts(actor);
+    const parsedPrice =
+      allowCostField && typeof reqData.donGiaDuKien === 'number' && Number.isFinite(reqData.donGiaDuKien)
+        ? Math.max(0, reqData.donGiaDuKien)
+        : undefined;
+
+    const newReq: PurchaseRequest = {
+      id: nextUniqueId('PR'),
+      maPhieu: candidateCode,
+      loaiYeuCau: reqData.loaiYeuCau,
+      maMatHang: reqData.maMatHang?.trim() || undefined,
+      tenMatHang: reqData.tenMatHang.trim(),
+      danhMuc: reqData.danhMuc?.trim() || undefined,
+      quyCachThongSo: reqData.quyCachThongSo?.trim() || undefined,
+      soLuong: Math.max(1, Number(reqData.soLuong) || 1),
+      donViTinh: reqData.donViTinh.trim() || 'Cái',
+      donGiaDuKien: parsedPrice,
+      nhaCungCapDeXuat: reqData.nhaCungCapDeXuat?.trim() || undefined,
+      mucDoUuTien: reqData.mucDoUuTien || 'Bình thường',
+      trangThai: 'Chờ duyệt',
+      ngayYeuCau: reqData.ngayYeuCau || getVietnamTodayYMD(),
+      ngayCanHang: reqData.ngayCanHang?.trim() || undefined,
+      nguoiYeuCau: reqData.nguoiYeuCau || actor.tenNhanVien,
+      boPhan: reqData.boPhan?.trim() || actor.phongBan || 'Kỹ Thuật & Bảo Trì (O&M)',
+      maThietBiLienQuan: reqData.maThietBiLienQuan?.trim() || undefined,
+      lyDoYeuCau: reqData.lyDoYeuCau.trim(),
+      ghiChu: reqData.ghiChu?.trim() || undefined,
+    };
+
+    setPurchaseRequests((prev) => [newReq, ...prev]);
+    syncDoc('purchase_requests', newReq.id, sanitizePurchaseRequest(newReq));
+    const moduleLabel =
+      newReq.loaiYeuCau === 'DUNG_CU' ? 'Yêu cầu mua dụng cụ' : 'Yêu cầu mua vật tư';
+    addAuditLog(
+      'Thêm',
+      moduleLabel,
+      newReq.maPhieu,
+      `Tạo phiếu ${newReq.maPhieu}: ${newReq.tenMatHang} (${newReq.soLuong} ${newReq.donViTinh}) • Ưu tiên: ${newReq.mucDoUuTien}`
+    );
+    triggerWebNotification({
+      type: 'TICKET_MOI',
+      title: `[${moduleLabel}] ${newReq.maPhieu}: ${newReq.tenMatHang}`,
+      message: `${newReq.nguoiYeuCau} đề xuất mua ${newReq.soLuong} ${newReq.donViTinh} ${newReq.tenMatHang} (${newReq.mucDoUuTien}). Lý do: ${newReq.lyDoYeuCau}`,
+      relatedId: newReq.maPhieu,
+      targetTab: newReq.loaiYeuCau === 'DUNG_CU' ? 'tools' : 'spare_parts',
+    });
+    return newReq;
+  };
+
+  const updatePurchaseRequest = (req: PurchaseRequest) => {
+    const existing = purchaseRequests.find((r) => r.id === req.id);
+    if (!existing) return;
+    const actor = currentUserRef.current;
+    const allowCostField = canViewCosts(actor);
+    const nextPrice = allowCostField
+      ? typeof req.donGiaDuKien === 'number' && Number.isFinite(req.donGiaDuKien)
+        ? Math.max(0, req.donGiaDuKien)
+        : undefined
+      : existing.donGiaDuKien;
+
+    const updated: PurchaseRequest = {
+      ...existing,
+      ...req,
+      // Keep immutable metadata untouched for Firestore security rules consistency
+      id: existing.id,
+      maPhieu: existing.maPhieu,
+      loaiYeuCau: existing.loaiYeuCau,
+      nguoiYeuCau: existing.nguoiYeuCau,
+      ngayYeuCau: existing.ngayYeuCau,
+      soLuong: Math.max(1, Number(req.soLuong) || 1),
+      donGiaDuKien: nextPrice,
+    };
+
+    setPurchaseRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    syncDoc('purchase_requests', updated.id, sanitizePurchaseRequest(updated));
+    const moduleLabel =
+      updated.loaiYeuCau === 'DUNG_CU' ? 'Yêu cầu mua dụng cụ' : 'Yêu cầu mua vật tư';
+    addAuditLog(
+      'Sửa',
+      moduleLabel,
+      updated.maPhieu,
+      `Cập nhật phiếu ${updated.maPhieu}: ${updated.tenMatHang} (SL: ${updated.soLuong} ${updated.donViTinh})`
+    );
+  };
+
+  const updatePurchaseRequestStatus = (params: {
+    id: string;
+    trangThai: PurchaseRequestStatus;
+    ghiChuDuyet?: string;
+    autoReceiveToInventory?: boolean;
+  }): { success: boolean; message?: string } => {
+    const actor = currentUserRef.current;
+    if (!canApprovePurchaseRequests(actor)) {
+      return {
+        success: false,
+        message: 'Tài khoản Kỹ thuật viên không có quyền phê duyệt hoặc đổi trạng thái mua hàng.',
+      };
+    }
+    const existing = purchaseRequests.find((r) => r.id === params.id);
+    if (!existing) {
+      return { success: false, message: 'Không tìm thấy phiếu yêu cầu mua hàng.' };
+    }
+
+    const today = getVietnamTodayYMD();
+    let stockedInventory = existing.daNhapKho || false;
+
+    if (
+      params.trangThai === 'Đã nhận hàng' &&
+      params.autoReceiveToInventory &&
+      !existing.daNhapKho &&
+      existing.maMatHang
+    ) {
+      const codeLower = existing.maMatHang.trim().toLowerCase();
+      if (existing.loaiYeuCau === 'VAT_TU') {
+        const matchedPart = spareParts.find((p) => p.maVatTu.trim().toLowerCase() === codeLower);
+        if (matchedPart) {
+          const newTx: StockTransaction = {
+            transId: nextUniqueId('TR'),
+            ngay: today,
+            loaiGD: 'Nhập kho',
+            maVatTu: matchedPart.maVatTu,
+            thietBiSuDung: existing.maThietBiLienQuan || matchedPart.tenThietBiSuDung || 'Kho chung',
+            soLuong: existing.soLuong,
+            nguoiThucHien: actor.tenNhanVien,
+            ghiChu: `Nhập kho từ phiếu mua vật tư ${existing.maPhieu}`,
+          };
+          const updatedPart: SparePart = {
+            ...matchedPart,
+            tonThucTe: applyStockTransaction(matchedPart.tonThucTe, 'Nhập kho', existing.soLuong),
+          };
+          setStockTransactions((prev) => [newTx, ...prev]);
+          setSpareParts((prev) =>
+            prev.map((sp) => (sp.maVatTu === updatedPart.maVatTu ? updatedPart : sp))
+          );
+          syncDoc('stock_transactions', newTx.transId, sanitizeStockTx(newTx));
+          syncDoc('spare_parts', updatedPart.maVatTu, sanitizeSparePart(updatedPart));
+          stockedInventory = true;
+        }
+      } else {
+        const matchedTool = tools.find((t) => t.maDungCu.trim().toLowerCase() === codeLower);
+        if (matchedTool) {
+          const updatedTool: ToolItem = {
+            ...matchedTool,
+            soLuongTong: matchedTool.soLuongTong + existing.soLuong,
+            soLuongKhaDung: matchedTool.soLuongKhaDung + existing.soLuong,
+          };
+          const newToolLog: ToolBorrowLog = {
+            id: nextUniqueId('TLG'),
+            maDungCu: matchedTool.maDungCu,
+            tenDungCu: matchedTool.tenDungCu,
+            loaiGiaoDich: 'Kiểm kê',
+            soLuong: existing.soLuong,
+            nguoiMuon: existing.nguoiYeuCau,
+            nguoiBanGiao: actor.tenNhanVien,
+            ngayGiaoDich: today,
+            ghiChu: `Bổ sung tồn kho từ phiếu mua dụng cụ ${existing.maPhieu}`,
+          };
+          setTools((prev) => prev.map((t) => (t.id === updatedTool.id ? updatedTool : t)));
+          setToolLogs((prev) => [newToolLog, ...prev]);
+          syncDoc('tools', updatedTool.id, sanitizeToolItem(updatedTool));
+          syncDoc('tool_logs', newToolLog.id, sanitizeToolLog(newToolLog));
+          stockedInventory = true;
+        }
+      }
+    }
+
+    const isApprovalStep =
+      params.trangThai === 'Đã duyệt' ||
+      params.trangThai === 'Đang đặt hàng' ||
+      params.trangThai === 'Từ chối' ||
+      params.trangThai === 'Đã nhận hàng';
+
+    const updated: PurchaseRequest = {
+      ...existing,
+      trangThai: params.trangThai,
+      ghiChuDuyet:
+        params.ghiChuDuyet !== undefined ? params.ghiChuDuyet.trim() || undefined : existing.ghiChuDuyet,
+      nguoiDuyet: isApprovalStep ? existing.nguoiDuyet || actor.tenNhanVien : existing.nguoiDuyet,
+      ngayDuyet: isApprovalStep ? existing.ngayDuyet || today : existing.ngayDuyet,
+      nguoiNhanHang: params.trangThai === 'Đã nhận hàng' ? actor.tenNhanVien : existing.nguoiNhanHang,
+      ngayNhanHang: params.trangThai === 'Đã nhận hàng' ? today : existing.ngayNhanHang,
+      daNhapKho: stockedInventory,
+    };
+
+    setPurchaseRequests((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+    syncDoc('purchase_requests', updated.id, sanitizePurchaseRequest(updated));
+    const moduleLabel =
+      updated.loaiYeuCau === 'DUNG_CU' ? 'Yêu cầu mua dụng cụ' : 'Yêu cầu mua vật tư';
+    addAuditLog(
+      params.trangThai === 'Đã nhận hàng' ? 'Hoàn thành' : 'Cập nhật',
+      moduleLabel,
+      updated.maPhieu,
+      `${actor.tenNhanVien} chuyển trạng thái ${updated.maPhieu} (${updated.tenMatHang}) -> ${params.trangThai}${
+        stockedInventory ? ' (Đã cộng tồn kho)' : ''
+      }`
+    );
+    triggerWebNotification({
+      type: 'BAO_CAO_HOAN_THANH',
+      title: `[${moduleLabel}] ${updated.maPhieu} — ${params.trangThai}`,
+      message: `${updated.tenMatHang} (${updated.soLuong} ${updated.donViTinh}) đã được ${actor.tenNhanVien} cập nhật trạng thái: ${params.trangThai}.${
+        updated.ghiChuDuyet ? ` Ghi chú: ${updated.ghiChuDuyet}` : ''
+      }`,
+      relatedId: updated.maPhieu,
+      targetTab: updated.loaiYeuCau === 'DUNG_CU' ? 'tools' : 'spare_parts',
+    });
+    return { success: true };
+  };
+
+  const deletePurchaseRequest = (id: string) => {
+    if (!canDeleteRecords(currentUserRef.current)) return;
+    const target = purchaseRequests.find((r) => r.id === id);
+    setPurchaseRequests((prev) => prev.filter((r) => r.id !== id));
+    removeDocCloud('purchase_requests', id);
+    const moduleLabel =
+      target?.loaiYeuCau === 'DUNG_CU' ? 'Yêu cầu mua dụng cụ' : 'Yêu cầu mua vật tư';
+    addAuditLog(
+      'Xóa',
+      moduleLabel,
+      target?.maPhieu || id,
+      `Xóa phiếu yêu cầu mua ${target?.tenMatHang || id}`
+    );
+  };
+
   const login = (usernameInput: string, passwordInput?: string): { success: boolean; message?: string } => {
     const cleanUser = usernameInput.trim().toLowerCase();
     if (!cleanUser) {
@@ -3496,7 +3788,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     recipientEmailOverride?: string;
     saveEmailToProfile?: boolean;
   }): Promise<EmailSendResult | null> => {
-    if (params.module === 'KE_HOACH_BAO_TRI' && !canManageMaintenancePlans(currentUser)) {
+    if (!canAssignWork(currentUserRef.current)) {
       return null;
     }
     const parsedList =
@@ -3887,6 +4179,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToolLogs(INITIAL_TOOL_LOGS);
     setDailyAreaChecks(INITIAL_DAILY_AREA_CHECKS);
     setMorningCheckTemplates(DEFAULT_MORNING_CHECK_TEMPLATES);
+    setPurchaseRequests(INITIAL_PURCHASE_REQUESTS);
     applyCurrentUser(INITIAL_EMPLOYEES[0], false);
     localStorage.clear();
     if (cloudUserRef.current?.email.toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL) {
@@ -3912,6 +4205,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toolLogs: INITIAL_TOOL_LOGS,
           dailyAreaChecks: INITIAL_DAILY_AREA_CHECKS,
           morningCheckTemplates: DEFAULT_MORNING_CHECK_TEMPLATES,
+          purchaseRequests: INITIAL_PURCHASE_REQUESTS,
           emailLogs: INITIAL_EMAIL_LOGS,
           auditLogs: INITIAL_AUDIT_LOGS,
           emailConfig: INITIAL_EMAIL_CONFIG,
@@ -3945,6 +4239,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toolLogs,
       dailyAreaChecks,
       morningCheckTemplates,
+      purchaseRequests,
       emailConfig,
       emailLogs,
       tariffConfig,
@@ -3978,6 +4273,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Array.isArray(data.tools)) setTools(data.tools);
       if (Array.isArray(data.toolLogs)) setToolLogs(data.toolLogs);
       if (Array.isArray(data.dailyAreaChecks)) setDailyAreaChecks(data.dailyAreaChecks);
+      if (Array.isArray(data.purchaseRequests)) setPurchaseRequests(data.purchaseRequests);
       if (data.morningCheckTemplates && typeof data.morningCheckTemplates === 'object') {
         setMorningCheckTemplates({
           ...DEFAULT_MORNING_CHECK_TEMPLATES,
@@ -4010,6 +4306,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
             data.morningCheckTemplates && typeof data.morningCheckTemplates === 'object'
               ? { ...DEFAULT_MORNING_CHECK_TEMPLATES, ...data.morningCheckTemplates }
               : morningCheckTemplates,
+          purchaseRequests: Array.isArray(data.purchaseRequests) ? data.purchaseRequests : purchaseRequests,
           emailLogs: Array.isArray(data.emailLogs) ? data.emailLogs : emailLogs,
           auditLogs,
           emailConfig:
@@ -4053,6 +4350,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toolLogs,
         dailyAreaChecks,
         morningCheckTemplates,
+        purchaseRequests,
         currentUser,
         emailConfig,
         emailLogs,
@@ -4098,6 +4396,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateTool,
         deleteTool,
         recordToolTransaction,
+        addPurchaseRequest,
+        updatePurchaseRequest,
+        updatePurchaseRequestStatus,
+        deletePurchaseRequest,
         addTicket,
         updateTicket,
         deleteTicket,

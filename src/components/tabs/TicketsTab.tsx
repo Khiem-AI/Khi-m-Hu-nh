@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Ticket, TicketStatus, TicketPriority } from '../../types/cmms';
-import { canDeleteRecords, formatDateVN, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { canAssignWork, canDeleteRecords, formatDateVN, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import { exportTicketsRepairExcel } from '../../utils/excelExport';
 import { WorkAssignmentModal } from '../common/WorkAssignmentModal';
@@ -34,6 +34,7 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
 }) => {
   const { tickets, equipment, currentUser, updateTicket, deleteTicket, employees, addAuditLog } = useCMMS();
   const canDelete = canDeleteRecords(currentUser);
+  const allowAssignWork = canAssignWork(currentUser);
 
   const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [searchTerm, setSearchTerm] = useState('');
@@ -453,15 +454,17 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-1.5 ml-auto">
-                      <button
-                        type="button"
-                        onClick={() => setTicketToAssign(ticket)}
-                        className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition whitespace-nowrap"
-                        title="Giao việc & Gửi email tới người phụ trách"
-                      >
-                        <Send className="w-3.5 h-3.5" />
-                        Giao Việc
-                      </button>
+                      {allowAssignWork && (
+                        <button
+                          type="button"
+                          onClick={() => setTicketToAssign(ticket)}
+                          className="min-h-[38px] inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 text-xs font-semibold transition whitespace-nowrap"
+                          title="Giao việc & Gửi email tới người phụ trách"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                          Giao Việc
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => onOpenEditTicket(ticket)}
@@ -640,13 +643,15 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
                               Hoàn Thành
                             </button>
                           )}
-                          <button
-                            onClick={() => setTicketToAssign(ticket)}
-                            className="p-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 transition"
-                            title="Giao việc & Gửi email"
-                          >
-                            <Send className="w-3.5 h-3.5" />
-                          </button>
+                          {allowAssignWork && (
+                            <button
+                              onClick={() => setTicketToAssign(ticket)}
+                              className="p-1.5 rounded-lg bg-indigo-500/15 hover:bg-indigo-500/30 text-indigo-300 transition"
+                              title="Giao việc & Gửi email"
+                            >
+                              <Send className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => onOpenEditTicket(ticket)}
                             className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition"
@@ -738,7 +743,7 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
       )}
 
       {/* Work Assignment & Email Modal */}
-      {ticketToAssign && (
+      {ticketToAssign && allowAssignWork && (
         <WorkAssignmentModal
           isOpen={Boolean(ticketToAssign)}
           onClose={() => setTicketToAssign(null)}

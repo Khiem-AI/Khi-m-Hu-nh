@@ -30,6 +30,7 @@ import {
   MeterReading,
   MorningCheckTemplatesMap,
   Power10Days,
+  PurchaseRequest,
   SafetyInspectionItem,
   SparePart,
   StockTransaction,
@@ -672,7 +673,42 @@ const IMMUTABLE_KEYS_BY_COL: Record<string, Set<string>> = {
     'chiTietNoiDung',
   ]),
   daily_area_checks: new Set(['id']),
+  purchase_requests: new Set(['id', 'maPhieu', 'loaiYeuCau', 'nguoiYeuCau', 'ngayYeuCau']),
 };
+
+export function sanitizePurchaseRequest(p: PurchaseRequest): Record<string, unknown> {
+  return stripUndefined({
+    id: clampString(p.id, 80),
+    maPhieu: clampString(p.maPhieu || p.id, 80),
+    loaiYeuCau: p.loaiYeuCau === 'DUNG_CU' ? 'DUNG_CU' : 'VAT_TU',
+    maMatHang: p.maMatHang ? clampString(p.maMatHang, 80) : undefined,
+    tenMatHang: clampString(p.tenMatHang || '', 240),
+    quyCachThongSo: p.quyCachThongSo ? clampString(p.quyCachThongSo, 1000) : undefined,
+    danhMuc: p.danhMuc ? clampString(p.danhMuc, 160) : undefined,
+    soLuong: Math.max(1, Number(p.soLuong) || 1),
+    donViTinh: clampString((p.donViTinh || '').trim() || 'Cái', 40),
+    donGiaDuKien:
+      typeof p.donGiaDuKien === 'number' && !isNaN(p.donGiaDuKien)
+        ? Math.max(0, p.donGiaDuKien)
+        : undefined,
+    nhaCungCapDeXuat: p.nhaCungCapDeXuat ? clampString(p.nhaCungCapDeXuat, 200) : undefined,
+    lyDoYeuCau: clampString(p.lyDoYeuCau || '', 2000),
+    mucDoUuTien: p.mucDoUuTien || 'Bình thường',
+    ngayYeuCau: clampString(p.ngayYeuCau || '', 32),
+    ngayCanHang: p.ngayCanHang ? clampString(p.ngayCanHang, 32) : undefined,
+    nguoiYeuCau: clampString((p.nguoiYeuCau || '').trim() || 'Kỹ thuật viên', 160),
+    boPhan: p.boPhan ? clampString(p.boPhan, 160) : undefined,
+    maThietBiLienQuan: p.maThietBiLienQuan ? clampString(p.maThietBiLienQuan, 80) : undefined,
+    trangThai: p.trangThai || 'Chờ duyệt',
+    nguoiDuyet: p.nguoiDuyet ? clampString(p.nguoiDuyet, 160) : undefined,
+    ngayDuyet: p.ngayDuyet ? clampString(p.ngayDuyet, 32) : undefined,
+    ghiChuDuyet: p.ghiChuDuyet ? clampString(p.ghiChuDuyet, 1000) : undefined,
+    ngayNhanHang: p.ngayNhanHang ? clampString(p.ngayNhanHang, 32) : undefined,
+    nguoiNhanHang: p.nguoiNhanHang ? clampString(p.nguoiNhanHang, 160) : undefined,
+    daNhapKho: typeof p.daNhapKho === 'boolean' ? p.daNhapKho : undefined,
+    ghiChu: p.ghiChu ? clampString(p.ghiChu, 1500) : undefined,
+  });
+}
 
 function buildUpdatePayload(
   colName: string,
@@ -821,6 +857,7 @@ export interface WorkspaceSnapshotData {
   tools: ToolItem[];
   toolLogs: ToolBorrowLog[];
   dailyAreaChecks: DailyAreaCheck[];
+  purchaseRequests?: PurchaseRequest[];
   emailLogs: EmailLog[];
   auditLogs: AuditLog[];
   emailConfig: EmailConfig;
@@ -902,6 +939,9 @@ export async function seedOrPushWorkspaceToFirestore(
   }
   for (const item of snapshotData.dailyAreaChecks) {
     ops.push({ col: 'daily_area_checks', id: item.id, data: sanitizeDailyAreaCheck(item) });
+  }
+  for (const item of snapshotData.purchaseRequests || []) {
+    ops.push({ col: 'purchase_requests', id: item.id, data: sanitizePurchaseRequest(item) });
   }
   for (const item of snapshotData.emailLogs) {
     ops.push({ col: 'email_logs', id: item.id, data: sanitizeEmailLog(item) });
@@ -1113,6 +1153,7 @@ export async function propagateAllowedEmails(allowedEmails: string[]): Promise<v
     'tools',
     'tool_logs',
     'daily_area_checks',
+    'purchase_requests',
     'email_logs',
     'audit_logs',
   ];

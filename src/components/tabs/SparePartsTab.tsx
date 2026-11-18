@@ -17,7 +17,10 @@ import {
   Layers,
   Edit,
   Trash2,
+  ShoppingCart,
+  X,
 } from 'lucide-react';
+import { PurchaseRequestSection, PurchaseRequestDraft } from '../common/PurchaseRequestSection';
 
 interface SparePartsTabProps {
   onOpenStockModal: (partCode?: string) => void;
@@ -30,11 +33,15 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
   onOpenAddPart,
   onOpenEditPart,
 }) => {
-  const { spareParts, stockTransactions, deleteSparePart, currentUser } = useCMMS();
+  const { spareParts, stockTransactions, purchaseRequests, deleteSparePart, currentUser } = useCMMS();
   const showCosts = canViewCosts(currentUser);
   const canDelete = canDeleteRecords(currentUser);
+  const partPurchaseCount = purchaseRequests.filter((r) => r.loaiYeuCau === 'VAT_TU').length;
 
-  const [activeSubTab, setActiveSubTab] = useState<'inventory' | 'transactions'>('inventory');
+  const [activeSubTab, setActiveSubTab] = useState<'inventory' | 'transactions' | 'purchase'>('inventory');
+  const [purchaseDraft, setPurchaseDraft] = useState<PurchaseRequestDraft | null>(null);
+  const [openPurchaseModalTick, setOpenPurchaseModalTick] = useState(0);
+  const [deletingPart, setDeletingPart] = useState<SparePart | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
 
@@ -173,7 +180,30 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
               <History className="w-3.5 h-3.5" />
               Xuất Nhập ({stockTransactions.length})
             </button>
+            <button
+              onClick={() => setActiveSubTab('purchase')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+                activeSubTab === 'purchase'
+                  ? 'bg-purple-600 text-white shadow'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <ShoppingCart className="w-3.5 h-3.5" />
+              Yêu Cầu Mua ({partPurchaseCount})
+            </button>
           </div>
+
+          <button
+            onClick={() => {
+              setPurchaseDraft(null);
+              setActiveSubTab('purchase');
+              setOpenPurchaseModalTick((prev) => prev + 1);
+            }}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs transition shadow-sm"
+          >
+            <ShoppingCart className="w-4 h-4" />
+            + Yêu Cầu Mua Vật Tư
+          </button>
 
           <button
             onClick={() => onOpenStockModal()}
@@ -192,6 +222,9 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
           </button>
         </div>
       </div>
+
+      {activeSubTab !== 'purchase' && (
+        <>
 
       {/* KPI Highlights */}
       <div className={`grid grid-cols-1 ${showCosts ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4`}>
@@ -277,9 +310,11 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
           Xuất File CSV
         </button>
       </div>
+        </>
+      )}
 
       {/* Sub-tab 1: Inventory Table (Sheet 5) */}
-      {activeSubTab === 'inventory' ? (
+      {activeSubTab === 'inventory' && (
         <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
           <SmartHorizontalScroll>
             <table className="w-full text-left border-collapse text-xs">
@@ -335,6 +370,24 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
                       <td className="py-3.5 px-4 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            onClick={() => {
+                              setPurchaseDraft({
+                                maMatHang: part.maVatTu,
+                                tenMatHang: part.tenVatTu,
+                                quyCachThongSo: part.thongSo,
+                                donViTinh: part.donViTinh,
+                                maThietBiLienQuan: part.maThietBi,
+                                donGiaDuKien: showCosts ? part.donGia : undefined,
+                                triggerKey: Date.now(),
+                              });
+                              setActiveSubTab('purchase');
+                            }}
+                            title="Yêu cầu mua bổ sung"
+                            className="p-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 transition"
+                          >
+                            <ShoppingCart className="w-4 h-4" />
+                          </button>
+                          <button
                             onClick={() => onOpenStockModal(part.maVatTu)}
                             title="Xuất/Nhập kho ngay"
                             className="p-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 transition"
@@ -350,11 +403,7 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
                           </button>
                           {canDelete && (
                             <button
-                              onClick={() => {
-                                if (window.confirm(`Bạn có chắc chắn muốn xóa vật tư ${part.tenVatTu}?`)) {
-                                  deleteSparePart(part.maVatTu);
-                                }
-                              }}
+                              onClick={() => setDeletingPart(part)}
                               title="Xóa vật tư"
                               className="p-1.5 rounded-lg bg-slate-800 hover:bg-rose-500/20 text-slate-500 hover:text-rose-400 transition"
                             >
@@ -370,8 +419,10 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
             </table>
           </SmartHorizontalScroll>
         </div>
-      ) : (
-        /* Sub-tab 2: Stock Transactions Table (Sheet 6) */
+      )}
+
+      {/* Sub-tab 2: Stock Transactions Table (Sheet 6) */}
+      {activeSubTab === 'transactions' && (
         <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
           <SmartHorizontalScroll>
             <table className="w-full text-left border-collapse text-xs">
@@ -428,6 +479,63 @@ export const SparePartsTab: React.FC<SparePartsTabProps> = ({
               </tbody>
             </table>
           </SmartHorizontalScroll>
+        </div>
+      )}
+
+      {/* Sub-tab 3: Purchase Requests for Spare Parts */}
+      {activeSubTab === 'purchase' && (
+        <PurchaseRequestSection
+          type="VAT_TU"
+          preselectedDraft={purchaseDraft}
+          onClearPreselected={() => setPurchaseDraft(null)}
+          openCreateSignal={openPurchaseModalTick}
+        />
+      )}
+
+      {/* Custom Delete Confirmation Modal */}
+      {deletingPart && canDelete && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 text-rose-400">
+                <div className="p-2 rounded-xl bg-rose-500/20 border border-rose-500/30">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <h3 className="text-base font-bold text-slate-100">Xác Nhận Xóa Vật Tư</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeletingPart(null)}
+                className="p-1 rounded-lg text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Bạn có chắc chắn muốn xóa vật tư{' '}
+              <strong className="text-purple-400 font-mono">{deletingPart.maVatTu}</strong> (
+              <strong className="text-white">{deletingPart.tenVatTu}</strong>) khỏi danh mục kho?
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDeletingPart(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  deleteSparePart(deletingPart.maVatTu);
+                  setDeletingPart(null);
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold"
+              >
+                Xóa Vật Tư
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

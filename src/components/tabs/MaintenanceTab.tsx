@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenancePlan, MaintenanceHistory, Equipment, MaintenanceWorkType } from '../../types/cmms';
-import { canDeleteRecords, canManageMaintenancePlans, canViewCosts, formatDateVN, formatVND, getHistoryWorkType, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { canAssignWork, canDeleteRecords, canManageMaintenancePlans, canViewCosts, formatDateVN, formatVND, getHistoryWorkType, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import {
   exportMaintenanceHistoryExcel,
@@ -271,6 +271,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
 
   const canDelete = canDeleteRecords(currentUser);
   const canEditPlans = canManageMaintenancePlans(currentUser);
+  const allowAssignWork = canAssignWork(currentUser);
 
   const handleMovePlanToDate = (planId: string, newDate: string) => {
     if (!canEditPlans) return;
@@ -752,7 +753,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                     </div>
 
                     <div className="flex items-center gap-2 pt-2 border-t border-slate-800">
-                      {canEditPlans && (
+                      {allowAssignWork && (
                         <button
                           type="button"
                           onClick={() => setPlanToAssign(plan)}
@@ -854,7 +855,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                         </td>
                         <td className="py-3 px-4 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-1.5">
-                            {canEditPlans && (
+                            {allowAssignWork && (
                               <button
                                 onClick={() => setPlanToAssign(plan)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition"
@@ -1727,7 +1728,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                                 Bảo Trì Ngay
                               </button>
                             )}
-                            {canEditPlans && (
+                            {allowAssignWork && (
                               <button
                                 type="button"
                                 onClick={() => setPlanToAssign(plan)}
@@ -1916,7 +1917,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
       )}
 
       {/* MODAL 4: Work Assignment & Email Notification */}
-      {planToAssign && canEditPlans && (
+      {planToAssign && allowAssignWork && (
         <WorkAssignmentModal
           isOpen={Boolean(planToAssign)}
           onClose={() => setPlanToAssign(null)}

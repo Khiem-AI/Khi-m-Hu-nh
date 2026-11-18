@@ -669,3 +669,44 @@ export interface DailyAreaCheck {
   anhHienTruong?: string;
   baoCaoTheoNgay?: DailyAreaDayReport[];
 }
+
+export type PurchaseRequestType = 'DUNG_CU' | 'VAT_TU';
+
+export type PurchaseRequestPriority = 'Bình thường' | 'Gấp' | 'Khẩn cấp';
+
+export type PurchaseRequestStatus =
+  | 'Chờ duyệt'
+  | 'Đã duyệt'
+  | 'Đang đặt hàng'
+  | 'Đã nhận hàng'
+  | 'Từ chối';
+
+export interface PurchaseRequest {
+  id: string;
+  maPhieu: string;
+  loaiYeuCau: PurchaseRequestType;
+  maMatHang?: string;
+  tenMatHang: string;
+  quyCachThongSo?: string;
+  danhMuc?: string;
+  soLuong: number;
+  donViTinh: string;
+  donGiaDuKien?: number;
+  nhaCungCapDeXuat?: string;
+  lyDoYeuCau: string;
+  mucDoUuTien: PurchaseRequestPriority;
+  ngayYeuCau: string; // YYYY-MM-DD
+  ngayCanHang?: string; // YYYY-MM-DD
+  nguoiYeuCau: string;
+  boPhan?: string;
+  maThietBiLienQuan?: string;
+  trangThai: PurchaseRequestStatus;
+  nguoiDuyet?: string;
+  ngayDuyet?: string;
+  ghiChuDuyet?: string;
+  ngayNhanHang?: string;
+  nguoiNhanHang?: string;
+  daNhapKho?: boolean;
+  ghiChu?: string;
+}
+

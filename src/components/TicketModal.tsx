@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Ticket, TicketPriority, TicketStatus } from '../types/cmms';
-import { isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
+import { canAssignWork, isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
 import { BOOTSTRAPPED_ADMIN_EMAIL } from '../utils/firestoreSync';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
@@ -34,6 +34,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({
     autoEmailServerStatus,
   } = useCMMS();
 
+  const allowAssignWork = canAssignWork(currentUser);
   const defaultEngineer =
     employees.find((e) => e.chucVu === 'Kỹ sư thiết bị')?.tenNhanVien || currentUser.tenNhanVien;
 
@@ -42,10 +43,11 @@ export const TicketModal: React.FC<TicketModalProps> = ({
   const [trangThai, setTrangThai] = useState<TicketStatus>(ticketToEdit?.trangThai || 'Mới tiếp nhận');
   const [mucDoUuTien, setMucDoUuTien] = useState<TicketPriority>(ticketToEdit?.mucDoUuTien || 'Cao');
   const [nguoiPhuTrach, setNguoiPhuTrach] = useState(
-    ticketToEdit?.nguoiPhuTrach || employees[0]?.tenNhanVien || currentUser.tenNhanVien
+    ticketToEdit?.nguoiPhuTrach ||
+      (allowAssignWork ? employees[0]?.tenNhanVien || currentUser.tenNhanVien : currentUser.tenNhanVien)
   );
   const [nguoiGiaoViec, setNguoiGiaoViec] = useState(
-    ticketToEdit?.nguoiGiaoViec || defaultEngineer
+    ticketToEdit ? ticketToEdit.nguoiGiaoViec || '' : allowAssignWork ? defaultEngineer : ''
   );
   const [nguoiLap, setNguoiLap] = useState(ticketToEdit?.nguoiLap || currentUser.tenNhanVien);
   const [maThietBi, setMaThietBi] = useState(ticketToEdit?.maThietBi || defaultEquipmentCode || '');
@@ -65,7 +67,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({
       setTrangThai(ticketToEdit.trangThai);
       setMucDoUuTien(ticketToEdit.mucDoUuTien);
       setNguoiPhuTrach(ticketToEdit.nguoiPhuTrach);
-      setNguoiGiaoViec(ticketToEdit.nguoiGiaoViec || defaultEngineer);
+      setNguoiGiaoViec(ticketToEdit.nguoiGiaoViec || (allowAssignWork ? defaultEngineer : ''));
       setNguoiLap(ticketToEdit.nguoiLap);
       setMaThietBi(ticketToEdit.maThietBi || '');
       setKetQua(ticketToEdit.ketQua || '');
@@ -77,8 +79,10 @@ export const TicketModal: React.FC<TicketModalProps> = ({
       setMoTaChiTiet('');
       setTrangThai('Mới tiếp nhận');
       setMucDoUuTien('Cao');
-      setNguoiPhuTrach(employees[0]?.tenNhanVien || currentUser.tenNhanVien);
-      setNguoiGiaoViec(defaultEngineer);
+      setNguoiPhuTrach(
+        allowAssignWork ? employees[0]?.tenNhanVien || currentUser.tenNhanVien : currentUser.tenNhanVien
+      );
+      setNguoiGiaoViec(allowAssignWork ? defaultEngineer : '');
       setNguoiLap(currentUser.tenNhanVien);
       setMaThietBi(defaultEquipmentCode || '');
       setKetQua('');
@@ -92,7 +96,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({
         : Boolean(emailConfig.enabled && emailConfig.notifyOnNewTicket)
     );
     setError('');
-  }, [isOpen, ticketToEdit, defaultEquipmentCode, currentUser, defaultEngineer, employees, emailConfig.enabled, emailConfig.notifyOnNewTicket]);
+  }, [isOpen, ticketToEdit, defaultEquipmentCode, currentUser, defaultEngineer, employees, emailConfig.enabled, emailConfig.notifyOnNewTicket, allowAssignWork]);
 
   if (!isOpen) return null;
 
@@ -267,17 +271,32 @@ export const TicketModal: React.FC<TicketModalProps> = ({
               </select>
             </div>
 
-            <MultiAssigneePicker
-              employees={employees}
-              value={nguoiPhuTrach}
-              onChange={(formatted) => {
-                setNguoiPhuTrach(formatted);
-                if (formatted) setError('');
-              }}
-              label="Người Phụ Trách Thực Hiện (Chọn 1 hoặc nhiều người)"
-              accentColor="amber"
-              required
-            />
+            {allowAssignWork ? (
+              <MultiAssigneePicker
+                employees={employees}
+                value={nguoiPhuTrach}
+                onChange={(formatted) => {
+                  setNguoiPhuTrach(formatted);
+                  if (formatted) setError('');
+                }}
+                label="Người Phụ Trách Thực Hiện (Chọn 1 hoặc nhiều người)"
+                accentColor="amber"
+                required
+              />
+            ) : ticketToEdit ? (
+              <div className="p-3 rounded-xl bg-slate-800/50 border border-slate-700/70 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-2">
+                <span>
+                  <span className="text-slate-400">Phụ trách hiện tại:</span>{' '}
+                  <strong className="text-amber-300">{nguoiPhuTrach || '—'}</strong>
+                </span>
+                {nguoiGiaoViec && (
+                  <span>
+                    <span className="text-slate-400">Người giao việc:</span>{' '}
+                    <strong className="text-slate-200">{nguoiGiaoViec}</strong>
+                  </span>
+                )}
+              </div>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">
@@ -323,21 +342,23 @@ export const TicketModal: React.FC<TicketModalProps> = ({
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-slate-300">Người Giao Việc</label>
-              <select
-                value={nguoiGiaoViec}
-                onChange={(e) => setNguoiGiaoViec(e.target.value)}
-                className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
-              >
-                {employees.map((emp) => (
-                  <option key={emp.maNhanVien} value={emp.tenNhanVien}>
-                    [{emp.maNhanVien}] {emp.tenNhanVien}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div className={`grid grid-cols-1 ${allowAssignWork ? 'sm:grid-cols-2' : ''} gap-4`}>
+            {allowAssignWork && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-slate-300">Người Giao Việc</label>
+                <select
+                  value={nguoiGiaoViec}
+                  onChange={(e) => setNguoiGiaoViec(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 font-medium"
+                >
+                  {employees.map((emp) => (
+                    <option key={emp.maNhanVien} value={emp.tenNhanVien}>
+                      [{emp.maNhanVien}] {emp.tenNhanVien}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <label className="text-xs font-semibold text-slate-300">Người Lập Phiếu</label>

@@ -5,6 +5,7 @@ import { APP_VIEW_OPTIONS, Employee, UserRole } from '../../types/cmms';
 import {
   ADMIN_ONLY_VIEWS,
   COST_RESTRICTED_VIEWS,
+  canAssignWork,
   canManageMaintenancePlans,
   canViewCosts,
   getEffectiveAllowedViews,
@@ -144,7 +145,13 @@ export const EmployeesTab: React.FC = () => {
     setEditNghiPhepNam(emp.ngayNghiPhepNam ?? 12);
     setEditNghiPhepDaDung(emp.ngayNghiPhepDaDung ?? 0);
     setEditAnhDaiDien(emp.anhDaiDien || '');
-    setEditRules(emp.quyenHan || ['VIEW_EQUIPMENT', 'EXECUTE_PLANS', 'PROCESS_TICKETS']);
+    const baseRules = (emp.quyenHan || ['VIEW_EQUIPMENT', 'EXECUTE_PLANS', 'PROCESS_TICKETS']).filter(
+      (r) => r !== 'ASSIGN_WORK' && r !== 'DENY_ASSIGN_WORK'
+    );
+    if (canAssignWork(emp)) {
+      baseRules.push('ASSIGN_WORK');
+    }
+    setEditRules(baseRules);
     setEditAllowedViews(getEffectiveAllowedViews(emp));
   };
 
@@ -161,11 +168,16 @@ export const EmployeesTab: React.FC = () => {
         (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
     );
     const sanitizedRules = editRules.filter((r) => {
-      if (r === 'DENY_MORNING_CHECKS') return false;
+      if (r === 'DENY_MORNING_CHECKS' || r === 'ASSIGN_WORK' || r === 'DENY_ASSIGN_WORK') return false;
       if (costRestricted && r === 'MANAGE_COSTS') return false;
       if (planEditRestricted && (r === 'MANAGE_PLANS' || r === 'ALL')) return false;
       return true;
     });
+    if (allowAdminViews || editRules.includes('ASSIGN_WORK')) {
+      sanitizedRules.push('ASSIGN_WORK');
+    } else {
+      sanitizedRules.push('DENY_ASSIGN_WORK');
+    }
     if (!allowAdminViews && !sanitizedViews.includes('morning_checks')) {
       sanitizedRules.push('DENY_MORNING_CHECKS');
     }
@@ -195,13 +207,13 @@ export const EmployeesTab: React.FC = () => {
     if (!maNhanVien.trim() || !tenNhanVien.trim()) return;
 
     const defaultRules =
-      chucVu === 'Admin' || chucVu === 'Owner'
-        ? ['ALL', 'SYSTEM_ADMIN', 'MANAGE_EQUIPMENT', 'MANAGE_PLANS', 'MANAGE_TICKETS', 'MANAGE_SPARE_PARTS', 'MANAGE_EMPLOYEES']
-        : chucVu === 'Người quản lý'
-        ? ['MANAGE_EQUIPMENT', 'MANAGE_PLANS', 'MANAGE_HISTORY', 'MANAGE_TICKETS', 'MANAGE_SPARE_PARTS', 'MANAGE_WAREHOUSE', 'MANAGE_ENERGY', 'MANAGE_COSTS', 'MANAGE_EMPLOYEES', 'EXPORT_DATA', 'APPROVE_MAINTENANCE']
+      chucVu === 'Admin' || chucVu === 'Owner' || chucVu === 'Quản trị viên'
+        ? ['ALL', 'SYSTEM_ADMIN', 'MANAGE_EQUIPMENT', 'MANAGE_PLANS', 'MANAGE_TICKETS', 'MANAGE_SPARE_PARTS', 'MANAGE_EMPLOYEES', 'ASSIGN_WORK']
+        : chucVu === 'Người quản lý' || chucVu === 'Director' || chucVu === 'Trưởng phòng Kỹ thuật'
+        ? ['MANAGE_EQUIPMENT', 'MANAGE_PLANS', 'MANAGE_HISTORY', 'MANAGE_TICKETS', 'MANAGE_SPARE_PARTS', 'MANAGE_WAREHOUSE', 'MANAGE_ENERGY', 'MANAGE_COSTS', 'MANAGE_EMPLOYEES', 'EXPORT_DATA', 'APPROVE_MAINTENANCE', 'ASSIGN_WORK']
         : chucVu === 'Kỹ sư thiết bị'
-        ? ['MANAGE_EQUIPMENT', 'MANAGE_PLANS', 'MANAGE_TICKETS', 'MANAGE_SPARE_PARTS', 'EXPORT_DATA']
-        : ['VIEW_EQUIPMENT', 'EXECUTE_PLANS', 'PROCESS_TICKETS', 'REQUEST_SPARE_PARTS'];
+        ? ['MANAGE_EQUIPMENT', 'MANAGE_PLANS', 'MANAGE_TICKETS', 'MANAGE_SPARE_PARTS', 'EXPORT_DATA', 'ASSIGN_WORK']
+        : ['VIEW_EQUIPMENT', 'EXECUTE_PLANS', 'PROCESS_TICKETS', 'REQUEST_SPARE_PARTS', 'DENY_ASSIGN_WORK'];
 
     const allowAdminViews = isAdminRole(chucVu, maNhanVien);
     const costRestricted = isCostRestrictedRole(chucVu, maNhanVien);
@@ -364,7 +376,7 @@ export const EmployeesTab: React.FC = () => {
             Kỹ Thuật Viên / Vận Hành
           </div>
           <p className="text-[11px] text-slate-400">
-            Thực hiện bảo trì, chụp ảnh trước/sau, chỉnh sửa thiết bị, tickets, dụng cụ, phụ tùng &amp; lịch sử bảo trì (không xóa; chỉ xem kế hoạch bảo trì; ẩn thông tin chi phí).
+            Thực hiện bảo trì, chụp ảnh trước/sau, chỉnh sửa thiết bị, tickets, dụng cụ, phụ tùng &amp; lịch sử bảo trì (không xóa; chỉ xem kế hoạch bảo trì; ẩn giao việc trừ khi Admin cấp quyền ASSIGN_WORK; ẩn thông tin chi phí).
           </p>
         </div>
       </div>
@@ -556,15 +568,22 @@ export const EmployeesTab: React.FC = () => {
                             (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
                         )
                       );
-                      if (costRestricted || planEditRestricted) {
-                        setEditRules((prev) =>
-                          prev.filter((r) => {
-                            if (costRestricted && r === 'MANAGE_COSTS') return false;
-                            if (planEditRestricted && (r === 'MANAGE_PLANS' || r === 'ALL')) return false;
-                            return true;
-                          })
-                        );
-                      }
+                      setEditRules((prev) => {
+                        const filteredRules = prev.filter((r) => {
+                          if (costRestricted && r === 'MANAGE_COSTS') return false;
+                          if (planEditRestricted && (r === 'MANAGE_PLANS' || r === 'ALL')) return false;
+                          if (r === 'ASSIGN_WORK' || r === 'DENY_ASSIGN_WORK') return false;
+                          return true;
+                        });
+                        const defaultAssignForNextRole = canAssignWork({
+                          maNhanVien: editingEmployee.maNhanVien,
+                          chucVu: nextRole,
+                        } as Employee);
+                        if (defaultAssignForNextRole) {
+                          filteredRules.push('ASSIGN_WORK');
+                        }
+                        return filteredRules;
+                      });
                     }}
                     className="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-100 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
@@ -769,6 +788,7 @@ export const EmployeesTab: React.FC = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                   {[
                     'ALL',
+                    'ASSIGN_WORK',
                     'MANAGE_EQUIPMENT',
                     'MANAGE_PLANS',
                     'MANAGE_TICKETS',
@@ -783,10 +803,15 @@ export const EmployeesTab: React.FC = () => {
                   ].map((rule) => {
                     const costRestricted = isCostRestrictedRole(editChucVu, editingEmployee.maNhanVien);
                     const planEditRestricted = isPlanEditRestrictedRole(editChucVu, editingEmployee.maNhanVien);
+                    const isRoleAdmin = isAdminRole(editChucVu, editingEmployee.maNhanVien);
                     const ruleLocked =
                       (rule === 'MANAGE_COSTS' && costRestricted) ||
-                      ((rule === 'MANAGE_PLANS' || rule === 'ALL') && planEditRestricted);
-                    const isChecked = !ruleLocked && editRules.includes(rule);
+                      ((rule === 'MANAGE_PLANS' || rule === 'ALL') && planEditRestricted) ||
+                      (rule === 'ASSIGN_WORK' && isRoleAdmin);
+                    const isChecked =
+                      rule === 'ASSIGN_WORK' && isRoleAdmin
+                        ? true
+                        : !ruleLocked && editRules.includes(rule);
                     return (
                       <label
                         key={rule}
@@ -812,7 +837,9 @@ export const EmployeesTab: React.FC = () => {
                           }}
                           className="rounded text-indigo-600 focus:ring-0 disabled:opacity-40"
                         />
-                        <span className="font-mono text-[10px] truncate">{rule}</span>
+                        <span className="font-mono text-[10px] truncate">
+                          {rule === 'ASSIGN_WORK' ? 'ASSIGN_WORK (Giao việc)' : rule}
+                        </span>
                       </label>
                     );
                   })}

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import {
+  canAssignWork,
   parseAssigneeNames,
   resolveAssigneeEmailDetails,
   buildGmailComposeUrl,
@@ -95,7 +96,7 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
     }
   }, [isOpen, currentAssignee, currentAssigner, currentUser.tenNhanVien, employees, emailConfig.primaryRecipient]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !canAssignWork(currentUser)) return null;
 
   const selectedAssignees = parseAssigneeNames(assigneeName);
   const emailDetails = resolveAssigneeEmailDetails(

@@ -477,6 +477,38 @@ service cloud.firestore {
         (!('baoCaoTheoNgay' in data) || (data.baoCaoTheoNgay is list && data.baoCaoTheoNgay.size() <= 31 && (data.baoCaoTheoNgay.size() == 0 || data.baoCaoTheoNgay[0] is map)));
     }
 
+    function isValidPurchaseRequest(data) {
+      return data.keys().hasAll(['id', 'maPhieu', 'loaiYeuCau', 'tenMatHang', 'soLuong', 'donViTinh', 'lyDoYeuCau', 'mucDoUuTien', 'ngayYeuCau', 'nguoiYeuCau', 'trangThai', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        data.keys().hasOnly(['id', 'maPhieu', 'loaiYeuCau', 'maMatHang', 'tenMatHang', 'quyCachThongSo', 'danhMuc', 'soLuong', 'donViTinh', 'donGiaDuKien', 'nhaCungCapDeXuat', 'lyDoYeuCau', 'mucDoUuTien', 'ngayYeuCau', 'ngayCanHang', 'nguoiYeuCau', 'boPhan', 'maThietBiLienQuan', 'trangThai', 'nguoiDuyet', 'ngayDuyet', 'ghiChuDuyet', 'ngayNhanHang', 'nguoiNhanHang', 'daNhapKho', 'ghiChu', 'ownerUid', 'allowedEmails', 'createdAt', 'updatedAt']) &&
+        isValidMeta(data) &&
+        data.id is string && data.id.size() >= 1 && data.id.size() <= 80 &&
+        data.maPhieu is string && data.maPhieu.size() >= 1 && data.maPhieu.size() <= 80 &&
+        data.loaiYeuCau in ['DUNG_CU', 'VAT_TU'] &&
+        data.tenMatHang is string && data.tenMatHang.size() >= 1 && data.tenMatHang.size() <= 240 &&
+        data.soLuong is number && data.soLuong > 0 &&
+        data.donViTinh is string && data.donViTinh.size() >= 1 && data.donViTinh.size() <= 40 &&
+        data.lyDoYeuCau is string && data.lyDoYeuCau.size() <= 2000 &&
+        data.mucDoUuTien in ['Bình thường', 'Gấp', 'Khẩn cấp'] &&
+        data.ngayYeuCau is string && data.ngayYeuCau.size() <= 32 &&
+        data.nguoiYeuCau is string && data.nguoiYeuCau.size() >= 1 && data.nguoiYeuCau.size() <= 160 &&
+        data.trangThai in ['Chờ duyệt', 'Đã duyệt', 'Đang đặt hàng', 'Đã nhận hàng', 'Từ chối'] &&
+        (!('maMatHang' in data) || (data.maMatHang is string && data.maMatHang.size() <= 80)) &&
+        (!('quyCachThongSo' in data) || (data.quyCachThongSo is string && data.quyCachThongSo.size() <= 1000)) &&
+        (!('danhMuc' in data) || (data.danhMuc is string && data.danhMuc.size() <= 160)) &&
+        (!('donGiaDuKien' in data) || (data.donGiaDuKien is number && data.donGiaDuKien >= 0)) &&
+        (!('nhaCungCapDeXuat' in data) || (data.nhaCungCapDeXuat is string && data.nhaCungCapDeXuat.size() <= 200)) &&
+        (!('ngayCanHang' in data) || (data.ngayCanHang is string && data.ngayCanHang.size() <= 32)) &&
+        (!('boPhan' in data) || (data.boPhan is string && data.boPhan.size() <= 160)) &&
+        (!('maThietBiLienQuan' in data) || (data.maThietBiLienQuan is string && data.maThietBiLienQuan.size() <= 80)) &&
+        (!('nguoiDuyet' in data) || (data.nguoiDuyet is string && data.nguoiDuyet.size() <= 160)) &&
+        (!('ngayDuyet' in data) || (data.ngayDuyet is string && data.ngayDuyet.size() <= 32)) &&
+        (!('ghiChuDuyet' in data) || (data.ghiChuDuyet is string && data.ghiChuDuyet.size() <= 1000)) &&
+        (!('ngayNhanHang' in data) || (data.ngayNhanHang is string && data.ngayNhanHang.size() <= 32)) &&
+        (!('nguoiNhanHang' in data) || (data.nguoiNhanHang is string && data.nguoiNhanHang.size() <= 160)) &&
+        (!('daNhapKho' in data) || data.daNhapKho is bool) &&
+        (!('ghiChu' in data) || (data.ghiChu is string && data.ghiChu.size() <= 1500));
+    }
+
     // Collection Rules
     match /admins/{uid} {
       allow get: if isSignedIn() && isValidId(uid) && (request.auth.uid == uid || isBootstrappedAdmin());
@@ -663,6 +695,14 @@ service cloud.firestore {
       allow list: if isSignedIn() && isMemberOnDoc(existing());
       allow create: if isValidId(docId) && isSignedIn() && isValidDailyAreaCheck(incoming()) && isValidCreateMeta(incoming());
       allow update: if isValidId(docId) && isSignedIn() && isValidDailyAreaCheck(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['ngayKiemTra', 'ngayKetThuc', 'ngayTrongTuan', 'caLamViec', 'khuVuc', 'tieuDe', 'moTaCongViec', 'nguoiDuocGiao', 'nguoiPhanQuyen', 'hanHoanThanh', 'trangThai', 'ketQua', 'baoCaoThucTe', 'nguoiBaoCao', 'thoiGianBaoCao', 'anhHienTruong', 'baoCaoTheoNgay', 'allowedEmails', 'updatedAt'])));
+      allow delete: if isValidId(docId) && isAdmin();
+    }
+
+    match /purchase_requests/{docId} {
+      allow get: if isValidId(docId) && isSignedIn() && (resource == null || isAdmin() || isMemberOnDoc(existing()));
+      allow list: if isSignedIn() && isMemberOnDoc(existing());
+      allow create: if isValidId(docId) && isSignedIn() && isValidPurchaseRequest(incoming()) && isValidCreateMeta(incoming());
+      allow update: if isValidId(docId) && isSignedIn() && isValidPurchaseRequest(incoming()) && isValidUpdateMeta() && (isAdmin() || (isMemberOnDoc(existing()) && incoming().diff(existing()).affectedKeys().hasOnly(['maMatHang', 'tenMatHang', 'quyCachThongSo', 'danhMuc', 'soLuong', 'donViTinh', 'donGiaDuKien', 'nhaCungCapDeXuat', 'lyDoYeuCau', 'mucDoUuTien', 'ngayCanHang', 'boPhan', 'maThietBiLienQuan', 'trangThai', 'nguoiDuyet', 'ngayDuyet', 'ghiChuDuyet', 'ngayNhanHang', 'nguoiNhanHang', 'daNhapKho', 'ghiChu', 'allowedEmails', 'updatedAt'])));
       allow delete: if isValidId(docId) && isAdmin();
     }
   }

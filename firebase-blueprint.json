@@ -544,6 +544,44 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "ngayKiemTra", "caLamViec", "khuVuc", "tieuDe", "moTaCongViec", "nguoiDuocGiao", "trangThai", "ketQua", "ownerUid", "allowedEmails", "createdAt", "updatedAt"]
+    },
+    "PurchaseRequest": {
+      "title": "PurchaseRequest",
+      "description": "Purchase requisition for maintenance tools or spare parts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "maPhieu": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "loaiYeuCau": { "type": "string", "enum": ["DUNG_CU", "VAT_TU"] },
+        "maMatHang": { "type": "string", "maxLength": 80 },
+        "tenMatHang": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "quyCachThongSo": { "type": "string", "maxLength": 1000 },
+        "danhMuc": { "type": "string", "maxLength": 160 },
+        "soLuong": { "type": "number" },
+        "donViTinh": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "donGiaDuKien": { "type": "number" },
+        "nhaCungCapDeXuat": { "type": "string", "maxLength": 200 },
+        "lyDoYeuCau": { "type": "string", "maxLength": 2000 },
+        "mucDoUuTien": { "type": "string", "enum": ["Bình thường", "Gấp", "Khẩn cấp"] },
+        "ngayYeuCau": { "type": "string", "maxLength": 32 },
+        "ngayCanHang": { "type": "string", "maxLength": 32 },
+        "nguoiYeuCau": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "boPhan": { "type": "string", "maxLength": 160 },
+        "maThietBiLienQuan": { "type": "string", "maxLength": 80 },
+        "trangThai": { "type": "string", "enum": ["Chờ duyệt", "Đã duyệt", "Đang đặt hàng", "Đã nhận hàng", "Từ chối"] },
+        "nguoiDuyet": { "type": "string", "maxLength": 160 },
+        "ngayDuyet": { "type": "string", "maxLength": 32 },
+        "ghiChuDuyet": { "type": "string", "maxLength": 1000 },
+        "ngayNhanHang": { "type": "string", "maxLength": 32 },
+        "nguoiNhanHang": { "type": "string", "maxLength": 160 },
+        "daNhapKho": { "type": "boolean" },
+        "ghiChu": { "type": "string", "maxLength": 1500 },
+        "ownerUid": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "allowedEmails": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "maPhieu", "loaiYeuCau", "tenMatHang", "soLuong", "donViTinh", "lyDoYeuCau", "mucDoUuTien", "ngayYeuCau", "nguoiYeuCau", "trangThai", "ownerUid", "allowedEmails", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -568,6 +606,7 @@
     "/tool_logs/{docId}": { "schema": { "$ref": "#/entities/ToolBorrowLog" }, "description": "Tool borrow and return logs" },
     "/email_logs/{docId}": { "schema": { "$ref": "#/entities/EmailLog" }, "description": "Email dispatch history logs" },
     "/audit_logs/{docId}": { "schema": { "$ref": "#/entities/AuditLog" }, "description": "System audit trail" },
-    "/daily_area_checks/{docId}": { "schema": { "$ref": "#/entities/DailyAreaCheck" }, "description": "Start-of-day inspection assignments and field reports" }
+    "/daily_area_checks/{docId}": { "schema": { "$ref": "#/entities/DailyAreaCheck" }, "description": "Start-of-day inspection assignments and field reports" },
+    "/purchase_requests/{docId}": { "schema": { "$ref": "#/entities/PurchaseRequest" }, "description": "Tool and spare part purchase requisitions" }
   }
 }
