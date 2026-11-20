@@ -11,6 +11,9 @@ import {
   InspectionStatus,
   DailyAreaCheck,
   MorningCheckTemplatesMap,
+  EnergyTariffConfig,
+  DEFAULT_ENERGY_TARIFF_CONFIG,
+  Power10Days,
 } from '../types/cmms';
 
 /**
@@ -753,4 +756,103 @@ export function getScheduledDatesForAreaCheck(
     guard += 1;
   }
   return dates.length > 0 ? dates : [formatUtcYmd(start)];
+}
+
+/**
+ * Returns the clamped Solar discount percentage (default 5% off total Solar electricity cost).
+ */
+export function getSolarDiscountPct(tariff?: Partial<EnergyTariffConfig> | null): number {
+  const raw = tariff?.solarDiscountPct;
+  if (typeof raw !== 'number' || !Number.isFinite(raw)) {
+    return DEFAULT_ENERGY_TARIFF_CONFIG.solarDiscountPct;
+  }
+  return Math.min(100, Math.max(0, raw));
+}
+
+/**
+ * Calculates EVN grid electricity cost across Normal (BT), Peak (CD), and Off-Peak (TD) tiers.
+ */
+export function calculateEvnEnergyCost(
+  evnBT: number,
+  evnCD: number,
+  evnTD: number,
+  tariff: EnergyTariffConfig
+): { costBT: number; costCD: number; costTD: number; total: number } {
+  const costBT = (evnBT || 0) * (tariff.evnBT || 0);
+  const costCD = (evnCD || 0) * (tariff.evnCD || 0);
+  const costTD = (evnTD || 0) * (tariff.evnTD || 0);
+  return {
+    costBT,
+    costCD,
+    costTD,
+    total: costBT + costCD + costTD,
+  };
+}
+
+/**
+ * Calculates Solar electricity cost based on EVN BT & CD tariffs with the configured discount
+ * (default 5% off total Solar cost).
+ */
+export function calculateSolarEnergyCost(
+  solarBT: number,
+  solarCD: number,
+  tariff: EnergyTariffConfig
+): {
+  discountPct: number;
+  factor: number;
+  effectiveRateBT: number;
+  effectiveRateCD: number;
+  grossBT: number;
+  grossCD: number;
+  grossTotal: number;
+  discountAmount: number;
+  costBT: number;
+  costCD: number;
+  total: number;
+} {
+  const discountPct = getSolarDiscountPct(tariff);
+  const factor = (100 - discountPct) / 100;
+  const baseBT = tariff.evnBT || 0;
+  const baseCD = tariff.evnCD || 0;
+  const grossBT = (solarBT || 0) * baseBT;
+  const grossCD = (solarCD || 0) * baseCD;
+  const grossTotal = grossBT + grossCD;
+  const costBT = grossBT * factor;
+  const costCD = grossCD * factor;
+  const total = grossTotal * factor;
+  const discountAmount = grossTotal - total;
+
+  return {
+    discountPct,
+    factor,
+    effectiveRateBT: baseBT * factor,
+    effectiveRateCD: baseCD * factor,
+    grossBT,
+    grossCD,
+    grossTotal,
+    discountAmount,
+    costBT,
+    costCD,
+    total,
+  };
+}
+
+/**
+ * Calculates combined EVN + discounted Solar electricity cost for a 10-day power record.
+ */
+export function calculatePowerRecordCost(
+  record: Pick<Power10Days, 'evnBT' | 'evnCD' | 'evnTD' | 'solarBT' | 'solarCD'>,
+  tariff: EnergyTariffConfig
+): {
+  evn: ReturnType<typeof calculateEvnEnergyCost>;
+  solar: ReturnType<typeof calculateSolarEnergyCost>;
+  totalCost: number;
+} {
+  const evn = calculateEvnEnergyCost(record.evnBT, record.evnCD, record.evnTD, tariff);
+  const solar = calculateSolarEnergyCost(record.solarBT, record.solarCD, tariff);
+  return {
+    evn,
+    solar,
+    totalCost: evn.total + solar.total,
+  };
 }

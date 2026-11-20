@@ -12,7 +12,13 @@ import {
 import { useCMMS } from '../../context/CMMSContext';
 import { Power10Days, WaterMonthly } from '../../types/cmms';
 import { UI_TEXTS } from '../../config/uiTexts';
-import { canViewCosts, formatVND, isAdminLevel } from '../../utils/cmmsLogic';
+import {
+  calculatePowerRecordCost,
+  canViewCosts,
+  formatVND,
+  getSolarDiscountPct,
+  isAdminLevel,
+} from '../../utils/cmmsLogic';
 import { EnergyCompareDashboard } from '../energy/EnergyCompareDashboard';
 import { WaterCompareDashboard } from '../energy/WaterCompareDashboard';
 import { MonthlyEnergyTrendChart } from '../energy/MonthlyEnergyTrendChart';
@@ -140,15 +146,13 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
     ? (latest10.ngayLamViec || 0) * (latest10.loaiCa?.includes('3') ? 24 : 16)
     : 0;
   const latestKwhPerHour = latestHours > 0 ? grandTotal / latestHours : 0;
-  const latestEvnCost = latest10
-    ? latest10.evnBT * tariffConfig.evnBT +
-      latest10.evnCD * tariffConfig.evnCD +
-      latest10.evnTD * tariffConfig.evnTD
-    : 0;
-  const latestSolarCost = latest10
-    ? latest10.solarBT * tariffConfig.evnBT + latest10.solarCD * tariffConfig.evnCD
-    : 0;
-  const latestTotalCost = latestEvnCost + latestSolarCost;
+  const solarDiscountPct = getSolarDiscountPct(tariffConfig);
+  const latestCostSummary = latest10
+    ? calculatePowerRecordCost(latest10, tariffConfig)
+    : null;
+  const latestEvnCost = latestCostSummary ? latestCostSummary.evn.total : 0;
+  const latestSolarCost = latestCostSummary ? latestCostSummary.solar.total : 0;
+  const latestTotalCost = latestCostSummary ? latestCostSummary.totalCost : 0;
   const latestCostPerHour = latestHours > 0 ? latestTotalCost / latestHours : 0;
   const recent8 = sortedPower.slice(0, 8).reverse();
   const maxRecentBar = Math.max(
@@ -255,12 +259,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
       const util = r.uChiller + r.uMChiller + r.uComp + r.uPump + r.uCooling + r.uOther;
       const prod = r.pLighting + r.pAcmv + r.pEquipment;
       const off = r.oAcmv + r.oSocket + r.oKit + r.oServer + r.oLighting;
-      const cost =
-        r.evnBT * tariffConfig.evnBT +
-        r.evnCD * tariffConfig.evnCD +
-        r.evnTD * tariffConfig.evnTD +
-        r.solarBT * tariffConfig.evnBT +
-        r.solarCD * tariffConfig.evnCD;
+      const cost = calculatePowerRecordCost(r, tariffConfig).totalCost;
       return [
         `"${r.chuKy}"`,
         `"${r.tuNgay}"`,
@@ -419,10 +418,12 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
         </div>
 
         {showCosts && (
-          <div className="flex items-center gap-2 text-xs text-slate-400 font-mono">
+          <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400 font-mono">
             <span>Tỷ giá: 1 USD = {tariffConfig.usdToVndRate.toLocaleString()} đ</span>
             <span>•</span>
             <span className="text-cyan-400">EVN BT: {formatVND(tariffConfig.evnBT)}</span>
+            <span>•</span>
+            <span className="text-amber-400">Solar: giảm {solarDiscountPct}%</span>
           </div>
         )}
       </div>
@@ -510,7 +511,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
               </div>
               {showCosts && (
                 <span className="text-[11px] text-slate-500 mt-1 block font-mono">
-                  EVN: {formatVND(latestEvnCost)} + Solar: {formatVND(latestSolarCost)}
+                  EVN: {formatVND(latestEvnCost)} + Solar (-{solarDiscountPct}%): {formatVND(latestSolarCost)}
                 </span>
               )}
             </div>
@@ -805,12 +806,7 @@ export const EnergyTab: React.FC<EnergyTabProps> = ({ onOpenMeterModal: _onOpenM
                       const prodTotal = rec.pLighting + rec.pAcmv + rec.pEquipment;
                       const offTotal =
                         rec.oAcmv + rec.oSocket + rec.oKit + rec.oServer + rec.oLighting;
-                      const estCost =
-                        rec.evnBT * tariffConfig.evnBT +
-                        rec.evnCD * tariffConfig.evnCD +
-                        rec.evnTD * tariffConfig.evnTD +
-                        rec.solarBT * tariffConfig.evnBT +
-                        rec.solarCD * tariffConfig.evnCD;
+                      const estCost = calculatePowerRecordCost(rec, tariffConfig).totalCost;
 
                       return (
                         <tr key={rec.id} className="hover:bg-slate-800/40 transition">

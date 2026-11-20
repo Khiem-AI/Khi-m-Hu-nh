@@ -678,7 +678,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setGmailUser(null);
     setIsGmailConnected(false);
   };
-  const [tariffConfig, setTariffConfig] = useState<EnergyTariffConfig>(() => loadStorage('tariffConfig', DEFAULT_ENERGY_TARIFF_CONFIG));
+  const [tariffConfig, setTariffConfig] = useState<EnergyTariffConfig>(() => ({
+    ...DEFAULT_ENERGY_TARIFF_CONFIG,
+    ...loadStorage<Partial<EnergyTariffConfig>>('tariffConfig', DEFAULT_ENERGY_TARIFF_CONFIG),
+  }));
   const [documents, setDocuments] = useState<FacilityDocument[]>(() => loadStorage('documents', INITIAL_DOCUMENTS));
   const [projects, setProjects] = useState<FacilityProject[]>(() => loadStorage('projects', INITIAL_PROJECTS));
   const [safetyInspections, setSafetyInspections] = useState<SafetyInspectionItem[]>(() =>
@@ -1098,7 +1101,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   ...(s.payload as Partial<EmailConfig>),
                 }));
               } else if (s.key === 'tariff_config' && s.payload) {
-                setTariffConfig((prev) => ({ ...prev, ...(s.payload as Partial<EnergyTariffConfig>) }));
+                setTariffConfig((prev) => ({
+                  ...DEFAULT_ENERGY_TARIFF_CONFIG,
+                  ...prev,
+                  ...(s.payload as Partial<EnergyTariffConfig>),
+                }));
               } else if (s.key === 'morning_check_templates' && s.payload) {
                 setMorningCheckTemplates((prev) => ({
                   ...DEFAULT_MORNING_CHECK_TEMPLATES,
@@ -2112,7 +2119,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const updateTariffConfig = (cfg: Partial<EnergyTariffConfig>) => {
-    const nextCfg = { ...tariffConfig, ...cfg };
+    const nextCfg: EnergyTariffConfig = {
+      ...DEFAULT_ENERGY_TARIFF_CONFIG,
+      ...tariffConfig,
+      ...cfg,
+    };
     setTariffConfig(nextCfg);
     syncDoc('settings', 'tariff_config', {
       key: 'tariff_config',
@@ -4303,7 +4314,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...data.morningCheckTemplates,
         });
       }
-      if (data.tariffConfig && typeof data.tariffConfig === 'object') setTariffConfig(data.tariffConfig);
+      if (data.tariffConfig && typeof data.tariffConfig === 'object') {
+        setTariffConfig({ ...DEFAULT_ENERGY_TARIFF_CONFIG, ...data.tariffConfig });
+      }
       if (data.emailConfig && typeof data.emailConfig === 'object') setEmailConfig(data.emailConfig);
       addAuditLog('Cập nhật', 'Sao Lưu & Khôi Phục', 'Toàn bộ dữ liệu', 'Khôi phục thành công từ file sao lưu');
       if (cloudUserRef.current) {
@@ -4335,7 +4348,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           emailConfig:
             data.emailConfig && typeof data.emailConfig === 'object' ? data.emailConfig : emailConfig,
           tariffConfig:
-            data.tariffConfig && typeof data.tariffConfig === 'object' ? data.tariffConfig : tariffConfig,
+            data.tariffConfig && typeof data.tariffConfig === 'object'
+              ? { ...DEFAULT_ENERGY_TARIFF_CONFIG, ...data.tariffConfig }
+              : tariffConfig,
         };
         void seedOrPushWorkspaceToFirestore(
           cloudUserRef.current.uid,

@@ -1,7 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { Power10Days } from '../../types/cmms';
 import { useCMMS } from '../../context/CMMSContext';
-import { canViewCosts, formatVND, isAdminLevel } from '../../utils/cmmsLogic';
+import {
+  calculateEvnEnergyCost,
+  calculatePowerRecordCost,
+  calculateSolarEnergyCost,
+  canViewCosts,
+  formatVND,
+  getSolarDiscountPct,
+  isAdminLevel,
+} from '../../utils/cmmsLogic';
 import { TariffConfigModal } from './TariffConfigModal';
 import { Power10DaysModal } from './Power10DaysModal';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
@@ -168,19 +176,21 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
   const [editingPowerRecord, setEditingPowerRecord] = useState<Power10Days | null>(null);
   const [confirmDeleteRecord, setConfirmDeleteRecord] = useState<Power10Days | null>(null);
 
+  const solarDiscountPct = getSolarDiscountPct(tariffConfig);
+
   // EVN cost only
   const estimateEvnCost = (bt: number, cd: number, td: number): number => {
-    return bt * tariffConfig.evnBT + cd * tariffConfig.evnCD + td * tariffConfig.evnTD;
+    return calculateEvnEnergyCost(bt, cd, td, tariffConfig).total;
   };
 
-  // Solar cost calculated at EVN BT & CD rates (no low-peak)
+  // Solar cost calculated at EVN BT & CD rates with configured discount (default -5% off total Solar cost)
   const estimateSolarCost = (solarBT: number, solarCD: number): number => {
-    return solarBT * tariffConfig.evnBT + solarCD * tariffConfig.evnCD;
+    return calculateSolarEnergyCost(solarBT, solarCD, tariffConfig).total;
   };
 
-  // Combined Energy Cost = EVN Cost + Solar Cost (at EVN rates)
+  // Combined Energy Cost = EVN Cost + Discounted Solar Cost
   const estimateTotalEnergyCost = (r: Power10Days): number => {
-    return estimateEvnCost(r.evnBT, r.evnCD, r.evnTD) + estimateSolarCost(r.solarBT, r.solarCD);
+    return calculatePowerRecordCost(r, tariffConfig).totalCost;
   };
 
   // Sort descending by date
@@ -286,17 +296,23 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
     const solarRatio = grandTotal > 0 ? (totalSolar / grandTotal) * 100 : 0;
 
     // EVN Cost by TOU
-    const costEVN_BT = totalEVN_BT * tariffConfig.evnBT;
-    const costEVN_CD = totalEVN_CD * tariffConfig.evnCD;
-    const costEVN_TD = totalEVN_TD * tariffConfig.evnTD;
-    const totalEvnCost = costEVN_BT + costEVN_CD + costEVN_TD;
+    const evnCalc = calculateEvnEnergyCost(totalEVN_BT, totalEVN_CD, totalEVN_TD, tariffConfig);
+    const costEVN_BT = evnCalc.costBT;
+    const costEVN_CD = evnCalc.costCD;
+    const costEVN_TD = evnCalc.costTD;
+    const totalEvnCost = evnCalc.total;
 
-    // Solar Cost priced at EVN BT & CD rates (added directly into TOU & Total energy cost)
-    const costSolar_BT = totalSolar_BT * tariffConfig.evnBT;
-    const costSolar_CD = totalSolar_CD * tariffConfig.evnCD;
-    const totalSolarCost = costSolar_BT + costSolar_CD;
+    // Solar Cost priced at EVN BT & CD rates with configured discount (default -5% total Solar cost)
+    const solarCalc = calculateSolarEnergyCost(totalSolar_BT, totalSolar_CD, tariffConfig);
+    const costSolar_BT = solarCalc.costBT;
+    const costSolar_CD = solarCalc.costCD;
+    const grossSolarCost = solarCalc.grossTotal;
+    const solarDiscountAmount = solarCalc.discountAmount;
+    const effectiveSolarBT = solarCalc.effectiveRateBT;
+    const effectiveSolarCD = solarCalc.effectiveRateCD;
+    const totalSolarCost = solarCalc.total;
 
-    // Combined TOU Cost = EVN + Solar
+    // Combined TOU Cost = EVN + Discounted Solar
     const costAll_BT = costEVN_BT + costSolar_BT;
     const costAll_CD = costEVN_CD + costSolar_CD;
     const costAll_TD = costEVN_TD;
@@ -363,6 +379,10 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       totalSolar_CD,
       costSolar_BT,
       costSolar_CD,
+      grossSolarCost,
+      solarDiscountAmount,
+      effectiveSolarBT,
+      effectiveSolarCD,
       totalSolarCost,
       totalAll_BT,
       totalAll_CD,
@@ -418,7 +438,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
     const total = evnTot + solarTot;
     const operatingHours = getOperatingHours(periodA);
     const evnCost = estimateEvnCost(periodA.evnBT, periodA.evnCD, periodA.evnTD);
-    const solarCost = estimateSolarCost(periodA.solarBT, periodA.solarCD);
+    const solarDetailA = calculateSolarEnergyCost(periodA.solarBT, periodA.solarCD, tariffConfig);
+    const solarCost = solarDetailA.total;
+    const solarDiscountAmount = solarDetailA.discountAmount;
     const cost = evnCost + solarCost;
     const kwhPerHour = operatingHours > 0 ? total / operatingHours : 0;
     const costPerHour = operatingHours > 0 ? cost / operatingHours : 0;
@@ -435,6 +457,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       operatingHours,
       evnCost,
       solarCost,
+      solarDiscountAmount,
       cost,
       kwhPerHour,
       costPerHour,
@@ -453,7 +476,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
     const total = evnTot + solarTot;
     const operatingHours = getOperatingHours(periodB);
     const evnCost = estimateEvnCost(periodB.evnBT, periodB.evnCD, periodB.evnTD);
-    const solarCost = estimateSolarCost(periodB.solarBT, periodB.solarCD);
+    const solarDetailB = calculateSolarEnergyCost(periodB.solarBT, periodB.solarCD, tariffConfig);
+    const solarCost = solarDetailB.total;
+    const solarDiscountAmount = solarDetailB.discountAmount;
     const cost = evnCost + solarCost;
     const kwhPerHour = operatingHours > 0 ? total / operatingHours : 0;
     const costPerHour = operatingHours > 0 ? cost / operatingHours : 0;
@@ -470,6 +495,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       operatingHours,
       evnCost,
       solarCost,
+      solarDiscountAmount,
       cost,
       kwhPerHour,
       costPerHour,
@@ -596,7 +622,8 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       ...(showCosts
         ? [
             'Tiền điện EVN (VNĐ)',
-            'Tiền điện Solar theo giá EVN (VNĐ)',
+            `Giảm giá Solar -${solarDiscountPct}% (VNĐ)`,
+            `Tiền điện Solar sau giảm ${solarDiscountPct}% (VNĐ)`,
             'Tổng chi phí năng lượng EVN+Solar (VNĐ)',
             'Chi phí / 1h vận hành (VNĐ/h)',
           ]
@@ -617,11 +644,13 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
       const grand = evnTot + solTot;
       const hrs = getOperatingHours(r);
       const pct = grand > 0 ? ((solTot / grand) * 100).toFixed(1) : '0';
-      const evnCost = estimateEvnCost(r.evnBT, r.evnCD, r.evnTD);
-      const solarCost = estimateSolarCost(r.solarBT, r.solarCD);
-      const totalCost = evnCost + solarCost;
+      const powerCost = calculatePowerRecordCost(r, tariffConfig);
+      const evnCost = Math.round(powerCost.evn.total);
+      const solarDiscount = Math.round(powerCost.solar.discountAmount);
+      const solarCost = Math.round(powerCost.solar.total);
+      const totalCost = Math.round(powerCost.totalCost);
       const kwhHour = hrs > 0 ? (grand / hrs).toFixed(2) : '0';
-      const costHour = hrs > 0 ? Math.round(totalCost / hrs) : 0;
+      const costHour = hrs > 0 ? Math.round(powerCost.totalCost / hrs) : 0;
 
       return [
         `"${r.chuKy}"`,
@@ -641,7 +670,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
         r.solarCD,
         grand,
         `"${pct}%"`,
-        ...(showCosts ? [evnCost, solarCost, totalCost, costHour] : []),
+        ...(showCosts ? [evnCost, solarDiscount, solarCost, totalCost, costHour] : []),
         r.uChiller,
         r.uComp,
         r.uPump,
@@ -928,9 +957,11 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                   <div className="text-xl font-black text-emerald-400 font-mono">
                     {formatVND(filteredStats.totalCost)}
                   </div>
-                  <div className="text-[11px] text-slate-400 flex items-center justify-between pt-2 border-t border-slate-800 font-mono truncate">
+                  <div className="text-[11px] text-slate-400 flex items-center justify-between pt-2 border-t border-slate-800 font-mono truncate gap-2">
                     <span>EVN: {formatVND(filteredStats.totalEvnCost)}</span>
-                    <span className="text-amber-400">+Solar: {formatVND(filteredStats.totalSolarCost)}</span>
+                    <span className="text-amber-400">
+                      +Solar (-{solarDiscountPct}%): {formatVND(filteredStats.totalSolarCost)}
+                    </span>
                   </div>
                 </div>
 
@@ -965,7 +996,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                     <span className="truncate">{showCosts ? 'Nguồn Điện & Chi Phí (EVN + Solar)' : 'Nguồn Điện (EVN + Solar)'}</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 truncate">
-                    {showCosts ? 'Solar hạch toán theo đơn giá EVN (BT & CĐ)' : 'Tỷ trọng điện lưới EVN & năng lượng mặt trời'}
+                    {showCosts
+                      ? `Solar áp dụng giá EVN, giảm ${solarDiscountPct}% tổng chi phí`
+                      : 'Tỷ trọng điện lưới EVN & năng lượng mặt trời'}
                   </p>
                 </div>
                 <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 font-mono shrink-0">
@@ -988,7 +1021,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       value: filteredStats.totalSolar,
                       color: '#f59e0b',
                       formattedValue: `${filteredStats.totalSolar.toLocaleString('vi-VN')} kWh`,
-                      subLabel: showCosts ? `Chi phí Solar (giá EVN): ${formatVND(filteredStats.totalSolarCost)}` : undefined,
+                      subLabel: showCosts
+                        ? `Solar (-${solarDiscountPct}%): ${formatVND(filteredStats.totalSolarCost)} • Giảm ${formatVND(filteredStats.solarDiscountAmount)}`
+                        : undefined,
                     },
                   ]}
                   centerLabel={`${filteredStats.solarRatio.toFixed(1)}%`}
@@ -1015,7 +1050,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                 <div className="space-y-0.5 min-w-0">
                   <h4 className="text-xs font-bold text-slate-100 flex items-center gap-1.5 uppercase tracking-wider">
                     <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                    <span className="truncate">Cơ Cấu Phụ Tải 3 Vùng</span>
+                    <span className="truncate">Cơ Cấu Phụ Tải</span>
                   </h4>
                   <p className="text-[11px] text-slate-400 truncate">
                     Utility vs Production vs Office
@@ -1094,7 +1129,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       color: '#38bdf8',
                       formattedValue: `${filteredStats.totalAll_BT.toLocaleString('vi-VN')} kWh`,
                       subLabel: showCosts
-                        ? `Tiền: ${formatVND(filteredStats.costAll_BT)} (${tariffConfig.evnBT.toLocaleString()}đ/kWh)`
+                        ? `Tiền: ${formatVND(filteredStats.costAll_BT)} (EVN ${tariffConfig.evnBT.toLocaleString()}đ / Solar -${solarDiscountPct}%)`
                         : undefined,
                     },
                     {
@@ -1103,7 +1138,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       color: '#f97316',
                       formattedValue: `${filteredStats.totalAll_CD.toLocaleString('vi-VN')} kWh`,
                       subLabel: showCosts
-                        ? `Tiền: ${formatVND(filteredStats.costAll_CD)} (${tariffConfig.evnCD.toLocaleString()}đ/kWh)`
+                        ? `Tiền: ${formatVND(filteredStats.costAll_CD)} (EVN ${tariffConfig.evnCD.toLocaleString()}đ / Solar -${solarDiscountPct}%)`
                         : undefined,
                     },
                     {
@@ -1142,10 +1177,10 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
               <div>
                 <h4 className="text-sm font-bold text-slate-100 flex items-center gap-2">
                   <DollarSign className="w-4 h-4 text-emerald-400" />
-                  Phân Tích Chi Phí Tiền Điện Theo Khung Giờ (EVN + Solar Hạch Toán Giá EVN)
+                  Phân Tích Chi Phí Tiền Điện Theo Khung Giờ (EVN + Solar Giảm {solarDiscountPct}%)
                 </h4>
                 <p className="text-xs text-slate-400">
-                  Điện Solar (BT & CĐ, không có TĐ) được tính theo đơn giá EVN và cộng trực tiếp vào tổng chi phí sử dụng năng lượng từng khung giờ & chi phí / 1 giờ vận hành
+                  Điện Solar (BT & CĐ, không có TĐ) áp dụng biểu giá EVN và được <strong>giảm {solarDiscountPct}% trên tổng chi phí Solar</strong> trước khi cộng vào tổng chi phí năng lượng &amp; chi phí / 1 giờ vận hành
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -1199,7 +1234,10 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                         : '0'}
                     </td>
                     <td className="py-3.5 px-3.5 text-right font-mono text-cyan-300 font-semibold">
-                      {tariffConfig.evnBT.toLocaleString()} đ
+                      <div>{tariffConfig.evnBT.toLocaleString()} đ</div>
+                      <div className="text-[10px] text-amber-400/90 font-normal">
+                        Solar: {filteredStats.effectiveSolarBT.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} đ
+                      </div>
                     </td>
                     <td className="py-3.5 px-3.5 text-right font-mono font-extrabold text-slate-100">
                       {formatVND(filteredStats.costAll_BT)}
@@ -1243,7 +1281,10 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                         : '0'}
                     </td>
                     <td className="py-3.5 px-3.5 text-right font-mono text-amber-400 font-bold">
-                      {tariffConfig.evnCD.toLocaleString()} đ
+                      <div>{tariffConfig.evnCD.toLocaleString()} đ</div>
+                      <div className="text-[10px] text-amber-300/80 font-normal">
+                        Solar: {filteredStats.effectiveSolarCD.toLocaleString('vi-VN', { maximumFractionDigits: 1 })} đ
+                      </div>
                     </td>
                     <td className="py-3.5 px-3.5 text-right font-mono font-extrabold text-amber-300">
                       {formatVND(filteredStats.costAll_CD)}
@@ -1307,11 +1348,16 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                     </td>
                   </tr>
 
-                  {/* Solar Component Sub-Row (Included in BT & CD above) */}
+                  {/* Solar Component Sub-Row (Included in BT & CD above, after discount) */}
                   <tr className="hover:bg-slate-800/40 transition bg-yellow-950/20">
-                    <td className="py-3 px-3.5 font-bold text-yellow-400 flex items-center gap-2">
-                      <Sun className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
-                      <span>Trong đó: Điện Solar (đã cộng vào BT & CĐ)</span>
+                    <td className="py-3 px-3.5 font-bold text-yellow-400">
+                      <div className="flex items-center gap-2">
+                        <Sun className="w-3.5 h-3.5 text-yellow-400 shrink-0" />
+                        <span>Trong đó: Điện Solar (đã giảm {solarDiscountPct}% &amp; cộng vào BT/CĐ)</span>
+                      </div>
+                      <div className="text-[10px] text-emerald-400 pl-5 font-mono font-normal mt-0.5">
+                        Giá gốc EVN: {formatVND(filteredStats.grossSolarCost)} • Giảm {solarDiscountPct}%: -{formatVND(filteredStats.solarDiscountAmount)}
+                      </div>
                     </td>
                     <td className="py-3 px-3.5 font-mono text-yellow-300 text-[11px]">
                       <div>BT: {filteredStats.totalSolar_BT.toLocaleString('vi-VN')} kWh • CĐ: {filteredStats.totalSolar_CD.toLocaleString('vi-VN')} kWh</div>
@@ -1323,7 +1369,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                       {filteredStats.solarKwhPerHour.toFixed(1)}
                     </td>
                     <td className="py-3 px-3.5 text-right font-mono text-yellow-300 text-[11px]">
-                      Giá EVN BT/CĐ
+                      EVN (-{solarDiscountPct}%)
                     </td>
                     <td className="py-3 px-3.5 text-right font-mono font-bold text-amber-400">
                       + {formatVND(filteredStats.totalSolarCost)}
@@ -1677,7 +1723,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
             {/* Card 3: Năng Lượng Mặt Trời Solar */}
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>{showCosts ? 'Sản Lượng Solar (Giá EVN)' : 'Sản Lượng Solar'}</span>
+                <span>
+                  {showCosts ? `Sản Lượng Solar (Giá EVN -${solarDiscountPct}%)` : 'Sản Lượng Solar'}
+                </span>
                 <Sun className="w-4 h-4 text-amber-400" />
               </div>
               <div className="flex items-baseline justify-between gap-2">
@@ -1698,10 +1746,15 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
               </div>
               {showCosts ? (
                 <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">
-                  Chi phí Solar Kỳ A:{' '}
+                  CP Solar Kỳ A (-{solarDiscountPct}%):{' '}
                   <strong className="text-amber-400">
                     {statsA ? formatVND(statsA.solarCost) : '0 đ'}
                   </strong>
+                  {statsA && statsA.solarDiscountAmount > 0 && (
+                    <span className="text-emerald-400 ml-1">
+                      (-{formatVND(statsA.solarDiscountAmount)})
+                    </span>
+                  )}
                 </div>
               ) : (
                 <div className="text-[11px] text-slate-400 pt-1 border-t border-slate-800">

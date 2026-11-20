@@ -484,8 +484,9 @@ export interface EnergyTariffConfig {
   evnBT: number; // VNĐ / kWh (Giờ Bình Thường) - mặc định 1.738
   evnCD: number; // VNĐ / kWh (Giờ Cao Điểm) - mặc định 3.171
   evnTD: number; // VNĐ / kWh (Giờ Thấp Điểm) - mặc định 1.133
-  solarBT: number; // VNĐ / kWh (Solar Bình Thường) - mặc định 1.738
-  solarCD: number; // VNĐ / kWh (Solar Cao Điểm) - mặc định 3.171
+  solarBT: number; // VNĐ / kWh (Solar Bình Thường - giá gốc EVN) - mặc định 1.738
+  solarCD: number; // VNĐ / kWh (Solar Cao Điểm - giá gốc EVN) - mặc định 3.171
+  solarDiscountPct: number; // % giảm giá trên tổng chi phí điện Solar - mặc định 5%
   waterVNDPerM3: number; // VNĐ / m³ (Nước sinh hoạt) - mặc định 15.000
   sewageVNDPerM3: number; // VNĐ / m³ (Phí xử lý nước thải) - mặc định 7.500
   usdToVndRate: number; // VNĐ / USD - mặc định 25.400
@@ -497,6 +498,7 @@ export const DEFAULT_ENERGY_TARIFF_CONFIG: EnergyTariffConfig = {
   evnTD: 1133,
   solarBT: 1738,
   solarCD: 3171,
+  solarDiscountPct: 5,
   waterVNDPerM3: 15000,
   sewageVNDPerM3: 7500,
   usdToVndRate: 25400,

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { DEFAULT_ENERGY_TARIFF_CONFIG, EnergyTariffConfig } from '../../types/cmms';
 import { NumericInput } from '../common/NumericInput';
-import { formatVND } from '../../utils/cmmsLogic';
+import { formatVND, getSolarDiscountPct } from '../../utils/cmmsLogic';
 import {
   X,
   Settings,
@@ -23,20 +23,30 @@ interface TariffConfigModalProps {
 export const TariffConfigModal: React.FC<TariffConfigModalProps> = ({ isOpen, onClose }) => {
   const { tariffConfig, updateTariffConfig } = useCMMS();
 
-  const [form, setForm] = useState<EnergyTariffConfig>(() => ({ ...tariffConfig }));
+  const [form, setForm] = useState<EnergyTariffConfig>(() => ({
+    ...DEFAULT_ENERGY_TARIFF_CONFIG,
+    ...tariffConfig,
+  }));
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   React.useEffect(() => {
     if (isOpen) {
       setForm({
+        ...DEFAULT_ENERGY_TARIFF_CONFIG,
         ...tariffConfig,
         solarBT: tariffConfig.evnBT,
         solarCD: tariffConfig.evnCD,
+        solarDiscountPct: getSolarDiscountPct(tariffConfig),
       });
     }
   }, [isOpen, tariffConfig]);
 
   if (!isOpen) return null;
+
+  const discountPct = getSolarDiscountPct(form);
+  const solarFactor = (100 - discountPct) / 100;
+  const effectiveSolarBT = form.evnBT * solarFactor;
+  const effectiveSolarCD = form.evnCD * solarFactor;
 
   const handleResetDefault = () => {
     setForm({ ...DEFAULT_ENERGY_TARIFF_CONFIG });
@@ -44,10 +54,12 @@ export const TariffConfigModal: React.FC<TariffConfigModalProps> = ({ isOpen, on
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
+    const clampedDiscount = Math.min(100, Math.max(0, Number(form.solarDiscountPct) || 0));
     updateTariffConfig({
       ...form,
       solarBT: form.evnBT,
       solarCD: form.evnCD,
+      solarDiscountPct: clampedDiscount,
     });
     setSavedSuccess(true);
     setTimeout(() => {
@@ -167,41 +179,66 @@ export const TariffConfigModal: React.FC<TariffConfigModalProps> = ({ isOpen, on
             </div>
           </div>
 
-          {/* Nhóm 2: Biểu giá điện Solar (tính theo giá EVN, cộng vào chi phí năng lượng) */}
+          {/* Nhóm 2: Biểu giá điện Solar (tính theo giá EVN và giảm 5% tổng chi phí) */}
           <div className="p-4 rounded-2xl bg-slate-800/40 border border-slate-800 space-y-3">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 border-b border-slate-800/80 pb-2">
               <div className="flex items-center gap-2 text-sm font-bold text-amber-400">
                 <Sun className="w-4 h-4 text-amber-400" />
-                <span>Đơn Giá Điện Mặt Trời Solar (Áp Dụng Giá EVN & Cộng Vào Chi Phí)</span>
+                <span>Chi Phí Điện Mặt Trời Solar (Giá EVN Giảm {discountPct}%)</span>
               </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                Đồng bộ tự động theo EVN
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                Giảm {discountPct}% tổng chi phí Solar
               </span>
             </div>
 
             <p className="text-[11px] text-slate-400 bg-amber-950/20 p-2.5 rounded-xl border border-amber-500/20 leading-relaxed">
-              <strong>Quy tắc tính toán:</strong> Điện Solar được tính đơn giá giống như điện lưới EVN theo 2 khung giờ Bình Thường (BT) và Cao Điểm (CĐ) (không có giờ Thấp Điểm), và được <strong>cộng trực tiếp vào Tổng Chi Phí Sử Dụng Năng Lượng</strong> theo từng khung giờ.
+              <strong>Quy tắc tính toán:</strong> Điện Solar áp dụng biểu giá gốc EVN theo 2 khung giờ Bình Thường (BT) và Cao Điểm (CĐ) (không có giờ Thấp Điểm), sau đó <strong>giảm trực tiếp {discountPct}% trên tổng chi phí Solar</strong> trước khi cộng vào Tổng Chi Phí Năng Lượng.
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-emerald-300 flex items-center justify-between">
+                  <span>Chiết Khấu Solar (%)</span>
+                  <span className="text-[10px] text-emerald-400 font-mono">Mặc định 5%</span>
+                </label>
+                <NumericInput
+                  value={discountPct}
+                  onChange={(v) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      solarDiscountPct: Math.min(100, Math.max(0, v)),
+                    }))
+                  }
+                  suffix="%"
+                />
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-slate-300 flex items-center justify-between">
-                  <span>Solar Giờ Bình Thường (BT)</span>
-                  <span className="text-[10px] text-cyan-400 font-mono">Bằng EVN BT</span>
+                  <span>Solar BT (sau giảm {discountPct}%)</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Gốc: {form.evnBT.toLocaleString('vi-VN')}đ
+                  </span>
                 </label>
                 <div className="px-3 py-2.5 rounded-xl bg-slate-900/70 border border-slate-700 text-sm font-mono font-bold text-amber-400 flex items-center justify-between">
-                  <span>{form.evnBT.toLocaleString('vi-VN')}</span>
+                  <span>
+                    {effectiveSolarBT.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}
+                  </span>
                   <span className="text-xs text-slate-400">đ/kWh</span>
                 </div>
               </div>
 
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-amber-300 flex items-center justify-between">
-                  <span>Solar Giờ Cao Điểm (CĐ)</span>
-                  <span className="text-[10px] text-amber-400 font-mono">Bằng EVN CĐ</span>
+                  <span>Solar CĐ (sau giảm {discountPct}%)</span>
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    Gốc: {form.evnCD.toLocaleString('vi-VN')}đ
+                  </span>
                 </label>
                 <div className="px-3 py-2.5 rounded-xl bg-slate-900/70 border border-slate-700 text-sm font-mono font-bold text-amber-400 flex items-center justify-between">
-                  <span>{form.evnCD.toLocaleString('vi-VN')}</span>
+                  <span>
+                    {effectiveSolarCD.toLocaleString('vi-VN', { maximumFractionDigits: 2 })}
+                  </span>
                   <span className="text-xs text-slate-400">đ/kWh</span>
                 </div>
               </div>
@@ -260,7 +297,13 @@ export const TariffConfigModal: React.FC<TariffConfigModalProps> = ({ isOpen, on
             </div>
             <ul className="list-disc list-inside space-y-1 text-slate-400 text-[11px] font-mono">
               <li>
-                Tổng chi phí năng lượng = [(EVN BT + Solar BT) × {formatVND(form.evnBT)}] + [(EVN CĐ + Solar CĐ) × {formatVND(form.evnCD)}] + [EVN TĐ × {formatVND(form.evnTD)}]
+                Chi phí điện EVN = (EVN BT × {formatVND(form.evnBT)}) + (EVN CĐ × {formatVND(form.evnCD)}) + (EVN TĐ × {formatVND(form.evnTD)})
+              </li>
+              <li>
+                Chi phí điện Solar (giảm {discountPct}%) = [(Solar BT × {formatVND(form.evnBT)}) + (Solar CĐ × {formatVND(form.evnCD)})] × {(100 - discountPct)}%
+              </li>
+              <li>
+                Tổng chi phí năng lượng = Chi phí EVN + Chi phí Solar (sau giảm {discountPct}%)
               </li>
               <li>
                 Chi phí / 1 giờ vận hành = Tổng chi phí năng lượng / (Số ngày làm việc × Số giờ ca/ngày)
