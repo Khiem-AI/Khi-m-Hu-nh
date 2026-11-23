@@ -5,6 +5,7 @@ import {
   calculateEvnEnergyCost,
   calculatePowerRecordCost,
   calculateSolarEnergyCost,
+  canExportCSV,
   canViewCosts,
   formatVND,
   getSolarDiscountPct,
@@ -12,6 +13,7 @@ import {
 } from '../../utils/cmmsLogic';
 import { TariffConfigModal } from './TariffConfigModal';
 import { Power10DaysModal } from './Power10DaysModal';
+import { ZoneEnergyAnalysisSection } from './ZoneEnergyAnalysisSection';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Zap,
@@ -169,9 +171,10 @@ function getOperatingHours(r: Power10Days): number {
 }
 
 export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ powerRecords }) => {
-  const { tariffConfig, currentUser, deletePower10DaysRecord } = useCMMS();
+  const { tariffConfig, currentUser, deletePower10DaysRecord, theme } = useCMMS();
   const isAdmin = isAdminLevel(currentUser);
   const showCosts = canViewCosts(currentUser);
+  const allowExportCsv = canExportCSV(currentUser);
   const [isTariffModalOpen, setIsTariffModalOpen] = useState(false);
   const [editingPowerRecord, setEditingPowerRecord] = useState<Power10Days | null>(null);
   const [confirmDeleteRecord, setConfirmDeleteRecord] = useState<Power10Days | null>(null);
@@ -209,9 +212,9 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
     return Array.from(set);
   }, [powerRecords]);
 
-  // View modes: 'donut_and_cost' | 'period_vs_period' | 'yearly_yoy' | 'all_filtered'
+  // View modes: 'donut_and_cost' | 'zone_analysis' | 'period_vs_period' | 'yearly_yoy' | 'all_filtered'
   const [compareMode, setCompareMode] = useState<
-    'donut_and_cost' | 'period_vs_period' | 'yearly_yoy' | 'all_filtered'
+    'donut_and_cost' | 'zone_analysis' | 'period_vs_period' | 'yearly_yoy' | 'all_filtered'
   >('donut_and_cost');
 
   // Period vs Period state
@@ -225,6 +228,15 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
   const [filterShift, setFilterShift] = useState<string>('ALL');
   const [filterApprover, setFilterApprover] = useState<string>('ALL');
   const [searchTerm, setSearchTerm] = useState<string>('');
+
+  const handleResetFilters = () => {
+    setFilterYear('ALL');
+    setFilterMonth('ALL');
+    setFilterPeriodType('ALL');
+    setFilterShift('ALL');
+    setFilterApprover('ALL');
+    setSearchTerm('');
+  };
 
   // Selected periods
   const periodA = useMemo(() => {
@@ -719,7 +731,7 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
         <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-900/90 border border-slate-800 self-start lg:self-auto">
           <button
             onClick={() => setCompareMode('donut_and_cost')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
               compareMode === 'donut_and_cost'
                 ? 'bg-blue-600 text-white shadow'
                 : 'text-slate-400 hover:text-slate-200'
@@ -727,6 +739,17 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
           >
             <PieChart className="w-3.5 h-3.5 text-amber-300" />
             {showCosts ? 'Đồ Thị Donut & Chi Phí Giờ / Ca' : 'Đồ Thị Donut & Phân Tích Ca'}
+          </button>
+          <button
+            onClick={() => setCompareMode('zone_analysis')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+              compareMode === 'zone_analysis'
+                ? 'bg-blue-600 text-white shadow'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5 text-cyan-300" />
+            Phân Tích Khu Vực
           </button>
           <button
             onClick={() => setCompareMode('period_vs_period')}
@@ -1095,11 +1118,21 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
                 />
               </div>
 
-              <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between font-mono">
-                <span>Tổng 3 vùng ({filteredStats.totalOperatingHours.toLocaleString()}h):</span>
-                <strong className="text-slate-100">
-                  {(filteredStats.totalUtility + filteredStats.totalProduction + filteredStats.totalOffice).toLocaleString('vi-VN')} kWh
-                </strong>
+              <div className="pt-2.5 border-t border-slate-800 text-[11px] text-slate-400 flex items-center justify-between gap-2 font-mono">
+                <span>
+                  Tổng 3 vùng ({filteredStats.totalOperatingHours.toLocaleString()}h):{' '}
+                  <strong className="text-slate-100">
+                    {(filteredStats.totalUtility + filteredStats.totalProduction + filteredStats.totalOffice).toLocaleString('vi-VN')} kWh
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCompareMode('zone_analysis')}
+                  className="text-cyan-400 hover:text-cyan-300 font-sans font-semibold inline-flex items-center gap-1 transition cursor-pointer shrink-0 whitespace-nowrap"
+                >
+                  Chi tiết
+                  <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
             </div>
 
@@ -1608,7 +1641,31 @@ export const EnergyCompareDashboard: React.FC<EnergyCompareDashboardProps> = ({ 
               </div>
             )}
           </div>
+
+          {/* Per-Zone Detailed Energy Analysis (Production, Utility, Office) */}
+          <ZoneEnergyAnalysisSection
+            records={filteredList}
+            avgCostPerKwh={filteredStats.avgCostPerKwh}
+            usdToVndRate={tariffConfig.usdToVndRate}
+            showCosts={showCosts}
+            canExportCsv={allowExportCsv}
+            theme={theme}
+            onResetFilters={handleResetFilters}
+          />
         </div>
+      )}
+
+      {/* MODE: DEDICATED PER-ZONE ENERGY ANALYSIS (PRODUCTION / UTILITY / OFFICE) */}
+      {compareMode === 'zone_analysis' && (
+        <ZoneEnergyAnalysisSection
+          records={filteredList}
+          avgCostPerKwh={filteredStats.avgCostPerKwh}
+          usdToVndRate={tariffConfig.usdToVndRate}
+          showCosts={showCosts}
+          canExportCsv={allowExportCsv}
+          theme={theme}
+          onResetFilters={handleResetFilters}
+        />
       )}
 
       {/* MODE 1: PERIOD VS PERIOD COMPARISON */}
