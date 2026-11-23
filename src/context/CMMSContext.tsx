@@ -36,6 +36,8 @@ import {
   DailyInspectionArea,
   MorningCheckAreaTemplate,
   MorningCheckTemplatesMap,
+  MonthlyBoardReportRecord,
+  MonthlyBoardReportsStore,
   PurchaseRequest,
   PurchaseRequestStatus,
 } from '../types/cmms';
@@ -168,6 +170,7 @@ interface CMMSContextType {
   toolLogs: ToolBorrowLog[];
   dailyAreaChecks: DailyAreaCheck[];
   morningCheckTemplates: MorningCheckTemplatesMap;
+  monthlyBoardReports: MonthlyBoardReportsStore;
   purchaseRequests: PurchaseRequest[];
   currentUser: Employee;
 
@@ -307,6 +310,13 @@ interface CMMSContextType {
     anhDinhKem?: string[];
   }) => void;
   deleteDailyAreaCheck: (id: string) => void;
+
+  // Monthly Executive Board Reports ("Báo Cáo Tháng BGĐ")
+  saveMonthlyBoardReport: (
+    record: MonthlyBoardReportRecord,
+    defaults?: { defaultBoardRecipients?: string; defaultCcRecipients?: string }
+  ) => void;
+  deleteMonthlyBoardReport: (month: string) => void;
 
   // Email & Alert Service
   emailConfig: EmailConfig;
@@ -703,6 +713,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     ...DEFAULT_MORNING_CHECK_TEMPLATES,
     ...loadStorage<Partial<MorningCheckTemplatesMap>>('morningCheckTemplates', {}),
   }));
+  const [monthlyBoardReports, setMonthlyBoardReports] = useState<MonthlyBoardReportsStore>(() => {
+    const saved = loadStorage<Partial<MonthlyBoardReportsStore>>('monthlyBoardReports', {});
+    return {
+      defaultBoardRecipients: typeof saved.defaultBoardRecipients === 'string' ? saved.defaultBoardRecipients : '',
+      defaultCcRecipients: typeof saved.defaultCcRecipients === 'string' ? saved.defaultCcRecipients : '',
+      reportsByMonth:
+        saved.reportsByMonth && typeof saved.reportsByMonth === 'object' ? saved.reportsByMonth : {},
+    };
+  });
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>(() =>
     deduplicateById(loadStorage('purchaseRequests', INITIAL_PURCHASE_REQUESTS), 'PR')
   );
@@ -779,6 +798,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toolLogs,
     dailyAreaChecks,
     morningCheckTemplates,
+    monthlyBoardReports,
     purchaseRequests,
     emailLogs,
     auditLogs,
@@ -806,6 +826,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toolLogs,
       dailyAreaChecks,
       morningCheckTemplates,
+      monthlyBoardReports,
       purchaseRequests,
       emailLogs,
       auditLogs,
@@ -831,6 +852,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toolLogs,
     dailyAreaChecks,
     morningCheckTemplates,
+    monthlyBoardReports,
     purchaseRequests,
     emailLogs,
     auditLogs,
@@ -1111,6 +1133,22 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
                   ...DEFAULT_MORNING_CHECK_TEMPLATES,
                   ...prev,
                   ...(s.payload as Partial<MorningCheckTemplatesMap>),
+                }));
+              } else if (s.key === 'monthly_board_reports' && s.payload) {
+                const incomingStore = s.payload as Partial<MonthlyBoardReportsStore>;
+                setMonthlyBoardReports((prev) => ({
+                  defaultBoardRecipients:
+                    typeof incomingStore.defaultBoardRecipients === 'string'
+                      ? incomingStore.defaultBoardRecipients
+                      : prev.defaultBoardRecipients,
+                  defaultCcRecipients:
+                    typeof incomingStore.defaultCcRecipients === 'string'
+                      ? incomingStore.defaultCcRecipients
+                      : prev.defaultCcRecipients,
+                  reportsByMonth:
+                    incomingStore.reportsByMonth && typeof incomingStore.reportsByMonth === 'object'
+                      ? incomingStore.reportsByMonth
+                      : prev.reportsByMonth,
                 }));
               }
             }
@@ -1534,6 +1572,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveStorage('toolLogs', toolLogs), [toolLogs]);
   useEffect(() => saveStorage('dailyAreaChecks', dailyAreaChecks), [dailyAreaChecks]);
   useEffect(() => saveStorage('morningCheckTemplates', morningCheckTemplates), [morningCheckTemplates]);
+  useEffect(() => saveStorage('monthlyBoardReports', monthlyBoardReports), [monthlyBoardReports]);
   useEffect(() => saveStorage('purchaseRequests', purchaseRequests), [purchaseRequests]);
   useEffect(() => saveStorage('webNotifications', webNotifications), [webNotifications]);
 
@@ -2337,6 +2376,79 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'Công Việc Đầu Ngày',
       'Công việc mẫu',
       'Khôi phục 3 mẫu công việc đầu ngày về thiết lập mặc định'
+    );
+  };
+
+  const saveMonthlyBoardReport = (
+    record: MonthlyBoardReportRecord,
+    defaults?: { defaultBoardRecipients?: string; defaultCcRecipients?: string }
+  ) => {
+    if (!canViewCosts(currentUserRef.current)) return;
+    const cleanedRecord: MonthlyBoardReportRecord = {
+      ...record,
+      month: record.month.trim(),
+      reportTitle: record.reportTitle.trim(),
+      preparedBy: record.preparedBy.trim() || currentUserRef.current.tenNhanVien,
+      reviewerName: record.reviewerName?.trim() || undefined,
+      boardRecipients: record.boardRecipients.trim(),
+      ccRecipients: record.ccRecipients?.trim() || undefined,
+      highlights: record.highlights.slice(0, 6000),
+      risksAndIssues: record.risksAndIssues.slice(0, 6000),
+      nextMonthPlan: record.nextMonthPlan.slice(0, 6000),
+      directorFeedback: record.directorFeedback?.slice(0, 3000) || undefined,
+      updatedAt: record.updatedAt || new Date().toISOString(),
+    };
+
+    setMonthlyBoardReports((prev) => {
+      const nextStore: MonthlyBoardReportsStore = {
+        defaultBoardRecipients:
+          defaults?.defaultBoardRecipients !== undefined
+            ? defaults.defaultBoardRecipients.trim()
+            : prev.defaultBoardRecipients,
+        defaultCcRecipients:
+          defaults?.defaultCcRecipients !== undefined
+            ? defaults.defaultCcRecipients.trim()
+            : prev.defaultCcRecipients,
+        reportsByMonth: {
+          ...prev.reportsByMonth,
+          [cleanedRecord.month]: cleanedRecord,
+        },
+      };
+      syncDoc('settings', 'monthly_board_reports', {
+        key: 'monthly_board_reports',
+        payload: nextStore as unknown as Record<string, unknown>,
+      });
+      return nextStore;
+    });
+
+    addAuditLog(
+      'Cập nhật',
+      'Báo Cáo Tháng BGĐ',
+      `Kỳ ${cleanedRecord.month}`,
+      `Lưu báo cáo tháng ${cleanedRecord.month} (${cleanedRecord.status})`
+    );
+  };
+
+  const deleteMonthlyBoardReport = (month: string) => {
+    if (!isAdminLevel(currentUserRef.current)) return;
+    setMonthlyBoardReports((prev) => {
+      const nextReports = { ...prev.reportsByMonth };
+      delete nextReports[month];
+      const nextStore: MonthlyBoardReportsStore = {
+        ...prev,
+        reportsByMonth: nextReports,
+      };
+      syncDoc('settings', 'monthly_board_reports', {
+        key: 'monthly_board_reports',
+        payload: nextStore as unknown as Record<string, unknown>,
+      });
+      return nextStore;
+    });
+    addAuditLog(
+      'Xóa',
+      'Báo Cáo Tháng BGĐ',
+      `Kỳ ${month}`,
+      `Xóa bản lưu báo cáo tháng ${month} khỏi lịch sử`
     );
   };
 
@@ -3177,6 +3289,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (relatedId && relatedId.toUpperCase().startsWith('TK')) return 'tickets';
       return 'my_tasks';
     }
+    if (type === 'BAO_CAO_THANG_BGD') return 'monthly_report';
     return 'email_alerts';
   };
 
@@ -4273,6 +4386,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toolLogs,
       dailyAreaChecks,
       morningCheckTemplates,
+      monthlyBoardReports,
       purchaseRequests,
       emailConfig,
       emailLogs,
@@ -4314,6 +4428,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ...data.morningCheckTemplates,
         });
       }
+      if (data.monthlyBoardReports && typeof data.monthlyBoardReports === 'object') {
+        setMonthlyBoardReports({
+          defaultBoardRecipients: data.monthlyBoardReports.defaultBoardRecipients || '',
+          defaultCcRecipients: data.monthlyBoardReports.defaultCcRecipients || '',
+          reportsByMonth: data.monthlyBoardReports.reportsByMonth || {},
+        });
+      }
       if (data.tariffConfig && typeof data.tariffConfig === 'object') {
         setTariffConfig({ ...DEFAULT_ENERGY_TARIFF_CONFIG, ...data.tariffConfig });
       }
@@ -4342,6 +4463,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
             data.morningCheckTemplates && typeof data.morningCheckTemplates === 'object'
               ? { ...DEFAULT_MORNING_CHECK_TEMPLATES, ...data.morningCheckTemplates }
               : morningCheckTemplates,
+          monthlyBoardReports:
+            data.monthlyBoardReports && typeof data.monthlyBoardReports === 'object'
+              ? data.monthlyBoardReports
+              : monthlyBoardReports,
           purchaseRequests: Array.isArray(data.purchaseRequests) ? data.purchaseRequests : purchaseRequests,
           emailLogs: Array.isArray(data.emailLogs) ? data.emailLogs : emailLogs,
           auditLogs,
@@ -4388,6 +4513,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         toolLogs,
         dailyAreaChecks,
         morningCheckTemplates,
+        monthlyBoardReports,
         purchaseRequests,
         currentUser,
         emailConfig,
@@ -4475,6 +4601,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateDailyAreaCheck,
         submitDailyAreaCheckReport,
         deleteDailyAreaCheck,
+        saveMonthlyBoardReport,
+        deleteMonthlyBoardReport,
         isAuthenticated,
         theme,
         toggleTheme,

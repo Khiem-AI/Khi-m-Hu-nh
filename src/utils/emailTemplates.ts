@@ -79,6 +79,17 @@ export function getEmailTemplateTheme(type: EmailLog['type']): EmailTemplateThem
         calloutBorder: '#6ee7b7',
         subtitle: 'Biên bản nghiệm thu & hoàn thành công việc kỹ thuật',
       };
+    case 'BAO_CAO_THANG_BGD':
+      return {
+        badgeText: 'BÁO CÁO THÁNG BGĐ',
+        accentColor: '#1d4ed8',
+        badgeBg: '#eff6ff',
+        badgeTextColor: '#1e40af',
+        badgeBorder: '#bfdbfe',
+        calloutBg: '#f8fafc',
+        calloutBorder: '#93c5fd',
+        subtitle: 'Báo cáo tổng hợp vận hành, bảo trì & năng lượng định kỳ trình Ban Giám Đốc',
+      };
     case 'THU_NGHIEM':
     default:
       return {

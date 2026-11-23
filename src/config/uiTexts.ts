@@ -21,6 +21,7 @@ export const UI_TEXTS = {
     items: {
       dashboard: { label: 'Tổng Quan O&M', desc: '' },
       admin_dashboard: { label: 'Dashboard Admin', desc: '' },
+      monthly_report: { label: 'Báo Cáo Tháng BGĐ', desc: '' },
       my_tasks: { label: 'Việc Được Giao', desc: '' },
       morning_checks: { label: 'Công Việc Đầu Ngày', desc: '' },
       profile: { label: 'Hồ Sơ Cá Nhân', desc: '' },
@@ -121,6 +122,10 @@ export const UI_TEXTS = {
     emailAlerts: {
       badge: 'Thông Báo Email',
       title: 'Cấu Hình & Nhật Ký Gửi Email Thông Báo',
+    },
+    monthlyReport: {
+      badge: 'Báo Cáo Ban Giám Đốc',
+      title: 'Báo Cáo Tổng Hợp Vận Hành, Bảo Trì & Năng Lượng Hàng Tháng',
     },
   },
 

@@ -28,6 +28,7 @@ import {
   MaintenanceHistory,
   MaintenancePlan,
   MeterReading,
+  MonthlyBoardReportsStore,
   MorningCheckTemplatesMap,
   Power10Days,
   PurchaseRequest,
@@ -889,6 +890,7 @@ export interface WorkspaceSnapshotData {
   emailConfig: EmailConfig;
   tariffConfig: EnergyTariffConfig;
   morningCheckTemplates?: MorningCheckTemplatesMap;
+  monthlyBoardReports?: MonthlyBoardReportsStore;
 }
 
 export async function seedOrPushWorkspaceToFirestore(
@@ -993,6 +995,16 @@ export async function seedOrPushWorkspaceToFirestore(
       data: {
         key: 'morning_check_templates',
         payload: stripUndefined(snapshotData.morningCheckTemplates as unknown as Record<string, unknown>),
+      },
+    });
+  }
+  if (snapshotData.monthlyBoardReports) {
+    ops.push({
+      col: 'settings',
+      id: 'monthly_board_reports',
+      data: {
+        key: 'monthly_board_reports',
+        payload: stripUndefined(snapshotData.monthlyBoardReports as unknown as Record<string, unknown>),
       },
     });
   }

@@ -11,6 +11,7 @@ import {
   Clock,
   Wrench,
   BadgeCheck,
+  FileBarChart2,
 } from 'lucide-react';
 
 interface WebNotificationToastProps {
@@ -37,6 +38,8 @@ export const WebNotificationToast: React.FC<WebNotificationToastProps> = ({ onNa
         return <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />;
       case 'GIAO_VIEC':
         return <Wrench className="w-4 h-4 text-sky-600 dark:text-sky-400" />;
+      case 'BAO_CAO_THANG_BGD':
+        return <FileBarChart2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />;
       default:
         return <BellRing className="w-4 h-4 text-cyan-600 dark:text-cyan-400" />;
     }

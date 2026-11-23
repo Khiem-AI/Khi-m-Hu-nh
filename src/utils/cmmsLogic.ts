@@ -232,7 +232,7 @@ export function canAccessBackup(user?: Employee | null): boolean {
 }
 
 export const ADMIN_ONLY_VIEWS = ['admin_dashboard', 'employee_performance'] as const;
-export const COST_RESTRICTED_VIEWS = ['costs'] as const;
+export const COST_RESTRICTED_VIEWS = ['costs', 'monthly_report'] as const;
 
 /**
  * Only Admin-level users (Owner, Admin, Quản trị viên, ID1460) can access admin-only views.
@@ -361,6 +361,13 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
       !(user.quyenHan || []).includes('DENY_MORNING_CHECKS')
     ) {
       resolved.push('morning_checks');
+    }
+    if (
+      costAccess &&
+      !resolved.includes('monthly_report') &&
+      !(user.quyenHan || []).includes('DENY_MONTHLY_REPORT')
+    ) {
+      resolved.push('monthly_report');
     }
     return filterRestrictedViews(resolved);
   }

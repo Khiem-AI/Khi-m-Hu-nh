@@ -168,7 +168,14 @@ export const EmployeesTab: React.FC = () => {
         (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
     );
     const sanitizedRules = editRules.filter((r) => {
-      if (r === 'DENY_MORNING_CHECKS' || r === 'ASSIGN_WORK' || r === 'DENY_ASSIGN_WORK') return false;
+      if (
+        r === 'DENY_MORNING_CHECKS' ||
+        r === 'DENY_MONTHLY_REPORT' ||
+        r === 'ASSIGN_WORK' ||
+        r === 'DENY_ASSIGN_WORK'
+      ) {
+        return false;
+      }
       if (costRestricted && r === 'MANAGE_COSTS') return false;
       if (planEditRestricted && (r === 'MANAGE_PLANS' || r === 'ALL')) return false;
       return true;
@@ -180,6 +187,9 @@ export const EmployeesTab: React.FC = () => {
     }
     if (!allowAdminViews && !sanitizedViews.includes('morning_checks')) {
       sanitizedRules.push('DENY_MORNING_CHECKS');
+    }
+    if (!allowAdminViews && !costRestricted && !sanitizedViews.includes('monthly_report')) {
+      sanitizedRules.push('DENY_MONTHLY_REPORT');
     }
 
     updateEmployee({
@@ -222,10 +232,13 @@ export const EmployeesTab: React.FC = () => {
         (allowAdminViews || !(ADMIN_ONLY_VIEWS as readonly string[]).includes(id)) &&
         (!costRestricted || !(COST_RESTRICTED_VIEWS as readonly string[]).includes(id))
     );
-    const finalNewRules =
-      !allowAdminViews && !sanitizedNewViews.includes('morning_checks')
-        ? [...defaultRules, 'DENY_MORNING_CHECKS']
-        : defaultRules;
+    const finalNewRules = [...defaultRules];
+    if (!allowAdminViews && !sanitizedNewViews.includes('morning_checks')) {
+      finalNewRules.push('DENY_MORNING_CHECKS');
+    }
+    if (!allowAdminViews && !costRestricted && !sanitizedNewViews.includes('monthly_report')) {
+      finalNewRules.push('DENY_MONTHLY_REPORT');
+    }
 
     addEmployee({
       maNhanVien: maNhanVien.trim().toUpperCase(),

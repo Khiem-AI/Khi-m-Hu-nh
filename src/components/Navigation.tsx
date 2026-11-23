@@ -33,6 +33,7 @@ import {
   PanelLeftClose,
   ChevronRight,
   Sunrise,
+  FileBarChart2,
 } from 'lucide-react';
 
 interface NavigationProps {
@@ -150,6 +151,14 @@ export const Navigation: React.FC<NavigationProps> = ({
       badge: 'Admin',
       badgeColor: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
       adminOnly: true,
+    },
+    {
+      id: 'monthly_report',
+      label: UI_TEXTS.navigation.items.monthly_report.label,
+      desc: UI_TEXTS.navigation.items.monthly_report.desc,
+      icon: FileBarChart2,
+      badge: 'BGĐ',
+      badgeColor: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
     },
     {
       id: 'my_tasks',
@@ -289,7 +298,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     (item) =>
       allowedViewIds.includes(item.id) &&
       (!item.adminOnly || adminAccess) &&
-      (item.id !== 'costs' || costAccess)
+      ((item.id !== 'costs' && item.id !== 'monthly_report') || costAccess)
   );
 
   const handleItemSelect = (tabId: string) => {

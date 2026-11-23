@@ -664,3 +664,65 @@ html.dark ::-webkit-scrollbar-track {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(100, 116, 139, 0.75);
 }
+
+/* ============================================================================
+   EXECUTIVE A4 PRINT / PDF EXPORT STYLES (Monthly Board Report)
+   ============================================================================ */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 12mm;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  header,
+  aside,
+  .no-print {
+    display: none !important;
+  }
+
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .board-report-root .bg-slate-900,
+  .board-report-root .bg-slate-950,
+  .board-report-root .bg-slate-800\/50 {
+    background-color: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  .board-report-root .text-slate-100,
+  .board-report-root .text-slate-200,
+  .board-report-root .text-slate-300 {
+    color: #0f172a !important;
+  }
+
+  .board-report-root .text-slate-400,
+  .board-report-root .text-slate-500 {
+    color: #475569 !important;
+  }
+
+  .board-report-root .border-slate-800,
+  .board-report-root .border-slate-700,
+  .board-report-root .border-slate-700\/70,
+  .board-report-root .border-slate-700\/60 {
+    border-color: #cbd5e1 !important;
+  }
+
+  .print-break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+

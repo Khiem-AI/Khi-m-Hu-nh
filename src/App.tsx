@@ -7,6 +7,7 @@ import { canAccessBackup, canViewCosts, getEffectiveAllowedViews, isAdminLevel }
 // Tabs
 import { DashboardTab } from './components/tabs/DashboardTab';
 import { AdminDashboardTab } from './components/tabs/AdminDashboardTab';
+import { MonthlyBoardReportTab } from './components/tabs/MonthlyBoardReportTab';
 import { MyTasksTab } from './components/tabs/MyTasksTab';
 import { MorningChecksTab } from './components/tabs/MorningChecksTab';
 import { ProfileTab } from './components/tabs/ProfileTab';
@@ -260,6 +261,10 @@ function CMMSApp() {
               onOpenMaintenanceModal={handleOpenMaintenance}
               onOpenQR={handleOpenQR}
             />
+          )}
+
+          {activeTab === 'monthly_report' && canViewCosts(currentUser) && (
+            <MonthlyBoardReportTab />
           )}
 
           {activeTab === 'my_tasks' && (

@@ -1154,6 +1154,8 @@ export const EmailAlertsTab: React.FC = () => {
                             ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                             : log.type === 'BAO_CAO_HOAN_THANH'
                             ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : log.type === 'BAO_CAO_THANG_BGD'
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
                             : 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30'
                         }`}
                       >
@@ -1169,6 +1171,8 @@ export const EmailAlertsTab: React.FC = () => {
                           ? 'Giao Việc'
                           : log.type === 'BAO_CAO_HOAN_THANH'
                           ? 'Báo Cáo Hoàn Thành'
+                          : log.type === 'BAO_CAO_THANG_BGD'
+                          ? 'Báo Cáo Tháng BGĐ'
                           : 'Thử Nghiệm'}
                       </span>
                     </td>

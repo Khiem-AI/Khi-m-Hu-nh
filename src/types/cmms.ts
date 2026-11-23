@@ -274,6 +274,7 @@ export interface EmailLog {
     | 'KIEM_DINH_DEN_HAN'
     | 'GIAO_VIEC'
     | 'BAO_CAO_HOAN_THANH'
+    | 'BAO_CAO_THANG_BGD'
     | 'THU_NGHIEM';
   recipient: string;
   cc?: string;
@@ -335,6 +336,7 @@ export interface AppViewOption {
 export const APP_VIEW_OPTIONS: AppViewOption[] = [
   { id: 'dashboard', label: 'Tổng Quan O&M', desc: 'Bảng điều hành nhà máy' },
   { id: 'admin_dashboard', label: 'Dashboard Admin', desc: 'OEE, MTBF, MTTR & KPI vận hành' },
+  { id: 'monthly_report', label: 'Báo Cáo Tháng BGĐ', desc: 'Tổng hợp KPI & gửi Ban Giám Đốc' },
   { id: 'my_tasks', label: 'Việc Được Giao', desc: 'Nhiệm vụ của tôi' },
   { id: 'morning_checks', label: 'Công Việc Đầu Ngày', desc: 'Kiểm tra Vòng trong, Vòng Ngoài & Phòng Utility' },
   { id: 'profile', label: 'Hồ Sơ Cá Nhân', desc: 'Thông tin & Phép năm' },
@@ -712,4 +714,33 @@ export interface PurchaseRequest {
   daNhapKho?: boolean;
   ghiChu?: string;
 }
+
+// Báo cáo tháng gửi Ban Giám Đốc (Executive Monthly Board Report)
+export type MonthlyBoardReportStatus = 'Bản nháp' | 'Đã duyệt nội bộ' | 'Đã gửi BGĐ';
+
+export interface MonthlyBoardReportRecord {
+  month: string; // YYYY-MM
+  reportTitle: string;
+  preparedBy: string;
+  reviewerName?: string;
+  boardRecipients: string;
+  ccRecipients?: string;
+  highlights: string;
+  risksAndIssues: string;
+  nextMonthPlan: string;
+  directorFeedback?: string;
+  status: MonthlyBoardReportStatus;
+  updatedAt: string;
+  sentAt?: string;
+  sentBy?: string;
+  sentCount?: number;
+  lastEmailLogId?: string;
+}
+
+export interface MonthlyBoardReportsStore {
+  defaultBoardRecipients: string;
+  defaultCcRecipients: string;
+  reportsByMonth: Record<string, MonthlyBoardReportRecord>;
+}
+
 
