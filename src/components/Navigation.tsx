@@ -157,7 +157,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       label: UI_TEXTS.navigation.items.monthly_report.label,
       desc: UI_TEXTS.navigation.items.monthly_report.desc,
       icon: FileBarChart2,
-      badge: 'BGĐ',
+      badge: 'MOM',
       badgeColor: 'bg-blue-500/20 text-blue-300 border border-blue-500/30',
     },
     {
@@ -328,10 +328,10 @@ export const Navigation: React.FC<NavigationProps> = ({
             <button
               key={item.id}
               onClick={() => handleItemSelect(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left transition group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-left transition group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                 isActive
-                  ? 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-semibold shadow-md shadow-cyan-900/20'
-                  : 'text-slate-700 dark:text-slate-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-900/90'
+                  ? 'bg-gradient-to-r from-sky-600 to-blue-600 text-white font-semibold shadow-sm shadow-blue-900/15'
+                  : 'text-slate-700 dark:text-[#c7d3e4] hover:text-slate-900 dark:hover:text-[#edf2f9] hover:bg-slate-100/90 dark:hover:bg-[#1c2739]'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -339,15 +339,21 @@ export const Navigation: React.FC<NavigationProps> = ({
                   className={`w-4 h-4 sm:w-[18px] sm:h-[18px] shrink-0 ${
                     isActive
                       ? 'text-white'
-                      : 'text-slate-500 dark:text-slate-400 group-hover:text-cyan-600 dark:group-hover:text-cyan-400'
+                      : 'text-slate-500 dark:text-slate-400 group-hover:text-sky-600 dark:group-hover:text-sky-400'
                   }`}
                 />
                 <div className="truncate">
-                  <div className="text-xs font-bold leading-tight truncate">{item.label}</div>
+                  <div
+                    className={`text-[13px] leading-snug truncate ${
+                      isActive ? 'font-semibold' : 'font-medium'
+                    }`}
+                  >
+                    {item.label}
+                  </div>
                   {item.desc && (
                     <div
-                      className={`text-[10px] leading-tight truncate mt-0.5 ${
-                        isActive ? 'text-cyan-50/90' : 'text-slate-500 dark:text-slate-400'
+                      className={`text-[11px] leading-tight truncate mt-0.5 ${
+                        isActive ? 'text-sky-50/90' : 'text-slate-500 dark:text-slate-400'
                       }`}
                     >
                       {item.desc}
@@ -358,8 +364,8 @@ export const Navigation: React.FC<NavigationProps> = ({
 
               {item.badge && (
                 <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-md shrink-0 ml-2 tabular-nums ${
-                    isActive ? 'bg-white text-slate-900 font-extrabold' : item.badgeColor
+                  className={`text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 ml-2 tabular-nums ${
+                    isActive ? 'bg-white text-slate-800 font-bold' : item.badgeColor
                   }`}
                 >
                   {item.badge}
@@ -374,7 +380,7 @@ export const Navigation: React.FC<NavigationProps> = ({
       <button
         type="button"
         onClick={() => handleItemSelect('profile')}
-        className="w-full text-left p-3 rounded-xl bg-slate-50 dark:bg-slate-900/90 hover:bg-slate-100 dark:hover:bg-slate-800/80 border border-slate-200 dark:border-slate-800 text-xs space-y-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+        className="w-full text-left p-3 rounded-xl bg-slate-50/90 dark:bg-[#182233] hover:bg-slate-100 dark:hover:bg-[#1f2c42] border border-slate-200/80 dark:border-[#26344a] text-xs space-y-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
         title="Mở Hồ Sơ Cá Nhân (Profile)"
       >
         <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
@@ -383,10 +389,10 @@ export const Navigation: React.FC<NavigationProps> = ({
             {currentUser.maNhanVien}
           </span>
         </div>
-        <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
+        <div className="font-semibold text-slate-800 dark:text-[#e7edf6] truncate">
           {currentUser.tenNhanVien}
         </div>
-        <div className="text-[11px] text-cyan-700 dark:text-cyan-400 font-semibold">
+        <div className="text-[11px] text-sky-700 dark:text-sky-400 font-medium">
           {currentUser.chucVu}
         </div>
       </button>
@@ -394,8 +400,8 @@ export const Navigation: React.FC<NavigationProps> = ({
   );
 
   const desktopPinHeader = (
-    <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 shrink-0">
-      <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 truncate">
+    <div className="flex items-center justify-between px-3 py-2.5 border-b border-slate-200/80 dark:border-[#243045] bg-slate-50/60 dark:bg-[#162030]/80 shrink-0">
+      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 truncate">
         {isDesktopPinned ? 'Menu đang ghim' : 'Menu tự động ẩn'}
       </span>
       <div className="flex items-center gap-1 shrink-0">
@@ -411,10 +417,10 @@ export const Navigation: React.FC<NavigationProps> = ({
                 ? 'Bỏ ghim để tự động ẩn menu trái (tối ưu không gian)'
                 : 'Ghim cố định menu bên trái'
             }
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
+            className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold transition whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
               isDesktopPinned
                 ? 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800'
-                : 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-xs'
+                : 'bg-sky-600 text-white hover:bg-sky-500 shadow-xs'
             }`}
           >
             {isDesktopPinned ? (
@@ -439,7 +445,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             }}
             aria-label="Thu gọn menu ngay"
             title="Thu gọn menu ngay"
-            className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+            className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200/70 dark:hover:bg-slate-800 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
           >
             <PanelLeftClose className="w-3.5 h-3.5" />
           </button>
@@ -452,7 +458,7 @@ export const Navigation: React.FC<NavigationProps> = ({
     <>
       {/* Desktop Pinned Persistent Sidebar */}
       {isDesktopPinned ? (
-        <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950 sticky top-16 h-[calc(100vh-4rem)]">
+        <aside className="hidden lg:flex lg:flex-col w-64 shrink-0 border-r border-slate-200/80 dark:border-[#243045] bg-white dark:bg-[#131b29] sticky top-16 h-[calc(100vh-4rem)]">
           {desktopPinHeader}
           <div className="flex-1 overflow-y-auto">{content}</div>
         </aside>
@@ -472,7 +478,7 @@ export const Navigation: React.FC<NavigationProps> = ({
                 onClick={handleOpenDesktopHover}
                 aria-label="Hiện thanh menu bên trái"
                 title="Di chuột hoặc bấm để mở thanh menu"
-                className="hidden lg:flex fixed left-0 top-28 z-30 items-center justify-center w-6 h-12 rounded-r-xl bg-white/95 dark:bg-slate-900/95 border border-l-0 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-300 hover:w-7 hover:text-cyan-600 dark:hover:text-cyan-400 shadow-md transition-[width,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500"
+                className="hidden lg:flex fixed left-0 top-28 z-30 items-center justify-center w-6 h-12 rounded-r-xl bg-white/95 dark:bg-[#172030]/95 border border-l-0 border-slate-200 dark:border-[#2d3b54] text-slate-500 dark:text-slate-300 hover:w-7 hover:text-sky-600 dark:hover:text-sky-400 shadow-md transition-[width,color] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
               >
                 <ChevronRight className="w-4 h-4" />
               </button>
@@ -484,7 +490,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             onMouseEnter={handleOpenDesktopHover}
             onMouseLeave={handleScheduleCloseDesktopHover}
             aria-hidden={!isDesktopHoverOpen}
-            className={`hidden lg:flex lg:flex-col fixed left-0 top-16 bottom-0 w-64 z-40 border-r border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl transition-transform duration-200 ease-out ${
+            className={`hidden lg:flex lg:flex-col fixed left-0 top-16 bottom-0 w-64 z-40 border-r border-slate-200/80 dark:border-[#243045] bg-white/95 dark:bg-[#131b29]/95 backdrop-blur-md shadow-2xl transition-transform duration-200 ease-out ${
               isDesktopHoverOpen
                 ? 'translate-x-0 pointer-events-auto'
                 : '-translate-x-full pointer-events-none'
@@ -501,11 +507,11 @@ export const Navigation: React.FC<NavigationProps> = ({
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div
             onClick={onCloseMobile}
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm"
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm"
           />
-          <div className="relative w-72 max-w-[85vw] bg-white dark:bg-slate-950 border-r border-slate-200 dark:border-slate-800 flex flex-col z-50 shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
-              <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+          <div className="relative w-72 max-w-[85vw] bg-white dark:bg-[#131b29] border-r border-slate-200/80 dark:border-[#243045] flex flex-col z-50 shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-slate-200/80 dark:border-[#243045]">
+              <span className="font-bold text-slate-800 dark:text-[#e7edf6] text-sm">
                 FACILITY SYSTEM MANAGEMENT
               </span>
               <button

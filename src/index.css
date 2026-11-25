@@ -3,24 +3,30 @@
 
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: 'Be Vietnam Pro', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    line-height: 1.55;
     min-height: 100vh;
-    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1, h2, h3 {
+    font-family: 'Plus Jakarta Sans', 'Be Vietnam Pro', system-ui, sans-serif;
+    letter-spacing: -0.015em;
   }
 
   body.dark-theme,
   html.dark body {
-    background-color: #060a14;
-    color: #f8fafc;
+    background-color: #0f1520;
+    color: #e7edf6;
   }
 
   body.light-theme,
   html.light body {
-    background-color: #eef2f6;
-    color: #0f172a;
+    background-color: #f5f7fa;
+    color: #1e293b;
   }
 
   code, pre, .font-mono {
@@ -29,79 +35,138 @@
   }
 }
 
+/* Soften overly heavy 800-weight Vietnamese strokes for calmer visual comfort */
+.font-extrabold {
+  font-weight: 700 !important;
+}
+
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
+table td {
+  line-height: 1.48;
+}
+
 /* ============================================================================
-   DARK MODE PRECISION DEPTH & OPTICAL TYPOGRAPHY
+   DARK MODE — SOFT MIDNIGHT SLATE (Zero Pitch-Black Halation, WCAG AA+)
    ============================================================================ */
 html.dark .bg-slate-950 {
-  background-color: #060a14;
+  background-color: #0f1520;
+}
+
+html.dark header.bg-slate-950\/90,
+html.dark aside.bg-slate-950,
+html.dark .bg-slate-950\/95 {
+  background-color: #131b29;
+}
+
+html.dark .bg-slate-950\/90 {
+  background-color: rgba(19, 27, 41, 0.94);
 }
 
 html.dark .bg-slate-900 {
-  background-color: #0e1628;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 4px 16px -4px rgba(0, 0, 0, 0.45);
+  background-color: #172030;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 2px 10px -2px rgba(4, 9, 20, 0.32);
 }
 
 html.dark .bg-slate-900\/95,
 html.dark .bg-slate-900\/90,
 html.dark .bg-slate-900\/85,
 html.dark .bg-slate-900\/80 {
-  background-color: rgba(14, 22, 40, 0.94);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 4px 14px -4px rgba(0, 0, 0, 0.4);
+  background-color: rgba(23, 32, 48, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 2px 10px -2px rgba(4, 9, 20, 0.28);
+}
+
+html.dark .bg-slate-900\/70,
+html.dark .bg-slate-900\/60,
+html.dark .bg-slate-900\/50,
+html.dark .bg-slate-900\/40 {
+  background-color: rgba(23, 32, 48, 0.72);
 }
 
 html.dark .bg-slate-800 {
-  background-color: #162238;
+  background-color: #1f2a3e;
 }
 
+html.dark .bg-slate-800\/95,
 html.dark .bg-slate-800\/90,
 html.dark .bg-slate-800\/80,
 html.dark .bg-slate-800\/70,
 html.dark .bg-slate-800\/60,
 html.dark .bg-slate-800\/50 {
-  background-color: rgba(22, 34, 56, 0.82);
+  background-color: rgba(31, 42, 62, 0.78);
+}
+
+html.dark .bg-slate-800\/40,
+html.dark .bg-slate-800\/30 {
+  background-color: rgba(31, 42, 62, 0.45);
 }
 
 html.dark .border-slate-800,
 html.dark .border-slate-800\/80,
 html.dark .border-slate-800\/60 {
-  border-color: #1f2e47;
+  border-color: #253247;
 }
 
 html.dark .border-slate-700,
 html.dark .border-slate-700\/80,
 html.dark .border-slate-700\/70,
 html.dark .border-slate-700\/60 {
-  border-color: #2c3e5e;
+  border-color: #31425d;
 }
 
-html.dark .divide-slate-800 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #1f2e47;
+html.dark .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #233046;
 }
 
-/* Brighten secondary slate text in dark mode for effortless legibility */
+/* Ergonomic off-white ink hierarchy in dark mode (prevents stark white glare) */
+html.dark .text-slate-50,
+html.dark .text-slate-100 {
+  color: #e7edf6;
+}
+
+html.dark .text-slate-200 {
+  color: #d2dceb;
+}
+
+html.dark .text-slate-300 {
+  color: #bcc9dc;
+}
+
 html.dark .text-slate-400 {
-  color: #a6b6cc;
+  color: #96a7bf;
 }
 
 html.dark .text-slate-500 {
-  color: #8295b0;
+  color: #7d90ab;
 }
 
-html.dark input,
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 html.dark select,
 html.dark textarea {
-  border-color: #2e4061;
+  background-color: #1c2739;
+  border-color: #30415c;
+  color: #e7edf6;
+}
+
+html.dark input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
+html.dark select:hover,
+html.dark textarea:hover {
+  border-color: #415575;
+}
+
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #7f92ad;
 }
 
 /* ============================================================================
-   LIGHT MODE CONTRAST & ELEVATION SYSTEM (WCAG AA+ Compliant)
+   LIGHT MODE — CALM DAYLIGHT PAPER (Soft Hairline Borders, WCAG AA+)
    ============================================================================ */
 html.light .bg-slate-950 {
-  background-color: #eef2f6 !important;
+  background-color: #f5f7fa !important;
 }
 
 html.light header.bg-slate-950\/90,
@@ -123,12 +188,12 @@ html.light .bg-slate-950\/50,
 html.light .bg-slate-950\/40,
 html.light .bg-slate-950\/30,
 html.light .bg-slate-950\/20 {
-  background-color: #f1f5f9 !important;
+  background-color: #f4f7fb !important;
 }
 
 html.light .bg-slate-900 {
   background-color: #ffffff !important;
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.07), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 4px 12px -4px rgba(15, 23, 42, 0.04);
 }
 
 html.light .bg-slate-900\/95,
@@ -136,7 +201,7 @@ html.light .bg-slate-900\/90,
 html.light .bg-slate-900\/85,
 html.light .bg-slate-900\/80 {
   background-color: #ffffff !important;
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.07), 0 4px 12px -2px rgba(15, 23, 42, 0.04);
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04), 0 4px 12px -4px rgba(15, 23, 42, 0.04);
 }
 
 html.light .bg-slate-900\/70,
@@ -147,7 +212,7 @@ html.light .bg-slate-900\/40 {
 }
 
 html.light .bg-slate-800 {
-  background-color: #e9eef5 !important;
+  background-color: #f1f5f9 !important;
 }
 
 html.light .bg-slate-800\/95,
@@ -158,14 +223,14 @@ html.light .bg-slate-800\/60,
 html.light .bg-slate-800\/50,
 html.light .bg-slate-800\/40,
 html.light .bg-slate-800\/30 {
-  background-color: #f1f5f9 !important;
+  background-color: #f6f8fb !important;
 }
 
 html.light .bg-slate-700,
 html.light .bg-slate-700\/60,
 html.light .bg-slate-700\/50,
 html.light .bg-slate-700\/40 {
-  background-color: #e2e8f0 !important;
+  background-color: #e5ebf3 !important;
 }
 
 /* Light-mode tinted semantic containers */
@@ -192,7 +257,7 @@ html.light .bg-cyan-500\/20,
 html.light .bg-cyan-500\/15,
 html.light .bg-cyan-500\/10,
 html.light .bg-cyan-600\/20 {
-  background-color: #ecfeff !important;
+  background-color: #f0f9ff !important;
 }
 
 html.light .bg-indigo-950,
@@ -286,86 +351,86 @@ html.light [class*="bg-gradient-to-"][class*="from-slate-8"]:not(.hero-dark-bann
 html.light [class*="bg-gradient-to-"][class*="-950"]:not(.hero-dark-banner) {
   background-image: none !important;
   background-color: #ffffff !important;
-  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
 }
 
 /* Preserve intentionally dark hero banners and dark video viewfinders with crisp light text */
 html.light .hero-dark-banner {
-  background-image: linear-gradient(135deg, #0f172a 0%, #172554 55%, #1e1b4b 100%) !important;
-  background-color: #0f172a !important;
-  color: #f8fafc !important;
-  border-color: #1e293b !important;
+  background-image: linear-gradient(135deg, #131e33 0%, #1c2e54 55%, #1e2948 100%) !important;
+  background-color: #131e33 !important;
+  color: #f1f5f9 !important;
+  border-color: #253654 !important;
 }
 html.light .hero-dark-banner h2,
 html.light .hero-dark-banner h3,
 html.light .hero-dark-banner p,
 html.light .hero-dark-banner span:not(.bg-white *),
 html.light .hero-dark-banner .text-white {
-  color: #f8fafc !important;
+  color: #f1f5f9 !important;
 }
 html.light .hero-dark-banner .text-slate-300 {
   color: #cbd5e1 !important;
 }
 
-/* Crisp Borders in Light Mode */
+/* Soft, Refined Hairline Borders in Light Mode (No Harsh Wireframe Lines) */
 html.light .border-slate-800,
 html.light .border-slate-800\/80,
 html.light .border-slate-800\/60,
 html.light .border-slate-900 {
-  border-color: #cbd5e1 !important;
+  border-color: #e2e8f0 !important;
 }
 
 html.light .border-slate-700,
 html.light .border-slate-700\/80,
 html.light .border-slate-700\/70,
 html.light .border-slate-700\/60 {
-  border-color: #94a3b8 !important;
+  border-color: #d6dfe9 !important;
 }
 
 html.light .border-emerald-800 {
-  border-color: #6ee7b7 !important;
+  border-color: #a7f3d0 !important;
 }
 
 html.light .border-blue-800 {
-  border-color: #93c5fd !important;
+  border-color: #bfdbfe !important;
 }
 
 html.light .divide-slate-800 > :not([hidden]) ~ :not([hidden]),
 html.light .divide-slate-700 > :not([hidden]) ~ :not([hidden]) {
-  border-color: #cbd5e1 !important;
+  border-color: #e8edf4 !important;
 }
 
-/* Crisp Dark-on-Light Typography Contrast (WCAG AA+) */
+/* Balanced Deep-Ink Typography Contrast in Light Mode (WCAG AA+/AAA, Easy on Eyes) */
 html.light .text-white {
-  color: #0f172a !important;
+  color: #1e293b !important;
 }
 
 html.light .text-slate-50,
 html.light .text-slate-100 {
-  color: #0f172a !important;
+  color: #1e293b !important;
 }
 
 html.light .text-slate-200 {
-  color: #1e293b !important;
+  color: #293548 !important;
 }
 
 html.light .text-slate-300 {
-  color: #1e293b !important;
+  color: #334155 !important;
 }
 
 html.light .text-slate-400 {
-  color: #334155 !important;
+  color: #4b5b70 !important;
 }
 
 html.light .text-slate-500 {
-  color: #475569 !important;
+  color: #64748b !important;
 }
 
 html.light .text-slate-600 {
-  color: #334155 !important;
+  color: #475569 !important;
 }
 
-/* High-contrast semantic accent text in light mode (every 100/200/300/400 shade mapped to rich 700/800 ink) */
+/* Calm, high-contrast semantic accent ink in light mode */
 html.light .text-cyan-100,
 html.light .text-cyan-200,
 html.light .text-cyan-300,
@@ -453,13 +518,13 @@ html.light .text-violet-400 {
 html.light .hover\:bg-slate-800:hover,
 html.light .hover\:bg-slate-700:hover,
 html.light .hover\:bg-slate-700\/80:hover {
-  background-color: #e2e8f0 !important;
+  background-color: #e6ecf4 !important;
 }
 
 html.light .hover\:bg-slate-800\/40:hover,
 html.light .hover\:bg-slate-800\/60:hover,
 html.light .hover\:bg-slate-900\/80:hover {
-  background-color: #f1f5f9 !important;
+  background-color: #f3f6fa !important;
 }
 
 html.light .hover\:text-white:hover,
@@ -468,18 +533,24 @@ html.light .hover\:text-slate-200:hover {
   color: #0f172a !important;
 }
 
-/* Inputs, Selects & Textareas in Light Mode */
+/* Soft, Clean Inputs, Selects & Textareas in Light Mode */
 html.light input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
 html.light select,
 html.light textarea {
-  color: #0f172a !important;
+  color: #1e293b !important;
   background-color: #ffffff !important;
-  border-color: #94a3b8 !important;
+  border-color: #cfd8e3 !important;
+}
+
+html.light input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):hover,
+html.light select:hover,
+html.light textarea:hover {
+  border-color: #b4c2d4 !important;
 }
 
 html.light input::placeholder,
 html.light textarea::placeholder {
-  color: #64748b !important;
+  color: #708299 !important;
 }
 
 /* Maintain crisp white text on ALL solid & near-solid action buttons and badges in Light Mode */
@@ -511,6 +582,7 @@ html.light .bg-blue-600\/90,
 html.light .bg-blue-500,
 html.light .bg-sky-700,
 html.light .bg-sky-600,
+html.light .bg-sky-500,
 html.light .bg-amber-700,
 html.light .bg-amber-600,
 html.light .bg-amber-600\/90,
@@ -520,6 +592,9 @@ html.light .bg-orange-600,
 html.light .bg-purple-700,
 html.light .bg-purple-600,
 html.light .bg-purple-500,
+html.light [class*="from-sky-700"],
+html.light [class*="from-sky-600"],
+html.light [class*="from-sky-500"],
 html.light [class*="from-cyan-700"],
 html.light [class*="from-cyan-600"],
 html.light [class*="from-cyan-500"],
@@ -571,6 +646,7 @@ html.light .bg-blue-600\/90 *,
 html.light .bg-blue-500 *,
 html.light .bg-sky-700 *,
 html.light .bg-sky-600 *,
+html.light .bg-sky-500 *,
 html.light .bg-amber-700 *,
 html.light .bg-amber-600 *,
 html.light .bg-amber-600\/90 *,
@@ -580,6 +656,9 @@ html.light .bg-orange-600 *,
 html.light .bg-purple-700 *,
 html.light .bg-purple-600 *,
 html.light .bg-purple-500 *,
+html.light [class*="from-sky-700"] *,
+html.light [class*="from-sky-600"] *,
+html.light [class*="from-sky-500"] *,
 html.light [class*="from-cyan-700"] *,
 html.light [class*="from-cyan-600"] *,
 html.light [class*="from-cyan-500"] *,
@@ -605,26 +684,34 @@ html.light [class*="from-teal-600"] * {
 
 /* Keep explicit white-badge contrast inside active gradients (e.g. Navigation active badge) */
 html.light [class*="from-cyan-600"] .bg-white,
-html.light [class*="from-cyan-600"] .bg-white * {
-  color: #0f172a !important;
+html.light [class*="from-cyan-600"] .bg-white *,
+html.light [class*="from-sky-600"] .bg-white,
+html.light [class*="from-sky-600"] .bg-white *,
+html.light [class*="from-blue-600"] .bg-white,
+html.light [class*="from-blue-600"] .bg-white * {
+  color: #1e293b !important;
 }
 
-/* Crisp Table Headers & Row Hover Separation in Both Themes */
+/* Calm, Easy-to-Scan Table Headers & Row Hover Separation in Both Themes */
 html.light table thead tr {
-  background-color: #e8eef5 !important;
+  background-color: #f6f8fb !important;
 }
 html.light table thead th {
-  color: #1e293b !important;
-  border-bottom-color: #cbd5e1 !important;
+  color: #475569 !important;
+  border-bottom-color: #e2e8f0 !important;
 }
 html.light table tbody tr:hover {
   background-color: #f8fafc !important;
 }
 html.dark table thead tr {
-  background-color: #111b30;
+  background-color: #1b2538;
+}
+html.dark table thead th {
+  color: #9eb0c8;
+  border-bottom-color: #28364e;
 }
 html.dark table tbody tr:hover {
-  background-color: rgba(30, 48, 80, 0.45);
+  background-color: rgba(56, 189, 248, 0.06);
 }
 
 /* Accessible keyboard focus ring */
@@ -633,8 +720,16 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid #06b6d4;
+  outline: 2px solid #0284c7;
   outline-offset: 2px;
+}
+
+html.dark button:focus-visible,
+html.dark a:focus-visible,
+html.dark input:focus-visible,
+html.dark select:focus-visible,
+html.dark textarea:focus-visible {
+  outline-color: #38bdf8;
 }
 
 /* Donut background ring in light mode */
@@ -649,20 +744,20 @@ html.light .donut-track {
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.08);
+  background: rgba(15, 23, 42, 0.05);
 }
 
 html.dark ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.28);
+  background: rgba(15, 23, 42, 0.24);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.45);
+  background: rgba(100, 116, 139, 0.35);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.75);
+  background: rgba(100, 116, 139, 0.65);
 }
 
 /* ============================================================================

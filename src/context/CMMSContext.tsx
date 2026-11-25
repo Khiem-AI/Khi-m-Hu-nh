@@ -311,7 +311,7 @@ interface CMMSContextType {
   }) => void;
   deleteDailyAreaCheck: (id: string) => void;
 
-  // Monthly Executive Board Reports ("Báo Cáo Tháng BGĐ")
+  // Monthly Executive Board Reports ("Báo Cáo Tháng")
   saveMonthlyBoardReport: (
     record: MonthlyBoardReportRecord,
     defaults?: { defaultBoardRecipients?: string; defaultCcRecipients?: string }

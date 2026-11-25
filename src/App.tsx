@@ -201,7 +201,7 @@ function CMMSApp() {
 
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
-      theme === 'light' ? 'bg-[#eef2f6] text-slate-900' : 'bg-[#060a14] text-slate-100'
+      theme === 'light' ? 'bg-[#f5f7fa] text-[#1e293b]' : 'bg-[#0f1520] text-[#e7edf6]'
     }`}>
       {/* Top Header */}
       <Header

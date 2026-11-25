@@ -151,7 +151,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
               {totalWithRealPhotos} có ảnh thực tế
             </span>
           </div>
-          <h2 className="text-xl sm:text-2xl font-extrabold text-slate-100 tracking-tight mt-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-slate-100 tracking-tight mt-1">
             {UI_TEXTS.tabs.equipment.title}
           </h2>
         </div>
@@ -326,9 +326,9 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
       {/* Main Content: Table or Grid */}
       {viewMode === 'table' ? (
-        <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
+        <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-sm">
           <SmartHorizontalScroll>
-            <table className="w-full text-left border-collapse text-xs">
+            <table className="w-full text-left border-collapse text-[13px]">
               <thead>
                 <tr className="border-b border-slate-800 bg-slate-800/60 text-slate-400 font-semibold uppercase tracking-wider text-[11px]">
                   <th className="py-3 px-3 text-center">Hình Ảnh</th>

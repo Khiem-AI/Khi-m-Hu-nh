@@ -187,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-950/90 backdrop-blur-md transition-colors shadow-xs">
+    <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 dark:border-[#243045] bg-white/95 dark:bg-[#131b29]/95 backdrop-blur-md transition-colors shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
       <div className="flex h-16 items-center justify-between px-3 sm:px-6 gap-4">
         {/* Left: Mobile hamburger, Desktop sidebar toggle & Brand */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -213,10 +213,10 @@ export const Header: React.FC<HeaderProps> = ({
                   ? 'Tự động ẩn menu trái (tối ưu không gian)'
                   : 'Đang tự động ẩn menu • Bấm để ghim cố định'
               }
-              className={`hidden lg:inline-flex items-center justify-center p-2 rounded-xl border transition shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-500 ${
+              className={`hidden lg:inline-flex items-center justify-center p-2 rounded-xl border transition shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                 isDesktopSidebarPinned
-                  ? 'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                  : 'text-cyan-700 dark:text-cyan-300 bg-cyan-50 dark:bg-cyan-950/60 border-cyan-200 dark:border-cyan-800 hover:bg-cyan-100 dark:hover:bg-cyan-900/60'
+                  ? 'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#2a3850] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                  : 'text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/60'
               }`}
             >
               {isDesktopSidebarPinned ? (
@@ -231,12 +231,12 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onNavigateTab('dashboard')}
             className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group min-w-0"
           >
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white shadow-md shadow-cyan-500/20 group-hover:scale-105 transition shrink-0">
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm shadow-sky-600/20 group-hover:scale-105 transition shrink-0">
               <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-extrabold tracking-tight text-slate-900 dark:text-slate-100 text-sm sm:text-base lg:text-lg truncate">
+                <span className="font-bold tracking-tight text-slate-800 dark:text-[#e7edf6] text-sm sm:text-base lg:text-[17px] truncate">
                   {UI_TEXTS.brand.appName}
                 </span>
               </div>
@@ -256,7 +256,7 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={toggleTheme}
             aria-label={theme === 'dark' ? 'Chuyển sang giao diện Sáng' : 'Chuyển sang giao diện Tối'}
             title={theme === 'dark' ? 'Chuyển sang nền Sáng' : 'Chuyển sang nền Tối'}
-            className="h-9 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl bg-slate-100 dark:bg-slate-900 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-300 dark:border-slate-700 text-xs font-semibold transition whitespace-nowrap shrink-0"
+            className="h-9 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl bg-slate-50 dark:bg-[#1c2739] hover:bg-slate-100 dark:hover:bg-[#243248] text-slate-700 dark:text-slate-200 border border-slate-200/90 dark:border-[#2e3e59] text-xs font-semibold transition whitespace-nowrap shrink-0"
           >
             {theme === 'dark' ? (
               <>
