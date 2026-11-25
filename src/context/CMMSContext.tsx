@@ -432,6 +432,7 @@ interface CMMSContextType {
   lastServerSyncedAt: string | null;
   hasServerSyncSession: boolean;
   isRealtimeStreamConnected: boolean;
+  serverCloudHydrated: boolean;
   pendingCloudOpsCount: number;
   connectCloudWithGoogle: () => Promise<{ success: boolean; message: string }>;
   disconnectCloud: () => Promise<void>;
@@ -780,6 +781,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastServerSyncedAt, setLastServerSyncedAt] = useState<string | null>(null);
   const [hasServerSyncSession, setHasServerSyncSession] = useState<boolean>(false);
   const [isRealtimeStreamConnected, setIsRealtimeStreamConnected] = useState<boolean>(false);
+  const [serverCloudHydrated, setServerCloudHydrated] = useState<boolean>(false);
   const [pendingCloudOpsCount, setPendingCloudOpsCount] = useState<number>(0);
 
   const cloudUserRef = useRef<CloudAccountInfo | null>(null);
@@ -802,6 +804,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const cloudMirrorTimerRef = useRef<number | null>(null);
   const hasMountedSyncWatcherRef = useRef<boolean>(false);
   const flushingCloudOpsRef = useRef<boolean>(false);
+  const hydratingServerFromCloudRef = useRef<boolean>(false);
 
   const buildSyncFetchHeaders = (includeJson = true): Record<string, string> => {
     const headers: Record<string, string> = {
@@ -841,10 +844,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = (await resp.json()) as {
           revision?: number;
           snapshotUpdated?: boolean;
+          cloudHydrated?: boolean;
           pendingCloudCount?: number;
         };
         if (typeof data.pendingCloudCount === 'number') {
           setPendingCloudOpsCount(data.pendingCloudCount);
+        }
+        if (typeof data.cloudHydrated === 'boolean') {
+          setServerCloudHydrated(data.cloudHydrated);
         }
         if (typeof data.revision === 'number' && data.revision > serverRevisionRef.current) {
           serverRevisionRef.current = data.revision;
@@ -1746,11 +1753,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ok?: boolean;
         token?: string;
         workspaceRevision?: number;
+        cloudHydrated?: boolean;
         pendingCloudCount?: number;
       };
       if (data.ok && data.token) {
         serverSessionTokenRef.current = data.token;
         setHasServerSyncSession(true);
+        if (typeof data.cloudHydrated === 'boolean') {
+          setServerCloudHydrated(data.cloudHydrated);
+        }
         if (typeof data.pendingCloudCount === 'number') {
           setPendingCloudOpsCount(data.pendingCloudCount);
         }
@@ -1779,11 +1790,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ok?: boolean;
         authenticated?: boolean;
         token?: string;
+        cloudHydrated?: boolean;
         pendingCloudCount?: number;
       };
       if (data.ok && data.authenticated && data.token) {
         serverSessionTokenRef.current = data.token;
         setHasServerSyncSession(true);
+        if (typeof data.cloudHydrated === 'boolean') {
+          setServerCloudHydrated(data.cloudHydrated);
+        }
         if (typeof data.pendingCloudCount === 'number') {
           setPendingCloudOpsCount(data.pendingCloudCount);
         }
@@ -1968,6 +1983,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         revision?: number;
         updatedAt?: string | null;
         updatedBy?: string | null;
+        cloudHydrated?: boolean;
         pendingCloudCount?: number;
         snapshot?: Partial<WorkspaceSnapshotData>;
       };
@@ -1979,6 +1995,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof data.pendingCloudCount === 'number') {
         setPendingCloudOpsCount(data.pendingCloudCount);
       }
+      if (typeof data.cloudHydrated === 'boolean') {
+        setServerCloudHydrated(data.cloudHydrated);
+      }
       setHasServerSyncSession(true);
       initialServerSyncDoneRef.current = true;
       setServerSyncStatus('synced');
@@ -1986,6 +2005,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (typeof data.pendingCloudCount === 'number' && data.pendingCloudCount > 0 && cloudUserRef.current) {
         void flushPendingCloudOpsToFirestore();
+      }
+      // If server just restarted (cloudHydrated === false) and THIS browser is connected to Google Cloud,
+      // auto-rehydrate the server with fresh Cloud Firestore data immediately so all internal users receive it!
+      if (data.cloudHydrated === false && cloudUserRef.current) {
+        void hydrateServerFromCloudIfNeeded();
       }
 
       if (data.updated && data.snapshot) {
@@ -2031,7 +2055,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         success: true,
         updated: false,
         message:
-          (data.revision || 0) === 0
+          data.cloudHydrated === false
+            ? 'Máy chủ vừa khởi động lại và chưa nhận bản dữ liệu mới nhất từ Cloud. Hãy nhấn Liên kết Google Cloud trực tiếp hoặc đợi tài khoản Google mở ứng dụng.'
+            : (data.revision || 0) === 0
             ? 'Đã kết nối đồng bộ trực tiếp. Mọi dữ liệu nhập mới sẽ tự động đồng bộ ngay.'
             : `Dữ liệu hiện tại đã là phiên bản mới nhất (#${data.revision}).`,
       };
@@ -2110,10 +2136,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const data = (await resp.json()) as {
         ok?: boolean;
         revision?: number;
+        cloudHydrated?: boolean;
         pendingCloudCount?: number;
       };
       if (data.ok && typeof data.revision === 'number') {
         serverRevisionRef.current = data.revision;
+      }
+      if (typeof data.cloudHydrated === 'boolean') {
+        setServerCloudHydrated(data.cloudHydrated);
       }
       if (typeof data.pendingCloudCount === 'number') {
         setPendingCloudOpsCount(data.pendingCloudCount);
@@ -2126,6 +2156,32 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch {
       setServerSyncStatus('error');
       return false;
+    }
+  };
+
+  const hydrateServerFromCloudIfNeeded = async (): Promise<void> => {
+    const user = cloudUserRef.current;
+    if (!user || hydratingServerFromCloudRef.current) return;
+    hydratingServerFromCloudRef.current = true;
+    try {
+      if (!serverSessionTokenRef.current && auth.currentUser) {
+        await establishCloudServerSession(auth.currentUser);
+      }
+      if (!serverSessionTokenRef.current) return;
+      await flushPendingCloudOpsToFirestore();
+      const pulled = await pullLatestWorkspaceFromFirestore(
+        user.email,
+        user.uid,
+        knownCloudIdsRef.current
+      );
+      const freshSnapshot = applyPulledCloudDataToState(pulled);
+      if (pulled.workspaceMetaExists || pulled.totalLoaded > 0) {
+        await pushSnapshotToServer('cloud', freshSnapshot);
+      }
+    } catch {
+      // Non-fatal; retried on next poll or SSE reconnect
+    } finally {
+      hydratingServerFromCloudRef.current = false;
     }
   };
 
@@ -2954,10 +3010,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const msg = JSON.parse(event.data) as {
           type?: string;
           revision?: number;
+          cloudHydrated?: boolean;
           pendingCloudCount?: number;
         };
         if (typeof msg.pendingCloudCount === 'number') {
           setPendingCloudOpsCount(msg.pendingCloudCount);
+        }
+        if (typeof msg.cloudHydrated === 'boolean') {
+          setServerCloudHydrated(msg.cloudHydrated);
+          if (msg.cloudHydrated === false && cloudUserRef.current) {
+            void hydrateServerFromCloudIfNeeded();
+          }
         }
         if (typeof msg.revision === 'number' && msg.revision > serverRevisionRef.current) {
           void pullLatestFromServerInternal(false);
@@ -4685,11 +4748,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           token?: string;
           employee?: Employee;
           workspaceRevision?: number;
+          cloudHydrated?: boolean;
           pendingCloudCount?: number;
         };
         if (data.ok && data.token && data.employee) {
           serverSessionTokenRef.current = data.token;
           setHasServerSyncSession(true);
+          if (typeof data.cloudHydrated === 'boolean') {
+            setServerCloudHydrated(data.cloudHydrated);
+          }
           if (typeof data.pendingCloudCount === 'number') {
             setPendingCloudOpsCount(data.pendingCloudCount);
           }
@@ -4852,12 +4919,21 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     const actor = currentUserRef.current || currentUser;
     leavePresenceSession(false);
+    // Record & send logout audit log BEFORE clearing the server session token
+    addAuditLog(
+      'Đăng xuất',
+      'Hệ thống',
+      actor.maNhanVien,
+      `Người dùng ${actor.tenNhanVien} (${actor.maNhanVien} - ${actor.chucVu}) đăng xuất khỏi hệ thống`,
+      actor
+    );
     const activeToken = serverSessionTokenRef.current;
     serverSessionTokenRef.current = null;
     serverRevisionRef.current = 0;
     initialServerSyncDoneRef.current = false;
     setHasServerSyncSession(false);
     setIsRealtimeStreamConnected(false);
+    setServerCloudHydrated(false);
     setPendingCloudOpsCount(0);
     setServerSyncStatus('idle');
     void fetch('/api/auth/logout', {
@@ -4871,13 +4947,6 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         : { 'X-Requested-With': 'XMLHttpRequest' },
       keepalive: true,
     }).catch(() => {});
-    addAuditLog(
-      'Đăng xuất',
-      'Hệ thống',
-      actor.maNhanVien,
-      `Người dùng ${actor.tenNhanVien} (${actor.maNhanVien} - ${actor.chucVu}) đăng xuất khỏi hệ thống`,
-      actor
-    );
     setIsAuthenticated(false);
     sessionStorage.removeItem('cmms_authenticated');
     sessionStorage.removeItem('cmms_auth_user');
@@ -6281,6 +6350,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastServerSyncedAt,
         hasServerSyncSession,
         isRealtimeStreamConnected,
+        serverCloudHydrated,
         pendingCloudOpsCount,
         connectCloudWithGoogle,
         disconnectCloud,

@@ -714,7 +714,10 @@ async function startServer() {
 
   // --- Shared Authenticated Workspace Sync Hub (Real-Time SSE + Cloud Bridge for Internal & Cloud Users) ---
   const BOOTSTRAPPED_ADMIN_EMAIL = 'khiemhuynhggs@gmail.com';
-  const SERVER_DATA_DIR = path.resolve(__dirname, '.cmms-server-data');
+  const configuredDataDir = (process.env.CMMS_DATA_DIR || '').trim();
+  const SERVER_DATA_DIR = configuredDataDir
+    ? path.resolve(configuredDataDir)
+    : path.resolve(__dirname, '.cmms-server-data');
   const SESSION_COOKIE_NAME = 'cmms_sync_sid';
   const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
   const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
@@ -781,6 +784,7 @@ async function startServer() {
     revision: number;
     updatedAt: string | null;
     updatedBy: string | null;
+    cloudHydrated: boolean;
     snapshot: Record<string, unknown> | null;
   }
 
@@ -814,6 +818,7 @@ async function startServer() {
     revision: 0,
     updatedAt: null,
     updatedBy: null,
+    cloudHydrated: false,
     snapshot: null,
   };
 
@@ -887,6 +892,7 @@ async function startServer() {
         revision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
         updatedBy: workspaceStore.updatedBy,
+        cloudHydrated: workspaceStore.cloudHydrated,
         snapshot: workspaceStore.snapshot,
       });
     } catch {
@@ -955,6 +961,7 @@ async function startServer() {
         workspaceStore.revision = parsed.revision;
         workspaceStore.updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null;
         workspaceStore.updatedBy = typeof parsed.updatedBy === 'string' ? parsed.updatedBy : null;
+        workspaceStore.cloudHydrated = Boolean(parsed.cloudHydrated);
         workspaceStore.snapshot = stripEmployeePasswords(parsed.snapshot as Record<string, unknown>);
       }
     } catch {
@@ -1373,6 +1380,7 @@ async function startServer() {
       },
       workspaceRevision: workspaceStore.revision,
       updatedAt: workspaceStore.updatedAt,
+      cloudHydrated: workspaceStore.cloudHydrated,
       pendingCloudCount: pendingCloudOps.size,
     });
   });
@@ -1420,6 +1428,7 @@ async function startServer() {
         expiresAt: session.expiresAt,
         workspaceRevision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       });
     } catch (err) {
@@ -1489,6 +1498,7 @@ async function startServer() {
       employee: safeEmployee,
       workspaceRevision: workspaceStore.revision,
       updatedAt: workspaceStore.updatedAt,
+      cloudHydrated: workspaceStore.cloudHydrated,
       pendingCloudCount: pendingCloudOps.size,
     });
   });
@@ -1598,6 +1608,7 @@ async function startServer() {
         revision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
         updatedBy: workspaceStore.updatedBy,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       })}\n\n`
     );
@@ -1630,6 +1641,7 @@ async function startServer() {
         updated: false,
         revision: 0,
         updatedAt: null,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       });
       return;
@@ -1641,6 +1653,7 @@ async function startServer() {
         revision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
         updatedBy: workspaceStore.updatedBy,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       });
       return;
@@ -1651,6 +1664,7 @@ async function startServer() {
       revision: workspaceStore.revision,
       updatedAt: workspaceStore.updatedAt,
       updatedBy: workspaceStore.updatedBy,
+      cloudHydrated: workspaceStore.cloudHydrated,
       pendingCloudCount: pendingCloudOps.size,
       snapshot: workspaceStore.snapshot,
     });
@@ -1749,6 +1763,7 @@ async function startServer() {
         revision: workspaceStore.revision,
         updatedAt: nowIso,
         updatedBy: actorLabel,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       });
 
@@ -1757,6 +1772,7 @@ async function startServer() {
         opId: op.opId,
         revision: workspaceStore.revision,
         snapshotUpdated,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       });
     }
@@ -1798,16 +1814,17 @@ async function startServer() {
           type: 'pending_cloud_ack',
           revision: workspaceStore.revision,
           updatedAt: new Date().toISOString(),
+          cloudHydrated: workspaceStore.cloudHydrated,
           pendingCloudCount: pendingCloudOps.size,
         });
       }
     }
-    res.json({ ok: true, pendingCloudCount: pendingCloudOps.size });
+    res.json({ ok: true, cloudHydrated: workspaceStore.cloudHydrated, pendingCloudCount: pendingCloudOps.size });
   });
 
   app.post(
     '/api/workspace/sync',
-    express.json({ limit: '25mb' }),
+    express.json({ limit: '50mb' }),
     async (req, res) => {
       const session = authenticateRequest(req, true);
       if (!session) {
@@ -1932,6 +1949,9 @@ async function startServer() {
       workspaceStore.revision += 1;
       workspaceStore.updatedAt = new Date().toISOString();
       workspaceStore.updatedBy = `${session.tenNhanVien} (${session.maNhanVien})`;
+      if (source === 'cloud') {
+        workspaceStore.cloudHydrated = true;
+      }
       workspaceStore.snapshot = cleanSnapshot;
 
       await persistWorkspace();
@@ -1944,6 +1964,7 @@ async function startServer() {
         revision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
         updatedBy: workspaceStore.updatedBy,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       });
 
@@ -1952,6 +1973,7 @@ async function startServer() {
         revision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
         updatedBy: workspaceStore.updatedBy,
+        cloudHydrated: workspaceStore.cloudHydrated,
         pendingCloudCount: pendingCloudOps.size,
       });
     }
