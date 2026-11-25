@@ -783,6 +783,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isRealtimeStreamConnected, setIsRealtimeStreamConnected] = useState<boolean>(false);
   const [serverCloudHydrated, setServerCloudHydrated] = useState<boolean>(false);
   const [pendingCloudOpsCount, setPendingCloudOpsCount] = useState<number>(0);
+  const [sseReconnectNonce, setSseReconnectNonce] = useState<number>(0);
 
   const cloudUserRef = useRef<CloudAccountInfo | null>(null);
   const pendingCloudFbUserRef = useRef<User | null>(null);
@@ -1193,10 +1194,36 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = (await resp.json()) as {
           ok?: boolean;
           onlineUsers?: OnlineUserPresence[];
+          cloudHydrated?: boolean;
+          workspaceRevision?: number;
+          pendingCloudCount?: number;
         };
         if (Array.isArray(data.onlineUsers)) {
           serverPresenceRef.current = data.onlineUsers;
           recomputeMergedOnlineUsers();
+        }
+        if (typeof data.pendingCloudCount === 'number') {
+          setPendingCloudOpsCount(data.pendingCloudCount);
+        }
+        if (typeof data.cloudHydrated === 'boolean') {
+          setServerCloudHydrated(data.cloudHydrated);
+          if (data.cloudHydrated === false && (cloudUserRef.current || auth.currentUser)) {
+            void hydrateServerFromCloudIfNeeded();
+          }
+        }
+        if (
+          typeof data.pendingCloudCount === 'number' &&
+          data.pendingCloudCount > 0 &&
+          (cloudUserRef.current || auth.currentUser)
+        ) {
+          void flushPendingCloudOpsToFirestore();
+        }
+        if (
+          typeof data.workspaceRevision === 'number' &&
+          data.workspaceRevision > serverRevisionRef.current &&
+          serverSessionTokenRef.current
+        ) {
+          void pullLatestFromServerInternal(false);
         }
       }
     } catch {
@@ -1739,15 +1766,21 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return mergedSnapshot;
   };
 
-  const establishCloudServerSession = async (fbUser: User): Promise<boolean> => {
+  const establishCloudServerSession = async (
+    fbUser: User,
+    forceRefreshToken = false
+  ): Promise<boolean> => {
     try {
-      const idToken = await fbUser.getIdToken();
+      const idToken = await fbUser.getIdToken(forceRefreshToken);
       const resp = await fetch('/api/auth/cloud-session', {
         method: 'POST',
         credentials: 'include',
         headers: buildSyncFetchHeaders(true),
         body: JSON.stringify({ idToken }),
       });
+      if (resp.status === 401 && !forceRefreshToken) {
+        return establishCloudServerSession(fbUser, true);
+      }
       if (!resp.ok) return false;
       const data = (await resp.json()) as {
         ok?: boolean;
@@ -1989,8 +2022,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       const prevRev = serverRevisionRef.current;
-      if (typeof data.revision === 'number' && data.revision > 0) {
-        serverRevisionRef.current = data.revision;
+      if (typeof data.revision === 'number') {
+        if (data.revision > 0) {
+          serverRevisionRef.current = data.revision;
+        } else if (prevRev > 0) {
+          serverRevisionRef.current = 0;
+        }
       }
       if (typeof data.pendingCloudCount === 'number') {
         setPendingCloudOpsCount(data.pendingCloudCount);
@@ -2160,26 +2197,53 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const hydrateServerFromCloudIfNeeded = async (): Promise<void> => {
-    const user = cloudUserRef.current;
-    if (!user || hydratingServerFromCloudRef.current) return;
+    const fbUser = auth.currentUser;
+    const cloudInfo =
+      cloudUserRef.current ||
+      (fbUser && fbUser.email
+        ? {
+            uid: fbUser.uid,
+            email: fbUser.email,
+            displayName: fbUser.displayName || fbUser.email,
+            photoURL: fbUser.photoURL || undefined,
+          }
+        : null);
+    if (!cloudInfo || hydratingServerFromCloudRef.current) return;
     hydratingServerFromCloudRef.current = true;
     try {
-      if (!serverSessionTokenRef.current && auth.currentUser) {
-        await establishCloudServerSession(auth.currentUser);
+      if (!serverSessionTokenRef.current && fbUser) {
+        await establishCloudServerSession(fbUser, false);
       }
       if (!serverSessionTokenRef.current) return;
       await flushPendingCloudOpsToFirestore();
-      const pulled = await pullLatestWorkspaceFromFirestore(
-        user.email,
-        user.uid,
-        knownCloudIdsRef.current
-      );
-      const freshSnapshot = applyPulledCloudDataToState(pulled);
-      if (pulled.workspaceMetaExists || pulled.totalLoaded > 0) {
-        await pushSnapshotToServer('cloud', freshSnapshot);
+      let snapshotToPush = latestSnapshotRef.current;
+      let canPush = workspaceReadyRef.current;
+      try {
+        const pulled = await pullLatestWorkspaceFromFirestore(
+          cloudInfo.email,
+          cloudInfo.uid,
+          knownCloudIdsRef.current
+        );
+        snapshotToPush = applyPulledCloudDataToState(pulled);
+        canPush = pulled.workspaceMetaExists || pulled.totalLoaded > 0 || canPush;
+      } catch {
+        // Fallback to already-synced in-memory Cloud snapshot if Firestore pull hits a transient blip
+      }
+      if (canPush) {
+        let pushed = await pushSnapshotToServer('cloud', snapshotToPush);
+        if (!pushed && fbUser) {
+          serverSessionTokenRef.current = null;
+          const reAuthed = await establishCloudServerSession(fbUser, true);
+          if (reAuthed) {
+            pushed = await pushSnapshotToServer('cloud', snapshotToPush);
+          }
+        }
+        if (pushed) {
+          setSseReconnectNonce((n) => n + 1);
+        }
       }
     } catch {
-      // Non-fatal; retried on next poll or SSE reconnect
+      // Non-fatal; retried on next heartbeat, poll, or SSE reconnect
     } finally {
       hydratingServerFromCloudRef.current = false;
     }
@@ -2388,8 +2452,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Mirror fresh Cloud data to Express server so all internal users on other devices receive it immediately
-        if (!cancelled && hasServerSession && (pulled.workspaceMetaExists || pulled.totalLoaded > 0)) {
-          await pushSnapshotToServer('cloud', freshSnapshot);
+        if (!cancelled && (pulled.workspaceMetaExists || pulled.totalLoaded > 0)) {
+          let sessionReady = hasServerSession || Boolean(serverSessionTokenRef.current);
+          if (!sessionReady) {
+            sessionReady = await establishCloudServerSession(fbUser, true);
+          }
+          if (!cancelled && sessionReady) {
+            await pushSnapshotToServer('cloud', freshSnapshot);
+          }
         }
       } catch (err) {
         if (cancelled) return;
@@ -2999,6 +3069,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
 
+    let reconnectTimer: number | null = null;
     const es = new EventSource('/api/workspace/stream', { withCredentials: true });
 
     es.onopen = () => {
@@ -3018,7 +3089,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         if (typeof msg.cloudHydrated === 'boolean') {
           setServerCloudHydrated(msg.cloudHydrated);
-          if (msg.cloudHydrated === false && cloudUserRef.current) {
+          if (msg.cloudHydrated === false && (cloudUserRef.current || auth.currentUser)) {
             void hydrateServerFromCloudIfNeeded();
           }
         }
@@ -3028,7 +3099,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (
           typeof msg.pendingCloudCount === 'number' &&
           msg.pendingCloudCount > 0 &&
-          cloudUserRef.current
+          (cloudUserRef.current || auth.currentUser)
         ) {
           void flushPendingCloudOpsToFirestore();
         }
@@ -3039,31 +3110,62 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     es.onerror = () => {
       setIsRealtimeStreamConnected(false);
+      if (reconnectTimer === null) {
+        reconnectTimer = window.setTimeout(async () => {
+          reconnectTimer = null;
+          if (auth.currentUser) {
+            const ok = await establishCloudServerSession(auth.currentUser, false);
+            if (ok) {
+              setSseReconnectNonce((n) => n + 1);
+            }
+          } else {
+            const restored = await restoreServerSessionFromCookie();
+            if (restored) {
+              setSseReconnectNonce((n) => n + 1);
+            }
+          }
+        }, 4500);
+      }
     };
 
     return () => {
+      if (reconnectTimer !== null) {
+        window.clearTimeout(reconnectTimer);
+      }
       es.close();
       setIsRealtimeStreamConnected(false);
     };
-  }, [isAuthenticated, hasServerSyncSession]);
+  }, [isAuthenticated, hasServerSyncSession, sseReconnectNonce]);
 
   // Lightweight fallback polling (20s interval + focus/visibility) alongside real-time SSE
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const pollNow = () => {
-      if (serverSessionTokenRef.current) {
-        void pullLatestFromServerInternal(false);
-        if (cloudUserRef.current) {
-          void flushPendingCloudOpsToFirestore();
+    const pollNow = async () => {
+      if (!serverSessionTokenRef.current) {
+        if (auth.currentUser) {
+          const established = await establishCloudServerSession(auth.currentUser, false);
+          if (established) {
+            await pullLatestFromServerInternal(false);
+            await flushPendingCloudOpsToFirestore();
+          }
+          return;
         }
+        const restored = await restoreServerSessionFromCookie();
+        if (!restored) return;
+      }
+      await pullLatestFromServerInternal(false);
+      if (cloudUserRef.current || auth.currentUser) {
+        await flushPendingCloudOpsToFirestore();
       }
     };
 
-    const intervalId = window.setInterval(pollNow, 20_000);
+    const intervalId = window.setInterval(() => {
+      void pollNow();
+    }, 20_000);
     const onFocusOrVisible = () => {
       if (document.visibilityState === 'visible') {
-        pollNow();
+        void pollNow();
       }
     };
     window.addEventListener('focus', onFocusOrVisible);

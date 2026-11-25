@@ -645,6 +645,16 @@ async function startServer() {
   const safeClip = (val: unknown, maxLen: number): string =>
     typeof val === 'string' ? val.trim().slice(0, maxLen) : '';
 
+  let getWorkspaceSyncMeta = (): {
+    cloudHydrated: boolean;
+    workspaceRevision: number;
+    pendingCloudCount: number;
+  } => ({
+    cloudHydrated: false,
+    workspaceRevision: 0,
+    pendingCloudCount: 0,
+  });
+
   app.post('/api/presence/heartbeat', (req, res) => {
     const body = (req.body || {}) as Record<string, unknown>;
     const sessionId = safeClip(body.sessionId, 80);
@@ -679,7 +689,7 @@ async function startServer() {
     });
 
     const onlineUsers = pruneAndAggregateOnlineUsers();
-    res.json({ ok: true, serverNow: Date.now(), onlineUsers });
+    res.json({ ok: true, serverNow: Date.now(), onlineUsers, ...getWorkspaceSyncMeta() });
   });
 
   app.post(
@@ -709,7 +719,7 @@ async function startServer() {
 
   app.get('/api/presence/online', (_req, res) => {
     const onlineUsers = pruneAndAggregateOnlineUsers();
-    res.json({ ok: true, serverNow: Date.now(), onlineUsers });
+    res.json({ ok: true, serverNow: Date.now(), onlineUsers, ...getWorkspaceSyncMeta() });
   });
 
   // --- Shared Authenticated Workspace Sync Hub (Real-Time SSE + Cloud Bridge for Internal & Cloud Users) ---
@@ -821,6 +831,12 @@ async function startServer() {
     cloudHydrated: false,
     snapshot: null,
   };
+
+  getWorkspaceSyncMeta = () => ({
+    cloudHydrated: workspaceStore.cloudHydrated,
+    workspaceRevision: workspaceStore.revision,
+    pendingCloudCount: pendingCloudOps.size,
+  });
 
   function hashPasswordScrypt(password: string, existingSalt?: string): { salt: string; hash: string } {
     const salt = existingSalt || crypto.randomBytes(16).toString('hex');
@@ -1270,9 +1286,9 @@ async function startServer() {
   // Google Firebase ID Token verification using Google's public x509 certificates
   let googleCertCache: { certs: Record<string, string>; expiresAt: number } | null = null;
 
-  async function getFirebasePublicCerts(): Promise<Record<string, string>> {
+  async function getFirebasePublicCerts(forceRefresh = false): Promise<Record<string, string>> {
     const now = Date.now();
-    if (googleCertCache && googleCertCache.expiresAt > now) {
+    if (!forceRefresh && googleCertCache && googleCertCache.expiresAt > now) {
       return googleCertCache.certs;
     }
     const resp = await fetch(
@@ -1316,8 +1332,12 @@ async function startServer() {
       throw new Error('Thuật toán chữ ký token không hợp lệ.');
     }
 
-    const certs = await getFirebasePublicCerts();
-    const certPem = certs[header.kid];
+    let certs = await getFirebasePublicCerts(false);
+    let certPem = certs[header.kid];
+    if (!certPem) {
+      certs = await getFirebasePublicCerts(true);
+      certPem = certs[header.kid];
+    }
     if (!certPem) {
       throw new Error('Không tìm thấy khóa công khai Google phù hợp.');
     }
