@@ -820,7 +820,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     colName: string,
     docId: string,
     action: 'upsert' | 'delete',
-    sanitizedData?: Record<string, unknown>
+    sanitizedData?: Record<string, unknown>,
+    alreadySyncedToCloud = false
   ) => {
     if (!serverSessionTokenRef.current && !hasServerSyncSession) return;
     void fetch('/api/workspace/pending-cloud-op', {
@@ -832,13 +833,25 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         docId,
         action,
         sanitizedData,
+        alreadySyncedToCloud,
       }),
     })
       .then(async (resp) => {
         if (!resp.ok) return;
-        const data = (await resp.json()) as { pendingCloudCount?: number };
+        const data = (await resp.json()) as {
+          revision?: number;
+          snapshotUpdated?: boolean;
+          pendingCloudCount?: number;
+        };
         if (typeof data.pendingCloudCount === 'number') {
           setPendingCloudOpsCount(data.pendingCloudCount);
+        }
+        if (typeof data.revision === 'number' && data.revision > serverRevisionRef.current) {
+          serverRevisionRef.current = data.revision;
+        }
+        if (data.snapshotUpdated) {
+          setServerSyncStatus('synced');
+          setLastServerSyncedAt(new Date().toLocaleTimeString('vi-VN'));
         }
       })
       .catch(() => {
@@ -953,10 +966,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const user = cloudUserRef.current;
     if (!user) {
-      // Internal user without Google Cloud -> queue real-time Cloud bridge op for instant Firestore sync
-      queuePendingCloudOp(colName, rawId, 'upsert', sanitizedData);
+      // Internal user without Google Cloud -> merge directly into server snapshot + queue Cloud bridge op
+      queuePendingCloudOp(colName, rawId, 'upsert', sanitizedData, false);
       return;
     }
+    // Cloud user -> write directly to Firestore AND broadcast doc op to shared server immediately
+    queuePendingCloudOp(colName, rawId, 'upsert', sanitizedData, true);
     const allowed = buildAllowedEmails(employeesOverride || employeesRef.current, user.email);
     void upsertCloudDoc(
       colName,
@@ -1293,9 +1308,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const removeDocCloud = (colName: string, rawId: string) => {
     if (!cloudUserRef.current) {
-      queuePendingCloudOp(colName, rawId, 'delete');
+      queuePendingCloudOp(colName, rawId, 'delete', undefined, false);
       return;
     }
+    queuePendingCloudOp(colName, rawId, 'delete', undefined, true);
     void deleteCloudDoc(colName, rawId, knownCloudIdsRef.current)
       .then(() => {
         setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
@@ -3047,6 +3063,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     morningCheckTemplates,
     monthlyBoardReports,
     purchaseRequests,
+    emailLogs,
+    auditLogs,
     emailConfig,
     tariffConfig,
   ]);
@@ -3121,7 +3139,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       doiTuong,
       chiTietNoiDung: details,
     };
-    setAuditLogs((prev) => [newLog, ...prev]);
+    setAuditLogs((prev) => {
+      const next = [newLog, ...prev];
+      latestSnapshotRef.current = { ...latestSnapshotRef.current, auditLogs: next };
+      return next;
+    });
     syncDoc('audit_logs', newLog.id, sanitizeAuditLog(newLog));
   };
 
@@ -4684,7 +4706,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Immediately pull the latest workspace snapshot from server before user interacts
           await pullLatestFromServerInternal(true);
           if ((data.workspaceRevision || 0) === 0) {
-            void pushSnapshotToServer('local');
+            await pushSnapshotToServer('local');
           }
           addAuditLog(
             'Đăng nhập',

@@ -989,7 +989,156 @@ async function startServer() {
       // No queued Cloud ops
     }
 
+    if (workspaceStore.snapshot && pendingCloudOps.size > 0) {
+      let mergedAny = false;
+      for (const op of pendingCloudOps.values()) {
+        if (applyDocOpToWorkspaceSnapshot(workspaceStore.snapshot, op)) {
+          mergedAny = true;
+        }
+      }
+      if (mergedAny) {
+        workspaceStore.revision = Math.max(workspaceStore.revision, 1);
+      }
+    }
+
     await bootstrapSeedEmployeesFromInitialData();
+  }
+
+  const CLOUD_COLLECTION_TO_SNAPSHOT_ARRAY: Record<
+    string,
+    { key: string; idField: string; prepend?: boolean; maxItems?: number }
+  > = {
+    equipment: { key: 'equipment', idField: 'maThietBi' },
+    maintenance_plans: { key: 'maintenancePlans', idField: 'id' },
+    maintenance_history: { key: 'maintenanceHistory', idField: 'id', prepend: true },
+    tickets: { key: 'tickets', idField: 'maTicket', prepend: true },
+    spare_parts: { key: 'spareParts', idField: 'maVatTu' },
+    stock_transactions: { key: 'stockTransactions', idField: 'transId', prepend: true },
+    power_10days: { key: 'power10Days', idField: 'id', prepend: true },
+    water_monthly: { key: 'waterMonthly', idField: 'month', prepend: true },
+    meter_readings: { key: 'meterReadings', idField: 'id', prepend: true },
+    cost_records: { key: 'costRecords', idField: 'idChiPhi', prepend: true },
+    documents: { key: 'documents', idField: 'id', prepend: true },
+    projects: { key: 'projects', idField: 'id', prepend: true },
+    safety_inspections: { key: 'safetyInspections', idField: 'id' },
+    tools: { key: 'tools', idField: 'id' },
+    tool_logs: { key: 'toolLogs', idField: 'id', prepend: true },
+    daily_area_checks: { key: 'dailyAreaChecks', idField: 'id', prepend: true },
+    purchase_requests: { key: 'purchaseRequests', idField: 'id', prepend: true },
+    email_logs: { key: 'emailLogs', idField: 'id', prepend: true, maxItems: 2000 },
+    audit_logs: { key: 'auditLogs', idField: 'id', prepend: true, maxItems: 2000 },
+  };
+
+  function applyDocOpToWorkspaceSnapshot(
+    snapshot: Record<string, unknown>,
+    op: Pick<PendingCloudOp, 'colName' | 'docId' | 'action' | 'sanitizedData'>
+  ): boolean {
+    const arrayMeta = CLOUD_COLLECTION_TO_SNAPSHOT_ARRAY[op.colName];
+    if (arrayMeta) {
+      const currentArr = Array.isArray(snapshot[arrayMeta.key])
+        ? [...(snapshot[arrayMeta.key] as Record<string, unknown>[])]
+        : [];
+      const targetId = op.docId.trim();
+      const idx = currentArr.findIndex((item) => {
+        if (!item || typeof item !== 'object') return false;
+        return String(item[arrayMeta.idField] || '').trim() === targetId;
+      });
+
+      if (op.action === 'delete') {
+        if (idx === -1) return false;
+        currentArr.splice(idx, 1);
+        snapshot[arrayMeta.key] = currentArr;
+        return true;
+      }
+
+      if (!op.sanitizedData) return false;
+      const { password: _removed, ...safeDoc } = op.sanitizedData;
+      if (idx >= 0) {
+        currentArr[idx] = { ...currentArr[idx], ...safeDoc };
+      } else if (arrayMeta.prepend) {
+        currentArr.unshift(safeDoc);
+      } else {
+        currentArr.push(safeDoc);
+      }
+      if (arrayMeta.maxItems && currentArr.length > arrayMeta.maxItems) {
+        currentArr.length = arrayMeta.maxItems;
+      }
+      snapshot[arrayMeta.key] = currentArr;
+      return true;
+    }
+
+    if (op.colName === 'employees_public' || op.colName === 'employees_private') {
+      const currentArr = Array.isArray(snapshot.employees)
+        ? [...(snapshot.employees as Record<string, unknown>[])]
+        : [];
+      const targetCode = op.docId.trim().toUpperCase();
+      const idx = currentArr.findIndex(
+        (item) => item && typeof item === 'object' && String(item.maNhanVien || '').trim().toUpperCase() === targetCode
+      );
+      if (op.action === 'delete') {
+        if (idx === -1) return false;
+        currentArr.splice(idx, 1);
+        snapshot.employees = currentArr;
+        return true;
+      }
+      if (!op.sanitizedData) return false;
+      const { password: _removed, ...safeEmp } = op.sanitizedData;
+      if (idx >= 0) {
+        currentArr[idx] = { ...currentArr[idx], ...safeEmp };
+      } else {
+        currentArr.push(safeEmp);
+      }
+      snapshot.employees = currentArr;
+      return true;
+    }
+
+    if (op.colName === 'settings' && op.action === 'upsert' && op.sanitizedData) {
+      const payload = op.sanitizedData.payload;
+      if (payload && typeof payload === 'object') {
+        if (op.docId === 'email_config') {
+          snapshot.emailConfig = payload;
+          return true;
+        }
+        if (op.docId === 'tariff_config') {
+          snapshot.tariffConfig = payload;
+          return true;
+        }
+        if (op.docId === 'morning_check_templates') {
+          snapshot.morningCheckTemplates = payload;
+          return true;
+        }
+        if (op.docId === 'monthly_board_reports') {
+          snapshot.monthlyBoardReports = payload;
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  function mergeAppendOnlyLogArrays(
+    existingVal: unknown,
+    incomingVal: unknown,
+    timeField: string,
+    maxItems = 2000
+  ): Record<string, unknown>[] {
+    const byId = new Map<string, Record<string, unknown>>();
+    const addItems = (arr: unknown) => {
+      if (!Array.isArray(arr)) return;
+      for (const item of arr) {
+        if (!item || typeof item !== 'object') continue;
+        const rec = item as Record<string, unknown>;
+        const id = String(rec.id || '').trim();
+        if (!id) continue;
+        byId.set(id, rec);
+      }
+    };
+    addItems(existingVal);
+    addItems(incomingVal);
+    return Array.from(byId.values())
+      .sort((a, b) => String(b[timeField] || '').localeCompare(String(a[timeField] || '')))
+      .slice(0, maxItems);
   }
 
   await loadPersistedWorkspaceState();
@@ -1522,10 +1671,12 @@ async function startServer() {
         docId?: unknown;
         action?: unknown;
         sanitizedData?: unknown;
+        alreadySyncedToCloud?: unknown;
       };
       const colName = typeof body.colName === 'string' ? body.colName.trim() : '';
       const docId = typeof body.docId === 'string' ? body.docId.trim().slice(0, 128) : '';
       const action = body.action === 'delete' ? 'delete' : 'upsert';
+      const alreadySyncedToCloud = body.alreadySyncedToCloud === true;
 
       if (!ALLOWED_CLOUD_COLLECTIONS.has(colName) || !docId) {
         res.status(400).json({ ok: false, message: 'Yêu cầu đồng bộ Cloud không hợp lệ.' });
@@ -1539,7 +1690,12 @@ async function startServer() {
           colName === 'settings' ||
           action === 'delete')
       ) {
-        res.json({ ok: true, skipped: true, pendingCloudCount: pendingCloudOps.size });
+        res.json({
+          ok: true,
+          skipped: true,
+          revision: workspaceStore.revision,
+          pendingCloudCount: pendingCloudOps.size,
+        });
         return;
       }
 
@@ -1553,32 +1709,56 @@ async function startServer() {
         cleanData = rest;
       }
 
-      if (pendingCloudOps.size >= MAX_PENDING_CLOUD_OPS) {
-        const oldestKey = pendingCloudOps.keys().next().value;
-        if (oldestKey) pendingCloudOps.delete(oldestKey);
-      }
-
+      const nowIso = new Date().toISOString();
+      const actorLabel = `${session.tenNhanVien} (${session.maNhanVien})`;
       const op: PendingCloudOp = {
         opId: `${Date.now().toString(36)}_${crypto.randomBytes(6).toString('hex')}`,
         colName,
         docId,
         action,
         sanitizedData: cleanData,
-        updatedAt: new Date().toISOString(),
-        updatedBy: `${session.tenNhanVien} (${session.maNhanVien})`,
+        updatedAt: nowIso,
+        updatedBy: actorLabel,
       };
-      pendingCloudOps.set(`${colName}/${docId}`, op);
-      await persistPendingCloudOps();
+
+      // Queue for Cloud Firestore bridge if this mutation came from a non-Cloud (internal) user
+      if (!alreadySyncedToCloud) {
+        if (pendingCloudOps.size >= MAX_PENDING_CLOUD_OPS) {
+          const oldestKey = pendingCloudOps.keys().next().value;
+          if (oldestKey) pendingCloudOps.delete(oldestKey);
+        }
+        pendingCloudOps.set(`${colName}/${docId}`, op);
+        await persistPendingCloudOps();
+      }
+
+      // Immediately merge this document mutation into workspaceStore.snapshot so ALL online devices
+      // see the update (e.g. login audit logs, new tickets, equipment edits) in real time and never lose it on refresh!
+      let snapshotUpdated = false;
+      if (workspaceStore.snapshot) {
+        snapshotUpdated = applyDocOpToWorkspaceSnapshot(workspaceStore.snapshot, op);
+        if (snapshotUpdated) {
+          workspaceStore.revision += 1;
+          workspaceStore.updatedAt = nowIso;
+          workspaceStore.updatedBy = actorLabel;
+          await persistWorkspace();
+        }
+      }
 
       broadcastWorkspaceEvent({
-        type: 'pending_cloud_op',
+        type: snapshotUpdated ? 'workspace_updated' : 'pending_cloud_op',
         revision: workspaceStore.revision,
-        updatedAt: op.updatedAt,
-        updatedBy: op.updatedBy,
+        updatedAt: nowIso,
+        updatedBy: actorLabel,
         pendingCloudCount: pendingCloudOps.size,
       });
 
-      res.json({ ok: true, opId: op.opId, pendingCloudCount: pendingCloudOps.size });
+      res.json({
+        ok: true,
+        opId: op.opId,
+        revision: workspaceStore.revision,
+        snapshotUpdated,
+        pendingCloudCount: pendingCloudOps.size,
+      });
     }
   );
 
@@ -1723,6 +1903,29 @@ async function startServer() {
             });
             credentialsChanged = true;
           }
+        }
+      }
+
+      // Preserve union of append-only auditLogs & emailLogs across concurrent users so no login/activity log is ever lost
+      if (workspaceStore.snapshot) {
+        cleanSnapshot.auditLogs = mergeAppendOnlyLogArrays(
+          workspaceStore.snapshot.auditLogs,
+          cleanSnapshot.auditLogs,
+          'thoiGian',
+          2000
+        );
+        cleanSnapshot.emailLogs = mergeAppendOnlyLogArrays(
+          workspaceStore.snapshot.emailLogs,
+          cleanSnapshot.emailLogs,
+          'timestamp',
+          2000
+        );
+      }
+
+      // Replay any still-pending Cloud ops onto cleanSnapshot so in-flight internal user edits are never overwritten
+      if (pendingCloudOps.size > 0) {
+        for (const op of pendingCloudOps.values()) {
+          applyDocOpToWorkspaceSnapshot(cleanSnapshot, op);
         }
       }
 
