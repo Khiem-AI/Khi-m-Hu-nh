@@ -187,14 +187,14 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-slate-200/90 dark:border-[#243045] bg-white/95 dark:bg-[#131b29]/95 backdrop-blur-md transition-colors shadow-[0_1px_2px_rgba(15,23,42,0.03)]">
+    <header className="sticky top-0 z-40 w-full border-t-[3px] border-t-sky-600 dark:border-t-sky-500 border-b border-[#cfe0f5] dark:border-[#243045] bg-gradient-to-r from-[#eaf2fd] via-[#f5f9ff] to-[#ecf3fc] dark:from-[#131b29] dark:via-[#151f30] dark:to-[#131b29] backdrop-blur-md transition-colors shadow-[0_2px_6px_rgba(15,45,82,0.05)]">
       <div className="flex h-16 items-center justify-between px-3 sm:px-6 gap-4">
         {/* Left: Mobile hamburger, Desktop sidebar toggle & Brand */}
         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
           <button
             onClick={onToggleMobileNav}
             aria-label="Mở menu điều hướng"
-            className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition shrink-0"
+            className="lg:hidden p-2 rounded-xl text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/80 dark:hover:bg-slate-800 transition shrink-0"
           >
             {isMobileNavOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
@@ -215,8 +215,8 @@ export const Header: React.FC<HeaderProps> = ({
               }
               className={`hidden lg:inline-flex items-center justify-center p-2 rounded-xl border transition shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 ${
                 isDesktopSidebarPinned
-                  ? 'text-slate-600 dark:text-slate-300 border-slate-200 dark:border-[#2a3850] hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                  : 'text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 border-sky-200 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/60'
+                  ? 'bg-white/75 dark:bg-transparent text-slate-600 dark:text-slate-300 border-[#c9dcf2] dark:border-[#2a3850] hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-800'
+                  : 'text-sky-700 dark:text-sky-300 bg-sky-100/80 dark:bg-sky-950/60 border-sky-300 dark:border-sky-800 hover:bg-sky-100 dark:hover:bg-sky-900/60'
               }`}
             >
               {isDesktopSidebarPinned ? (
@@ -231,12 +231,12 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={() => onNavigateTab('dashboard')}
             className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group min-w-0"
           >
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm shadow-sky-600/20 group-hover:scale-105 transition shrink-0">
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-sm shadow-sky-600/25 group-hover:scale-105 transition shrink-0">
               <Wrench className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-bold tracking-tight text-slate-800 dark:text-[#e7edf6] text-sm sm:text-base lg:text-[17px] truncate">
+                <span className="font-bold tracking-tight text-[#0f2d52] dark:text-[#e7edf6] text-sm sm:text-base lg:text-[17px] truncate">
                   {UI_TEXTS.brand.appName}
                 </span>
               </div>

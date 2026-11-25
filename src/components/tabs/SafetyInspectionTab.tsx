@@ -895,7 +895,7 @@ export const SafetyInspectionTab: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="font-semibold text-slate-300 block mb-1">Số Tem / Giấy Chứng Nhận</label>
+                  <label className="font-semibold text-slate-300 block mb-1">Số serial</label>
                   <input
                     type="text"
                     value={soTemGiayChungNhan}

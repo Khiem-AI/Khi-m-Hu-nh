@@ -546,17 +546,17 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
                     />
 
                     {/* Gradient Overlay */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-black/40 pointer-events-none" />
+                    <div className="photo-overlay absolute inset-0 bg-gradient-to-t from-slate-950/65 via-transparent to-black/25 pointer-events-none" />
 
                     {/* Top Badges */}
                     <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                       <span
-                        className={`text-[10px] font-extrabold px-2 py-0.5 rounded shadow ${
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded shadow ${
                           item.mucDoRuiRo === 'High'
                             ? 'bg-rose-500 text-white'
                             : item.mucDoRuiRo === 'Medium'
-                            ? 'bg-amber-500 text-slate-950'
-                            : 'bg-emerald-500 text-slate-950'
+                            ? 'bg-amber-500 text-white'
+                            : 'bg-emerald-500 text-white'
                         }`}
                       >
                         {item.mucDoRuiRo}
@@ -566,7 +566,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
                           e.stopPropagation();
                           onOpenQR(item);
                         }}
-                        className="p-1.5 rounded-lg bg-slate-950/80 hover:bg-slate-900 text-cyan-300 backdrop-blur-sm border border-slate-700/80 transition"
+                        className="photo-badge p-1.5 rounded-lg bg-slate-950/80 hover:bg-slate-900 text-cyan-300 backdrop-blur-sm border border-slate-700/80 transition"
                         title="Mã QR máy"
                       >
                         <QrCode className="w-3.5 h-3.5" />
@@ -575,7 +575,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
 
                     {/* Bottom machine badge */}
                     <div className="absolute bottom-2.5 left-3 right-3 flex items-end justify-between z-10">
-                      <span className="font-mono text-xs font-bold text-cyan-300 bg-slate-950/80 border border-cyan-500/40 px-2 py-0.5 rounded backdrop-blur-sm">
+                      <span className="photo-badge-cyan font-mono text-xs font-bold text-cyan-300 bg-slate-950/80 border border-cyan-500/40 px-2 py-0.5 rounded backdrop-blur-sm">
                         {item.maThietBi}
                       </span>
                       <button
@@ -583,7 +583,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
                           e.stopPropagation();
                           setSelectedEquipmentForDetail(item);
                         }}
-                        className="text-[11px] font-semibold text-slate-200 bg-slate-950/70 hover:bg-slate-900 px-2 py-0.5 rounded border border-slate-700/80 flex items-center gap-1 backdrop-blur-sm"
+                        className="photo-badge text-[11px] font-semibold text-slate-200 bg-slate-950/75 hover:bg-slate-900 px-2 py-0.5 rounded border border-slate-700/80 flex items-center gap-1 backdrop-blur-sm"
                       >
                         <Eye className="w-3 h-3 text-cyan-400" />
                         Chi tiết

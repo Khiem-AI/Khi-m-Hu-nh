@@ -345,13 +345,81 @@ html.light .bg-purple-500\/10 {
   background-color: #f5f3ff !important;
 }
 
-/* Neutralize ALL dark surface gradients in light mode (except intentionally dark hero banners and solid action buttons) */
-html.light [class*="bg-gradient-to-"][class*="from-slate-9"]:not(.hero-dark-banner),
-html.light [class*="bg-gradient-to-"][class*="from-slate-8"]:not(.hero-dark-banner),
-html.light [class*="bg-gradient-to-"][class*="-950"]:not(.hero-dark-banner) {
-  background-image: none !important;
-  background-color: #ffffff !important;
-  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+/* Coordinated pastel gradients for section banners in Light Mode (NEVER overwrite photo overlays or dark hero banners) */
+html.light [class*="bg-gradient-to-"][class*="from-slate-9"]:not(.hero-dark-banner):not(.photo-overlay):not(.pointer-events-none):not(.absolute),
+html.light [class*="bg-gradient-to-"][class*="from-slate-8"]:not(.hero-dark-banner):not(.photo-overlay):not(.pointer-events-none):not(.absolute),
+html.light [class*="bg-gradient-to-"][class*="-950"]:not(.hero-dark-banner):not(.photo-overlay):not(.pointer-events-none):not(.absolute) {
+  background-image: linear-gradient(135deg, #eef5ff 0%, #f6f9ff 58%, #edf3fc 100%) !important;
+  background-color: #eef5ff !important;
+  border-color: #cfe0f5 !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05);
+}
+
+html.light [class*="bg-gradient-to-"][class*="indigo-950"]:not(.hero-dark-banner):not(.photo-overlay):not(.pointer-events-none):not(.absolute) {
+  background-image: linear-gradient(135deg, #eef2ff 0%, #f5f7ff 58%, #eaefff 100%) !important;
+  border-color: #c7d2fe !important;
+}
+
+html.light [class*="bg-gradient-to-"][class*="cyan-950"]:not(.hero-dark-banner):not(.photo-overlay):not(.pointer-events-none):not(.absolute),
+html.light [class*="bg-gradient-to-"][class*="blue-950"]:not(.hero-dark-banner):not(.photo-overlay):not(.pointer-events-none):not(.absolute) {
+  background-image: linear-gradient(135deg, #eaf5ff 0%, #f2f8ff 58%, #e6f2fe 100%) !important;
+  border-color: #bfdbfe !important;
+}
+
+html.light [class*="bg-gradient-to-"][class*="amber-950"]:not(.hero-dark-banner):not(.photo-overlay):not(.pointer-events-none):not(.absolute) {
+  background-image: linear-gradient(135deg, #fffbeb 0%, #fef6d8 58%, #fffdf4 100%) !important;
+  border-color: #fde68a !important;
+}
+
+/* Preserve translucent dark scrim & frosted pill readability over equipment photos in Light Mode */
+html.light .photo-overlay {
+  background-color: transparent !important;
+  background-image: linear-gradient(to top, rgba(15, 23, 42, 0.62) 0%, rgba(15, 23, 42, 0.08) 45%, rgba(15, 23, 42, 0.22) 100%) !important;
+  box-shadow: none !important;
+}
+
+html.light .photo-badge {
+  background-color: rgba(15, 23, 42, 0.78) !important;
+  color: #f8fafc !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+html.light .photo-badge * {
+  color: #f8fafc !important;
+}
+
+html.light .photo-badge-cyan {
+  background-color: rgba(15, 23, 42, 0.82) !important;
+  color: #7dd3fc !important;
+  border-color: rgba(56, 189, 248, 0.45) !important;
+}
+
+/* Coordinated Page Title Banners across all tabs (replaces plain monotone white header rows) */
+html.light main > div > div:not([class*="rounded-"]):not(.hero-dark-banner):has(> div > h2.text-xl) {
+  background: linear-gradient(135deg, #eaf3ff 0%, #f4f8ff 55%, #eef2ff 100%);
+  border: 1px solid #cfe0f5;
+  border-left: 4px solid #0284c7;
+  border-radius: 1rem;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 2px 8px -2px rgba(15, 45, 82, 0.06);
+}
+
+html.dark main > div > div:not([class*="rounded-"]):not(.hero-dark-banner):has(> div > h2.text-xl) {
+  background: linear-gradient(135deg, rgba(22, 34, 53, 0.92) 0%, rgba(23, 32, 48, 0.88) 60%, rgba(26, 35, 56, 0.92) 100%);
+  border: 1px solid #263650;
+  border-left: 4px solid #38bdf8;
+  border-radius: 1rem;
+  padding: 1rem 1.25rem;
+}
+
+/* Rich deep sapphire-navy headings in Light Mode for clear visual hierarchy */
+html.light main h1:not(.hero-dark-banner *),
+html.light main h2:not(.hero-dark-banner *) {
+  color: #0f2d52 !important;
+}
+
+html.light main h3:not(.hero-dark-banner *) {
+  color: #16365c !important;
 }
 
 /* Preserve intentionally dark hero banners and dark video viewfinders with crisp light text */
@@ -556,35 +624,43 @@ html.light textarea::placeholder {
 /* Maintain crisp white text on ALL solid & near-solid action buttons and badges in Light Mode */
 html.light .bg-indigo-700,
 html.light .bg-indigo-600,
+html.light .bg-indigo-600\/95,
 html.light .bg-indigo-600\/90,
 html.light .bg-indigo-500,
 html.light .bg-cyan-700,
 html.light .bg-cyan-600,
+html.light .bg-cyan-600\/95,
 html.light .bg-cyan-600\/90,
 html.light .bg-cyan-500,
 html.light .bg-emerald-700,
 html.light .bg-emerald-600,
+html.light .bg-emerald-600\/95,
 html.light .bg-emerald-600\/90,
 html.light .bg-emerald-600\/80,
 html.light .bg-emerald-500,
 html.light .bg-teal-700,
 html.light .bg-teal-600,
+html.light .bg-teal-600\/95,
 html.light .bg-teal-500,
 html.light .bg-rose-700,
 html.light .bg-rose-600,
+html.light .bg-rose-600\/95,
 html.light .bg-rose-600\/90,
 html.light .bg-rose-500,
 html.light .bg-red-700,
 html.light .bg-red-600,
 html.light .bg-blue-700,
 html.light .bg-blue-600,
+html.light .bg-blue-600\/95,
 html.light .bg-blue-600\/90,
 html.light .bg-blue-500,
 html.light .bg-sky-700,
 html.light .bg-sky-600,
+html.light .bg-sky-600\/95,
 html.light .bg-sky-500,
 html.light .bg-amber-700,
 html.light .bg-amber-600,
+html.light .bg-amber-600\/95,
 html.light .bg-amber-600\/90,
 html.light .bg-amber-500,
 html.light .bg-orange-700,
@@ -620,35 +696,43 @@ html.light [class*="from-teal-600"] {
 
 html.light .bg-indigo-700 *,
 html.light .bg-indigo-600 *,
+html.light .bg-indigo-600\/95 *,
 html.light .bg-indigo-600\/90 *,
 html.light .bg-indigo-500 *,
 html.light .bg-cyan-700 *,
 html.light .bg-cyan-600 *,
+html.light .bg-cyan-600\/95 *,
 html.light .bg-cyan-600\/90 *,
 html.light .bg-cyan-500 *,
 html.light .bg-emerald-700 *,
 html.light .bg-emerald-600 *,
+html.light .bg-emerald-600\/95 *,
 html.light .bg-emerald-600\/90 *,
 html.light .bg-emerald-600\/80 *,
 html.light .bg-emerald-500 *,
 html.light .bg-teal-700 *,
 html.light .bg-teal-600 *,
+html.light .bg-teal-600\/95 *,
 html.light .bg-teal-500 *,
 html.light .bg-rose-700 *,
 html.light .bg-rose-600 *,
+html.light .bg-rose-600\/95 *,
 html.light .bg-rose-600\/90 *,
 html.light .bg-rose-500 *,
 html.light .bg-red-700 *,
 html.light .bg-red-600 *,
 html.light .bg-blue-700 *,
 html.light .bg-blue-600 *,
+html.light .bg-blue-600\/95 *,
 html.light .bg-blue-600\/90 *,
 html.light .bg-blue-500 *,
 html.light .bg-sky-700 *,
 html.light .bg-sky-600 *,
+html.light .bg-sky-600\/95 *,
 html.light .bg-sky-500 *,
 html.light .bg-amber-700 *,
 html.light .bg-amber-600 *,
+html.light .bg-amber-600\/95 *,
 html.light .bg-amber-600\/90 *,
 html.light .bg-amber-500 *,
 html.light .bg-orange-700 *,
@@ -692,16 +776,16 @@ html.light [class*="from-blue-600"] .bg-white * {
   color: #1e293b !important;
 }
 
-/* Calm, Easy-to-Scan Table Headers & Row Hover Separation in Both Themes */
+/* Coordinated Soft Ocean-Slate Table Headers & Row Hover Separation in Both Themes */
 html.light table thead tr {
-  background-color: #f6f8fb !important;
+  background: linear-gradient(180deg, #eaf2fc 0%, #dfebfa 100%) !important;
 }
 html.light table thead th {
-  color: #475569 !important;
-  border-bottom-color: #e2e8f0 !important;
+  color: #1c3b63 !important;
+  border-bottom-color: #c8daf0 !important;
 }
 html.light table tbody tr:hover {
-  background-color: #f8fafc !important;
+  background-color: #f4f8fd !important;
 }
 html.dark table thead tr {
   background-color: #1b2538;
