@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { StockTransactionType } from '../types/cmms';
-import { applyStockTransaction } from '../utils/cmmsLogic';
+import { applyStockTransaction, getTodayISODate } from '../utils/cmmsLogic';
 import { X, ArrowDownRight, ArrowUpRight, RotateCcw, AlertTriangle, CheckCircle, Package } from 'lucide-react';
 
 interface StockTransactionModalProps {
@@ -21,7 +21,7 @@ export const StockTransactionModal: React.FC<StockTransactionModalProps> = ({
   const [maVatTu, setMaVatTu] = useState(defaultPartCode || spareParts[0]?.maVatTu || '');
   const [thietBiSuDung, setThietBiSuDung] = useState('');
   const [soLuong, setSoLuong] = useState(1);
-  const [ngay, setNgay] = useState('2026-11-10');
+  const [ngay, setNgay] = useState(() => getTodayISODate());
   const [nguoiThucHien, setNguoiThucHien] = useState(currentUser.tenNhanVien || 'Khiêm Huỳnh');
   const [ghiChu, setGhiChu] = useState('');
   const [error, setError] = useState('');

@@ -8,7 +8,7 @@ import {
   DocumentStep,
   FacilityDocument,
 } from '../../types/cmms';
-import { canDeleteRecords, formatDateVN } from '../../utils/cmmsLogic';
+import { canDeleteRecords, formatDateVN, getTodayISODate } from '../../utils/cmmsLogic';
 import { compressImageFile } from '../../utils/imageUtils';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
@@ -389,7 +389,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
       fileSizeKb,
       checklistSteps: steps.length > 0 ? steps : undefined,
       nguoiTao: editingDoc?.nguoiTao || currentUser.tenNhanVien,
-      ngayCapNhat: '2026-11-10',
+      ngayCapNhat: getTodayISODate(),
       mobileFriendly,
     };
 
@@ -414,7 +414,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
     const updated: FacilityDocument = {
       ...doc,
       checklistSteps: nextSteps,
-      ngayCapNhat: '2026-11-10',
+      ngayCapNhat: getTodayISODate(),
     };
     updateDocument(updated);
     setActiveDoc(updated);
@@ -426,7 +426,7 @@ export const DocumentsTab: React.FC<DocumentsTabProps> = ({
     const updated: FacilityDocument = {
       ...doc,
       checklistSteps: nextSteps,
-      ngayCapNhat: '2026-11-10',
+      ngayCapNhat: getTodayISODate(),
     };
     updateDocument(updated);
     setActiveDoc(updated);

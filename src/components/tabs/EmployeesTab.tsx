@@ -9,6 +9,7 @@ import {
   canManageMaintenancePlans,
   canViewCosts,
   getEffectiveAllowedViews,
+  getTodayISODate,
 } from '../../utils/cmmsLogic';
 import { CameraCaptureInput } from '../common/CameraCaptureInput';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
@@ -22,12 +23,15 @@ import {
   Edit,
   X,
   LayoutGrid,
+  Monitor,
+  Smartphone,
 } from 'lucide-react';
 
 export const EmployeesTab: React.FC = () => {
-  const { employees, currentUser, addEmployee, updateEmployee } = useCMMS();
+  const { employees, currentUser, onlineUsers, addEmployee, updateEmployee } = useCMMS();
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [onlyOnline, setOnlyOnline] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<{ [id: string]: boolean }>({});
@@ -39,7 +43,7 @@ export const EmployeesTab: React.FC = () => {
   const [soDienThoai, setSoDienThoai] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('123456');
-  const [ngayVao, setNgayVao] = useState('2026-11-10');
+  const [ngayVao, setNgayVao] = useState(() => getTodayISODate());
   const [ngaySinh, setNgaySinh] = useState('');
   const [queQuan, setQueQuan] = useState('');
   const [phongBan, setPhongBan] = useState('Kỹ Thuật & Bảo Trì (O&M)');
@@ -75,13 +79,20 @@ export const EmployeesTab: React.FC = () => {
   const [editRules, setEditRules] = useState<string[]>([]);
   const [editAllowedViews, setEditAllowedViews] = useState<string[]>([]);
 
-  const filtered = employees.filter(
-    (e) =>
+  const onlineByCode = new Map(
+    onlineUsers.map((u) => [u.maNhanVien.trim().toUpperCase(), u])
+  );
+
+  const filtered = employees.filter((e) => {
+    const matchText =
       e.maNhanVien.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.tenNhanVien.toLowerCase().includes(searchTerm.toLowerCase()) ||
       e.chucVu.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.email.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+      e.email.toLowerCase().includes(searchTerm.toLowerCase());
+    if (!matchText) return false;
+    if (onlyOnline && !onlineByCode.has(e.maNhanVien.trim().toUpperCase())) return false;
+    return true;
+  });
 
   const togglePasswordVisibility = (maNV: string) => {
     setVisiblePasswords((prev) => ({
@@ -243,7 +254,7 @@ export const EmployeesTab: React.FC = () => {
     addEmployee({
       maNhanVien: maNhanVien.trim().toUpperCase(),
       tenNhanVien: tenNhanVien.trim(),
-      date: '2026-11-10',
+      date: getTodayISODate(),
       chucVu,
       ngayVao,
       ngaySinh: ngaySinh || undefined,
@@ -291,11 +302,15 @@ export const EmployeesTab: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
               {UI_TEXTS.tabs.employees.badge}
             </span>
             <span className="text-xs text-slate-400">({employees.length} cán bộ kỹ thuật)</span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              {onlineUsers.length} đang online
+            </span>
           </div>
           <h2 className="text-xl sm:text-2xl font-extrabold text-slate-100 tracking-tight mt-1">
             {UI_TEXTS.tabs.employees.title}
@@ -397,15 +412,29 @@ export const EmployeesTab: React.FC = () => {
       {/* Employees Table */}
       <div className="rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden shadow-xl">
         <div className="p-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Tìm theo mã NV, tên, email, vai trò..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            />
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+            <div className="relative w-full sm:w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Tìm theo mã NV, tên, email, vai trò..."
+                className="w-full pl-9 pr-3 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => setOnlyOnline((prev) => !prev)}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold border transition whitespace-nowrap ${
+                onlyOnline
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-sm'
+                  : 'bg-slate-800 text-emerald-400 border-slate-700 hover:border-emerald-500/50'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${onlyOnline ? 'bg-white' : 'bg-emerald-400 animate-pulse'}`} />
+              <span>Đang online ({onlineUsers.length})</span>
+            </button>
           </div>
           <span className="text-xs text-slate-400">Danh sách nhân sự & phân quyền giao diện</span>
         </div>
@@ -427,6 +456,7 @@ export const EmployeesTab: React.FC = () => {
             <tbody className="divide-y divide-slate-800 text-slate-300">
               {filtered.map((emp) => {
                 const isActive = currentUser.maNhanVien === emp.maNhanVien;
+                const onlineInfo = onlineByCode.get(emp.maNhanVien.trim().toUpperCase());
                 const isPassVisible = visiblePasswords[emp.maNhanVien];
                 const empPass = emp.password || '123456';
                 const effectiveViews = getEffectiveAllowedViews(emp);
@@ -441,15 +471,45 @@ export const EmployeesTab: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 font-semibold text-slate-100 whitespace-nowrap">
                       <div className="flex items-center gap-2.5">
-                        <img
-                          src={
-                            emp.anhDaiDien ||
-                            'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
-                          }
-                          alt=""
-                          className="w-8 h-8 rounded-full object-cover border border-slate-700"
-                        />
-                        <span>{emp.tenNhanVien}</span>
+                        <div className="relative shrink-0">
+                          <img
+                            src={
+                              emp.anhDaiDien ||
+                              'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
+                            }
+                            alt=""
+                            className={`w-8 h-8 rounded-full object-cover border ${
+                              onlineInfo ? 'border-emerald-400' : 'border-slate-700'
+                            }`}
+                          />
+                          {onlineInfo && (
+                            <span
+                              title="Đang online"
+                              className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-slate-900"
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span>{emp.tenNhanVien}</span>
+                            {onlineInfo && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-bold">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                Online
+                              </span>
+                            )}
+                          </div>
+                          {onlineInfo && (
+                            <div className="flex items-center gap-1 text-[10px] font-normal text-slate-400 mt-0.5">
+                              {onlineInfo.deviceType === 'Mobile' ? (
+                                <Smartphone className="w-3 h-3 text-emerald-400 shrink-0" />
+                              ) : (
+                                <Monitor className="w-3 h-3 text-emerald-400 shrink-0" />
+                              )}
+                              <span className="truncate">Đang xem: {onlineInfo.currentTabLabel}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">

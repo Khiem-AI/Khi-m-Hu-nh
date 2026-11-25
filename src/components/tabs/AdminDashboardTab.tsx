@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Equipment, MaintenanceWorkType } from '../../types/cmms';
-import { getHistoryWorkType, isAdminLevel } from '../../utils/cmmsLogic';
+import { getHistoryWorkType, getTodayISODate, isAdminLevel } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Activity,
@@ -29,7 +29,7 @@ interface AdminDashboardTabProps {
 type PeriodOption = '30D' | '90D' | '180D' | 'ALL';
 type SortMetric = 'oee_asc' | 'mttr_desc' | 'repairs_desc' | 'mtbf_asc' | 'code';
 
-const APP_TODAY_STR = '2026-11-10';
+const APP_TODAY_STR = getTodayISODate();
 const APP_TODAY_MS = new Date(`${APP_TODAY_STR}T23:59:59`).getTime();
 
 interface EquipmentReliabilityRow {

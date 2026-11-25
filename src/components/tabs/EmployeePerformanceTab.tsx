@@ -9,7 +9,7 @@ import {
   MaintenancePlan,
   Ticket,
 } from '../../types/cmms';
-import { formatDateVN, isAdminLevel, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { formatDateVN, getTodayISODate, isAdminLevel, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Award,
@@ -62,7 +62,7 @@ interface EmployeeMetricRow {
   tierClass: string;
 }
 
-const APP_REF_DATE = new Date('2026-11-10T00:00:00');
+const APP_REF_DATE = new Date(`${getTodayISODate()}T00:00:00`);
 
 function isWithinDays(dateStr: string | undefined, days: number | null): boolean {
   if (!days || !dateStr) return true;

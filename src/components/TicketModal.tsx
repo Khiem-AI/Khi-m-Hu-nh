@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Ticket, TicketPriority, TicketStatus } from '../types/cmms';
-import { canAssignWork, isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
+import { canAssignWork, getTodayISODate, isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
 import { BOOTSTRAPPED_ADMIN_EMAIL } from '../utils/firestoreSync';
 import { CameraCaptureInput } from './common/CameraCaptureInput';
 import { MultiAssigneePicker } from './common/MultiAssigneePicker';
@@ -145,7 +145,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({
           nguoiLap,
           maThietBi,
           ketQua,
-          ngayHoanThanh: trangThai === 'Hoàn thành' && !ngayHoanThanh ? '2026-11-10' : ngayHoanThanh,
+          ngayHoanThanh: trangThai === 'Hoàn thành' && !ngayHoanThanh ? getTodayISODate() : ngayHoanThanh,
           anhTruocXuLy,
           anhSauXuLy,
         },
@@ -163,7 +163,7 @@ export const TicketModal: React.FC<TicketModalProps> = ({
           nguoiLap,
           maThietBi,
           ketQua,
-          ngayHoanThanh: trangThai === 'Hoàn thành' ? '2026-11-10' : '',
+          ngayHoanThanh: trangThai === 'Hoàn thành' ? getTodayISODate() : '',
           anhTruocXuLy,
           anhSauXuLy,
         },

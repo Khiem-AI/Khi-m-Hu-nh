@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Equipment, Ticket, TicketStatus } from '../../types/cmms';
-import { formatDateVN, matchesAssignee } from '../../utils/cmmsLogic';
+import { formatDateVN, getTodayISODate, matchesAssignee } from '../../utils/cmmsLogic';
 import {
   AlertTriangle,
   Calendar,
@@ -175,7 +175,7 @@ export const MyTasksTab: React.FC<MyTasksTabProps> = ({
     updateTicket({
       ...ticket,
       trangThai: nextStatus,
-      ngayHoanThanh: nextStatus === 'Hoàn thành' ? '2026-11-10' : ticket.ngayHoanThanh,
+      ngayHoanThanh: nextStatus === 'Hoàn thành' ? getTodayISODate() : ticket.ngayHoanThanh,
       ketQua:
         nextStatus === 'Hoàn thành' && !ticket.ketQua
           ? `Đã hoàn thành xử lý bởi ${currentUser.tenNhanVien}`

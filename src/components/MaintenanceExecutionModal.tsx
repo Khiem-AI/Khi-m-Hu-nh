@@ -7,6 +7,7 @@ import {
   canViewCosts,
   formatDateVN,
   getHistoryWorkType,
+  getTodayISODate,
   isAdminLevel,
   parseAssigneeNames,
 } from '../utils/cmmsLogic';
@@ -60,7 +61,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
   const activeEquipment =
     allEquipment.find((e) => e.maThietBi === selectedCode) || propEquipment || allEquipment[0];
 
-  const today = '2026-11-10';
+  const today = getTodayISODate();
   const [loaiCongViec, setLoaiCongViec] = useState<MaintenanceWorkType>(
     initialRecord ? getHistoryWorkType(initialRecord) : defaultWorkType
   );

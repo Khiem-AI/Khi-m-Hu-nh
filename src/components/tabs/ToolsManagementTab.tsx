@@ -7,7 +7,7 @@ import {
   ToolCondition,
   ToolItem,
 } from '../../types/cmms';
-import { canDeleteRecords, formatDateVN, getInspectionDaysRemaining } from '../../utils/cmmsLogic';
+import { canDeleteRecords, formatDateVN, getInspectionDaysRemaining, getTodayISODate } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Wrench,
@@ -30,7 +30,7 @@ import {
 } from 'lucide-react';
 import { PurchaseRequestSection, PurchaseRequestDraft } from '../common/PurchaseRequestSection';
 
-const APP_TODAY = '2026-11-10';
+const APP_TODAY = getTodayISODate();
 
 const TOOL_CATEGORIES: ToolCategory[] = [
   'Dụng cụ cầm tay',

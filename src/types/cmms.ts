@@ -743,4 +743,16 @@ export interface MonthlyBoardReportsStore {
   reportsByMonth: Record<string, MonthlyBoardReportRecord>;
 }
 
-
+// Trạng thái người dùng đang online sử dụng ứng dụng
+export interface OnlineUserPresence {
+  maNhanVien: string;
+  tenNhanVien: string;
+  chucVu: string;
+  phongBan?: string;
+  currentTab: string;
+  currentTabLabel: string;
+  deviceType: 'Desktop' | 'Mobile';
+  lastActiveAt: number; // epoch ms
+  sessionCount: number;
+  source?: 'server' | 'cloud' | 'local';
+}

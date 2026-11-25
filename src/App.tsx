@@ -44,7 +44,7 @@ import { WebNotificationToast } from './components/common/WebNotificationToast';
 import { Equipment, MaintenanceWorkType, Ticket, SparePart, CostRecord } from './types/cmms';
 
 function CMMSApp() {
-  const { theme, isAuthenticated, currentUser } = useCMMS();
+  const { theme, isAuthenticated, currentUser, setActiveViewId } = useCMMS();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isDesktopSidebarPinned, setIsDesktopSidebarPinned] = useState<boolean>(() => {
@@ -125,6 +125,10 @@ function CMMSApp() {
       setActiveTab(allowedViews[0] || 'dashboard');
     }
   }, [activeTab, allowedViews]);
+
+  useEffect(() => {
+    setActiveViewId(activeTab);
+  }, [activeTab, setActiveViewId]);
 
   useEffect(() => {
     if (!hasBackupAccess && isBackupModalOpen) {

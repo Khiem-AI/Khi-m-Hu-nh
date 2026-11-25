@@ -3,7 +3,7 @@ import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenanceD3Summary } from '../dashboard/MaintenanceD3Summary';
 import { MonthlyTicketsMaintenanceChart } from '../dashboard/MonthlyTicketsMaintenanceChart';
-import { canExportCSV, canViewCosts, formatVND, formatDateVN, getHistoryWorkType, matchesAssignee } from '../../utils/cmmsLogic';
+import { canExportCSV, canViewCosts, formatVND, formatDateVN, getHistoryWorkType, getTodayISODate, matchesAssignee } from '../../utils/cmmsLogic';
 import {
   Cpu,
   Wrench,
@@ -27,8 +27,6 @@ import {
 } from 'lucide-react';
 import { Equipment, MaintenancePlan, TicketStatus } from '../../types/cmms';
 
-const APP_TODAY = '2026-11-10';
-
 function parseYMD(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
   return new Date(y, (m || 1) - 1, d || 1);
@@ -46,8 +44,6 @@ function addDaysYMD(dateStr: string, days: number): string {
   dt.setDate(dt.getDate() + days);
   return formatYMD(dt);
 }
-
-const END_30D = addDaysYMD(APP_TODAY, 30);
 
 const STATUS_BADGE_MAP: Record<
   MaintenancePlan['trangThai'],
@@ -139,12 +135,23 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   // Cost metrics
   const totalCost = costRecords.reduce((acc, c) => acc + c.soTienVND, 0);
 
-  // 30-Day Preventive Maintenance Calendar state
-  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>({
-    year: 2026,
-    month: 10, // November 2026 (0-indexed)
+  // 30-Day Preventive Maintenance Calendar state (always anchored to real local today)
+  const APP_TODAY = getTodayISODate();
+  const END_30D = addDaysYMD(APP_TODAY, 30);
+  const todayDateObj = parseYMD(APP_TODAY);
+  const currentMonthRef = { year: todayDateObj.getFullYear(), month: todayDateObj.getMonth() };
+  const nextMonthDateObj = new Date(todayDateObj.getFullYear(), todayDateObj.getMonth() + 1, 1);
+  const nextMonthRef = { year: nextMonthDateObj.getFullYear(), month: nextMonthDateObj.getMonth() };
+  const nextMonthFirstYMD = formatYMD(nextMonthDateObj);
+
+  const [calendarMonth, setCalendarMonth] = useState<{ year: number; month: number }>(() => {
+    const now = new Date();
+    return {
+      year: now.getFullYear(),
+      month: now.getMonth(),
+    };
   });
-  const [selectedDate, setSelectedDate] = useState<string>(APP_TODAY);
+  const [selectedDate, setSelectedDate] = useState<string>(() => getTodayISODate());
 
   const plansByDate = useMemo(() => {
     const map: Record<string, MaintenancePlan[]> = {};
@@ -162,7 +169,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
       maintenancePlans
         .filter((p) => p.ngayBaoTriTiepTheo >= APP_TODAY && p.ngayBaoTriTiepTheo <= END_30D)
         .sort((a, b) => a.ngayBaoTriTiepTheo.localeCompare(b.ngayBaoTriTiepTheo)),
-    [maintenancePlans]
+    [maintenancePlans, APP_TODAY, END_30D]
   );
 
   const monthCells = useMemo(() => {
@@ -187,7 +194,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
         plans,
       };
     });
-  }, [calendarMonth, plansByDate]);
+  }, [calendarMonth, plansByDate, APP_TODAY, END_30D]);
 
   const selectedDayPlans = plansByDate[selectedDate] || [];
 
@@ -932,30 +939,30 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             <button
               type="button"
               onClick={() => {
-                setCalendarMonth({ year: 2026, month: 10 });
+                setCalendarMonth({ year: currentMonthRef.year, month: currentMonthRef.month });
                 setSelectedDate(APP_TODAY);
               }}
               className={`px-3 py-1.5 rounded-xl font-semibold border transition ${
-                calendarMonth.year === 2026 && calendarMonth.month === 10
+                calendarMonth.year === currentMonthRef.year && calendarMonth.month === currentMonthRef.month
                   ? 'bg-emerald-600 text-white border-emerald-500'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
               }`}
             >
-              Tháng 11/2026
+              Tháng {String(currentMonthRef.month + 1).padStart(2, '0')}/{currentMonthRef.year}
             </button>
             <button
               type="button"
               onClick={() => {
-                setCalendarMonth({ year: 2026, month: 11 });
-                setSelectedDate('2026-12-01');
+                setCalendarMonth({ year: nextMonthRef.year, month: nextMonthRef.month });
+                setSelectedDate(nextMonthFirstYMD);
               }}
               className={`px-3 py-1.5 rounded-xl font-semibold border transition ${
-                calendarMonth.year === 2026 && calendarMonth.month === 11
+                calendarMonth.year === nextMonthRef.year && calendarMonth.month === nextMonthRef.month
                   ? 'bg-emerald-600 text-white border-emerald-500'
                   : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border-slate-700'
               }`}
             >
-              Tháng 12/2026
+              Tháng {String(nextMonthRef.month + 1).padStart(2, '0')}/{nextMonthRef.year}
             </button>
             <button
               type="button"

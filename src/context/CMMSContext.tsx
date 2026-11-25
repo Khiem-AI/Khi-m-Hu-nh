@@ -40,6 +40,8 @@ import {
   MonthlyBoardReportsStore,
   PurchaseRequest,
   PurchaseRequestStatus,
+  APP_VIEW_OPTIONS,
+  OnlineUserPresence,
 } from '../types/cmms';
 import { buildProfessionalEmailHtml } from '../utils/emailTemplates';
 import {
@@ -68,6 +70,7 @@ import {
 import {
   calculateNextMaintenanceDate,
   getMaintenanceStatus,
+  getTodayISODate,
   applyStockTransaction,
   calculateMeterConsumption,
   syncPlansWithHistory,
@@ -425,6 +428,12 @@ interface CMMSContextType {
   disconnectCloud: () => Promise<void>;
   forceSyncLocalToCloud: () => Promise<{ success: boolean; message: string }>;
 
+  // Live Online Users Presence
+  onlineUsers: OnlineUserPresence[];
+  activeViewId: string;
+  setActiveViewId: (tabId: string) => void;
+  refreshOnlineUsers: () => Promise<void>;
+
   // System Actions
   addAuditLog: (
     action: AuditLog['hanhDong'],
@@ -515,7 +524,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const [equipment, setEquipment] = useState<Equipment[]>(() => loadStorage('equipment', INITIAL_EQUIPMENT));
-  const [maintenancePlans, setMaintenancePlans] = useState<MaintenancePlan[]>(() => loadStorage('plans', INITIAL_MAINTENANCE_PLANS));
+  const [maintenancePlans, setMaintenancePlans] = useState<MaintenancePlan[]>(() => {
+    const loaded = loadStorage('plans', INITIAL_MAINTENANCE_PLANS);
+    const todayIso = getTodayISODate();
+    return loaded.map((p) => ({
+      ...p,
+      trangThai: getMaintenanceStatus(p.ngayBaoTriTiepTheo, todayIso),
+    }));
+  });
   const [maintenanceHistory, setMaintenanceHistory] = useState<MaintenanceHistory[]>(() => loadStorage('history', INITIAL_MAINTENANCE_HISTORY));
   const [tickets, setTickets] = useState<Ticket[]>(() => loadStorage('tickets', INITIAL_TICKETS));
   const [spareParts, setSpareParts] = useState<SparePart[]>(() => loadStorage('spareParts', INITIAL_SPARE_PARTS));
@@ -888,6 +904,320 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
   };
 
+  // --- Real-Time Online Users Presence Engine (Express Server + Cloud + Local Tabs) ---
+  const PRESENCE_STALE_MS = 75_000;
+  const CLOUD_PRESENCE_THROTTLE_MS = 45_000;
+  const [activeViewId, setActiveViewId] = useState<string>('dashboard');
+  const [onlineUsers, setOnlineUsers] = useState<OnlineUserPresence[]>([]);
+
+  const presenceSessionIdRef = useRef<string>('');
+  if (!presenceSessionIdRef.current) {
+    try {
+      const existingSid = sessionStorage.getItem('cmms_presence_session_id');
+      if (existingSid) {
+        presenceSessionIdRef.current = existingSid;
+      } else {
+        const freshSid = `ses_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+        sessionStorage.setItem('cmms_presence_session_id', freshSid);
+        presenceSessionIdRef.current = freshSid;
+      }
+    } catch {
+      presenceSessionIdRef.current = `ses_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+    }
+  }
+
+  const serverPresenceRef = useRef<OnlineUserPresence[]>([]);
+  const cloudPresenceRef = useRef<Map<string, OnlineUserPresence>>(new Map());
+  const localPresenceRef = useRef<Map<string, OnlineUserPresence>>(new Map());
+  const lastCloudPresencePushRef = useRef<{ ts: number; tab: string; userCode: string }>({
+    ts: 0,
+    tab: '',
+    userCode: '',
+  });
+  const activeViewIdRef = useRef<string>(activeViewId);
+  const isAuthenticatedRef = useRef<boolean>(isAuthenticated);
+
+  useEffect(() => {
+    activeViewIdRef.current = activeViewId;
+  }, [activeViewId]);
+
+  useEffect(() => {
+    isAuthenticatedRef.current = isAuthenticated;
+  }, [isAuthenticated]);
+
+  const getTabLabelById = (tabId: string): string => {
+    const found = APP_VIEW_OPTIONS.find((v) => v.id === tabId);
+    return found ? found.label : 'Tổng quan';
+  };
+
+  const detectDeviceType = (): 'Desktop' | 'Mobile' => {
+    if (typeof window === 'undefined') return 'Desktop';
+    const ua = navigator.userAgent || '';
+    if (/Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini/i.test(ua) || window.innerWidth < 768) {
+      return 'Mobile';
+    }
+    return 'Desktop';
+  };
+
+  const recomputeMergedOnlineUsers = () => {
+    const now = Date.now();
+    const merged = new Map<string, OnlineUserPresence>();
+
+    const ingest = (entry: OnlineUserPresence) => {
+      if (!entry?.maNhanVien) return;
+      if (now - entry.lastActiveAt > PRESENCE_STALE_MS) return;
+      const key = entry.maNhanVien.trim().toUpperCase();
+      const prev = merged.get(key);
+      if (!prev) {
+        merged.set(key, { ...entry });
+      } else {
+        const freshest = entry.lastActiveAt >= prev.lastActiveAt ? entry : prev;
+        merged.set(key, {
+          ...freshest,
+          sessionCount: Math.max(prev.sessionCount || 1, entry.sessionCount || 1),
+        });
+      }
+    };
+
+    // Prune stale cloud & local entries
+    for (const [k, v] of cloudPresenceRef.current.entries()) {
+      if (now - v.lastActiveAt > PRESENCE_STALE_MS) {
+        cloudPresenceRef.current.delete(k);
+      } else {
+        ingest(v);
+      }
+    }
+    for (const [k, v] of localPresenceRef.current.entries()) {
+      if (now - v.lastActiveAt > PRESENCE_STALE_MS) {
+        localPresenceRef.current.delete(k);
+      } else {
+        ingest(v);
+      }
+    }
+    for (const s of serverPresenceRef.current) {
+      ingest(s);
+    }
+
+    // Ensure the currently authenticated user is always represented immediately
+    if (isAuthenticatedRef.current && currentUserRef.current?.maNhanVien) {
+      const me = currentUserRef.current;
+      const myKey = me.maNhanVien.trim().toUpperCase();
+      const tabId = activeViewIdRef.current || 'dashboard';
+      const existing = merged.get(myKey);
+      merged.set(myKey, {
+        maNhanVien: me.maNhanVien,
+        tenNhanVien: me.tenNhanVien,
+        chucVu: me.chucVu,
+        phongBan: me.phongBan,
+        currentTab: tabId,
+        currentTabLabel: getTabLabelById(tabId),
+        deviceType: detectDeviceType(),
+        lastActiveAt: Math.max(now, existing?.lastActiveAt || 0),
+        sessionCount: Math.max(1, existing?.sessionCount || 1),
+        source: existing?.source || 'local',
+      });
+    }
+
+    const sorted = Array.from(merged.values()).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+    setOnlineUsers(sorted);
+  };
+
+  const leavePresenceSession = (useBeacon = false) => {
+    const sid = presenceSessionIdRef.current;
+    if (!sid) return;
+    const payloadStr = JSON.stringify({ sessionId: sid });
+    if (useBeacon && typeof navigator !== 'undefined' && typeof navigator.sendBeacon === 'function') {
+      try {
+        navigator.sendBeacon('/api/presence/leave', new Blob([payloadStr], { type: 'text/plain' }));
+        return;
+      } catch {
+        // fallback below
+      }
+    }
+    void fetch('/api/presence/leave', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payloadStr,
+      keepalive: true,
+    }).catch(() => {
+      // ignore network error on leave
+    });
+  };
+
+  const pushPresenceHeartbeat = async (forceCloud = false) => {
+    if (!isAuthenticatedRef.current || !currentUserRef.current?.maNhanVien) return;
+    const me = currentUserRef.current;
+    const tabId = activeViewIdRef.current || 'dashboard';
+    const tabLabel = getTabLabelById(tabId);
+    const deviceType = detectDeviceType();
+    const now = Date.now();
+
+    const selfEntry: OnlineUserPresence = {
+      maNhanVien: me.maNhanVien,
+      tenNhanVien: me.tenNhanVien,
+      chucVu: me.chucVu,
+      phongBan: me.phongBan,
+      currentTab: tabId,
+      currentTabLabel: tabLabel,
+      deviceType,
+      lastActiveAt: now,
+      sessionCount: 1,
+      source: 'local',
+    };
+    localPresenceRef.current.set(me.maNhanVien.trim().toUpperCase(), selfEntry);
+    recomputeMergedOnlineUsers();
+
+    // Broadcast to other local tabs
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        const ch = new BroadcastChannel('cmms_presence_channel');
+        ch.postMessage({ type: 'heartbeat', entry: selfEntry });
+        ch.close();
+      }
+    } catch {
+      // ignore BroadcastChannel unsupported
+    }
+
+    // Push to Express server presence hub
+    try {
+      const resp = await fetch('/api/presence/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: presenceSessionIdRef.current,
+          maNhanVien: me.maNhanVien,
+          tenNhanVien: me.tenNhanVien,
+          chucVu: me.chucVu,
+          phongBan: me.phongBan || '',
+          currentTab: tabId,
+          currentTabLabel: tabLabel,
+          deviceType,
+        }),
+      });
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          ok?: boolean;
+          onlineUsers?: OnlineUserPresence[];
+        };
+        if (Array.isArray(data.onlineUsers)) {
+          serverPresenceRef.current = data.onlineUsers;
+          recomputeMergedOnlineUsers();
+        }
+      }
+    } catch {
+      // ignore transient network errors
+    }
+
+    // Optional Cloud Firestore presence mirror (throttled to respect quota)
+    if (cloudUserRef.current) {
+      const last = lastCloudPresencePushRef.current;
+      const shouldPushCloud =
+        forceCloud ||
+        last.tab !== tabId ||
+        last.userCode !== me.maNhanVien ||
+        now - last.ts >= CLOUD_PRESENCE_THROTTLE_MS;
+      if (shouldPushCloud) {
+        lastCloudPresencePushRef.current = { ts: now, tab: tabId, userCode: me.maNhanVien };
+        const safeCode = me.maNhanVien.replace(/[^a-zA-Z0-9_-]/g, '_');
+        const key = `presence_${safeCode}`;
+        syncDoc('settings', key, {
+          key,
+          payload: {
+            maNhanVien: me.maNhanVien,
+            tenNhanVien: me.tenNhanVien,
+            chucVu: me.chucVu,
+            phongBan: me.phongBan || '',
+            currentTab: tabId,
+            currentTabLabel: tabLabel,
+            deviceType,
+            lastActiveAt: now,
+          },
+        });
+      }
+    }
+  };
+
+  const refreshOnlineUsers = async () => {
+    try {
+      const resp = await fetch('/api/presence/online');
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          ok?: boolean;
+          onlineUsers?: OnlineUserPresence[];
+        };
+        if (Array.isArray(data.onlineUsers)) {
+          serverPresenceRef.current = data.onlineUsers;
+        }
+      }
+    } catch {
+      // ignore
+    }
+    await pushPresenceHeartbeat(false);
+    recomputeMergedOnlineUsers();
+  };
+
+  // Heartbeat interval & lifecycle hooks
+  useEffect(() => {
+    if (!isAuthenticated || !currentUser?.maNhanVien) {
+      setOnlineUsers([]);
+      return;
+    }
+
+    void pushPresenceHeartbeat(false);
+
+    const intervalId = window.setInterval(() => {
+      void pushPresenceHeartbeat(false);
+    }, 15_000);
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        void pushPresenceHeartbeat(false);
+      }
+    };
+
+    const handlePageHide = () => {
+      leavePresenceSession(true);
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    window.addEventListener('pagehide', handlePageHide);
+
+    let channel: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        channel = new BroadcastChannel('cmms_presence_channel');
+        channel.onmessage = (ev: MessageEvent) => {
+          const msg = ev.data as { type?: string; entry?: OnlineUserPresence };
+          if (msg?.type === 'heartbeat' && msg.entry?.maNhanVien) {
+            localPresenceRef.current.set(
+              msg.entry.maNhanVien.trim().toUpperCase(),
+              msg.entry
+            );
+            recomputeMergedOnlineUsers();
+          }
+        };
+      }
+    } catch {
+      channel = null;
+    }
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.removeEventListener('pagehide', handlePageHide);
+      if (channel) {
+        try {
+          channel.close();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [isAuthenticated, currentUser.maNhanVien, activeViewId]);
+
+
   const removeDocCloud = (colName: string, rawId: string) => {
     if (!cloudUserRef.current) return;
     void deleteCloudDoc(colName, rawId, knownCloudIdsRef.current)
@@ -1150,8 +1480,28 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       ? incomingStore.reportsByMonth
                       : prev.reportsByMonth,
                 }));
+              } else if (s.key && s.key.startsWith('presence_') && s.payload) {
+                const p = s.payload as Record<string, unknown>;
+                const maNV = typeof p.maNhanVien === 'string' ? p.maNhanVien : '';
+                const lastActiveAt = typeof p.lastActiveAt === 'number' ? p.lastActiveAt : 0;
+                if (maNV && lastActiveAt > 0) {
+                  cloudPresenceRef.current.set(maNV.trim().toUpperCase(), {
+                    maNhanVien: maNV,
+                    tenNhanVien: typeof p.tenNhanVien === 'string' ? p.tenNhanVien : maNV,
+                    chucVu: typeof p.chucVu === 'string' ? p.chucVu : 'Nhân viên',
+                    phongBan: typeof p.phongBan === 'string' ? p.phongBan : undefined,
+                    currentTab: typeof p.currentTab === 'string' ? p.currentTab : 'dashboard',
+                    currentTabLabel:
+                      typeof p.currentTabLabel === 'string' ? p.currentTabLabel : 'Tổng quan',
+                    deviceType: p.deviceType === 'Mobile' ? 'Mobile' : 'Desktop',
+                    lastActiveAt,
+                    sessionCount: 1,
+                    source: 'cloud',
+                  });
+                }
               }
             }
+            recomputeMergedOnlineUsers();
           },
           onSnapError
         ),
@@ -1174,10 +1524,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           (items, paths) => {
             markSynced(paths);
             if (items.length > 0 || workspaceReadyRef.current) {
+              const todayIso = getTodayISODate();
               setMaintenancePlans(
-                [...items].sort((a, b) =>
-                  (a.ngayBaoTriTiepTheo || '').localeCompare(b.ngayBaoTriTiepTheo || '')
-                )
+                [...items]
+                  .map((p) => ({
+                    ...p,
+                    trangThai: getMaintenanceStatus(p.ngayBaoTriTiepTheo, todayIso),
+                  }))
+                  .sort((a, b) =>
+                    (a.ngayBaoTriTiepTheo || '').localeCompare(b.ngayBaoTriTiepTheo || '')
+                  )
               );
             }
           },
@@ -1623,16 +1979,18 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const addEquipment = (item: Equipment) => {
     setEquipment((prev) => [item, ...prev]);
     // Also create initial maintenance plan if not exists
+    const todayIso = getTodayISODate();
+    const nextDue = item.hanBaoTriTiepTheo || calculateNextMaintenanceDate(todayIso, item.tanSuat);
     const newPlan: MaintenancePlan = {
       id: nextUniqueId('PLAN'),
       maThietBi: item.maThietBi,
       tenThietBi: item.tenThietBi,
       loaiBaoTri: 'Định kỳ',
       tanSuat: item.tanSuat,
-      ngayBaoTriGanNhat: '2026-11-01',
-      ngayBaoTriTiepTheo: item.hanBaoTriTiepTheo || calculateNextMaintenanceDate('2026-11-01', item.tanSuat),
+      ngayBaoTriGanNhat: todayIso,
+      ngayBaoTriTiepTheo: nextDue,
       nguoiPhuTrach: item.nguoiPhuTrach,
-      trangThai: getMaintenanceStatus(item.hanBaoTriTiepTheo || '2026-11-20'),
+      trangThai: getMaintenanceStatus(nextDue, todayIso),
       ghiChu: `Tạo tự động cho thiết bị ${item.tenThietBi}`,
     };
     setMaintenancePlans((prev) => [newPlan, ...prev]);
@@ -3214,6 +3572,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     const actor = currentUserRef.current || currentUser;
+    leavePresenceSession(false);
     addAuditLog(
       'Đăng xuất',
       'Hệ thống',
@@ -4623,6 +4982,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         connectCloudWithGoogle,
         disconnectCloud,
         forceSyncLocalToCloud,
+        onlineUsers,
+        activeViewId,
+        setActiveViewId,
+        refreshOnlineUsers,
       }}
     >
       {children}

@@ -3,7 +3,7 @@ import * as d3 from 'd3';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Equipment, MaintenancePlan, RiskLevel } from '../../types/cmms';
-import { formatDateVN } from '../../utils/cmmsLogic';
+import { formatDateVN, getTodayISODate } from '../../utils/cmmsLogic';
 import {
   AlertTriangle,
   ArrowRight,
@@ -13,7 +13,7 @@ import {
   Wrench,
 } from 'lucide-react';
 
-const APP_TODAY = '2026-11-10';
+const APP_TODAY = getTodayISODate();
 
 function parseYMD(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);

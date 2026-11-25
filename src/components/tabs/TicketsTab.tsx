@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { Ticket, TicketStatus, TicketPriority } from '../../types/cmms';
-import { canAssignWork, canDeleteRecords, formatDateVN, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { canAssignWork, canDeleteRecords, formatDateVN, getTodayISODate, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import { exportTicketsRepairExcel } from '../../utils/excelExport';
 import { WorkAssignmentModal } from '../common/WorkAssignmentModal';
@@ -75,7 +75,7 @@ export const TicketsTab: React.FC<TicketsTabProps> = ({
     updateTicket({
       ...ticket,
       trangThai: newStatus,
-      ngayHoanThanh: newStatus === 'Hoàn thành' ? '2026-11-10' : ticket.ngayHoanThanh,
+      ngayHoanThanh: newStatus === 'Hoàn thành' ? getTodayISODate() : ticket.ngayHoanThanh,
     });
   };
 

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCMMS } from '../context/CMMSContext';
 import { UI_TEXTS } from '../config/uiTexts';
-import { canAccessBackup, getInspectionStatus, getInspectionDaysRemaining } from '../utils/cmmsLogic';
+import { canAccessBackup, getEffectiveAllowedViews, getInspectionStatus, getInspectionDaysRemaining } from '../utils/cmmsLogic';
 import {
   Wrench,
   QrCode,
@@ -35,6 +35,10 @@ import {
   PanelLeftOpen,
   BellRing,
   CheckCheck,
+  Users,
+  Monitor,
+  Smartphone,
+  ArrowRight,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -58,6 +62,9 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const {
     currentUser,
+    employees,
+    onlineUsers,
+    refreshOnlineUsers,
     maintenancePlans,
     spareParts,
     tickets,
@@ -87,6 +94,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [showUserDropdown, setShowUserDropdown] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showCloudPopover, setShowCloudPopover] = useState(false);
+  const [showOnlinePopover, setShowOnlinePopover] = useState(false);
+  const [isRefreshingOnline, setIsRefreshingOnline] = useState(false);
   const [isCloudActionLoading, setIsCloudActionLoading] = useState(false);
   const [cloudActionNotice, setCloudActionNotice] = useState<{
     ok: boolean;
@@ -109,6 +118,15 @@ export const Header: React.FC<HeaderProps> = ({
   const [cpConfirmPass, setCpConfirmPass] = useState('');
 
   const hasBackupAccess = canAccessBackup(currentUser);
+  const canViewEmployeesTab = getEffectiveAllowedViews(currentUser).includes('employees');
+
+  const formatPresenceAgo = (ts: number) => {
+    const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (diffSec < 12) return 'Đang hoạt động';
+    if (diffSec < 60) return `${diffSec} giây trước`;
+    const mins = Math.floor(diffSec / 60);
+    return `${mins} phút trước`;
+  };
 
   // Urgent alerts
   const overduePlans = maintenancePlans.filter((p) => p.trangThai === 'Quá hạn');
@@ -293,6 +311,168 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
           )}
 
+          {/* Live Online Users Pill & Popover */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                const nextOpen = !showOnlinePopover;
+                setShowOnlinePopover(nextOpen);
+                setShowCloudPopover(false);
+                setShowNotifications(false);
+                setShowUserDropdown(false);
+                if (nextOpen) {
+                  void refreshOnlineUsers();
+                }
+              }}
+              aria-label={`Người dùng đang online: ${onlineUsers.length}`}
+              title={`Xem danh sách người dùng đang online (${onlineUsers.length})`}
+              className="h-9 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-500/40 text-xs font-semibold transition whitespace-nowrap shrink-0"
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+              <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 hidden sm:inline" />
+              <span className="font-mono font-bold tabular-nums">{onlineUsers.length}</span>
+              <span className="hidden xl:inline">Online</span>
+            </button>
+
+            {showOnlinePopover && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3 text-xs">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2.5">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2.5 w-2.5">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                    </span>
+                    <div>
+                      <span className="font-bold text-slate-900 dark:text-slate-100 text-sm block">
+                        Đang Online ({onlineUsers.length})
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Cập nhật tự động theo thời gian thực
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={isRefreshingOnline}
+                    onClick={async () => {
+                      setIsRefreshingOnline(true);
+                      await refreshOnlineUsers();
+                      setIsRefreshingOnline(false);
+                    }}
+                    title="Làm mới danh sách đang online"
+                    className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 transition disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingOnline ? 'animate-spin' : ''}`} />
+                  </button>
+                </div>
+
+                <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
+                  {onlineUsers.length === 0 ? (
+                    <div className="text-center py-6 text-slate-500 dark:text-slate-400">
+                      Chưa ghi nhận người dùng nào đang trực tuyến.
+                    </div>
+                  ) : (
+                    onlineUsers.map((u) => {
+                      const empMatch = employees.find(
+                        (e) => e.maNhanVien.trim().toUpperCase() === u.maNhanVien.trim().toUpperCase()
+                      );
+                      const isMe =
+                        currentUser.maNhanVien.trim().toUpperCase() === u.maNhanVien.trim().toUpperCase();
+                      const avatarUrl =
+                        empMatch?.anhDaiDien ||
+                        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80';
+
+                      return (
+                        <div
+                          key={u.maNhanVien}
+                          className={`p-2.5 rounded-xl border flex items-start gap-2.5 transition ${
+                            isMe
+                              ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-500/35'
+                              : 'bg-slate-50 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800'
+                          }`}
+                        >
+                          <div className="relative shrink-0 mt-0.5">
+                            <img
+                              src={avatarUrl}
+                              alt={u.tenNhanVien}
+                              className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                            />
+                            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+                          </div>
+
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                                  {u.tenNhanVien}
+                                </span>
+                                {isMe && (
+                                  <span className="px-1.5 py-0.2 rounded bg-emerald-600 text-white text-[10px] font-bold shrink-0">
+                                    Bạn
+                                  </span>
+                                )}
+                              </div>
+                              <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 shrink-0">
+                                {u.maNhanVien}
+                              </span>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 dark:text-slate-400">
+                              <span className="px-1.5 py-0.2 rounded bg-sky-100 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 font-semibold text-[10px]">
+                                {u.chucVu}
+                              </span>
+                              <span className="inline-flex items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                                {u.deviceType === 'Mobile' ? (
+                                  <Smartphone className="w-3 h-3" />
+                                ) : (
+                                  <Monitor className="w-3 h-3" />
+                                )}
+                                {u.deviceType}
+                                {u.sessionCount > 1 ? ` • ${u.sessionCount} phiên` : ''}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 text-[11px]">
+                              <span className="text-slate-700 dark:text-slate-300 truncate">
+                                Đang xem:{' '}
+                                <strong className="text-cyan-700 dark:text-cyan-300 font-semibold">
+                                  {u.currentTabLabel}
+                                </strong>
+                              </span>
+                              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold shrink-0">
+                                {formatPresenceAgo(u.lastActiveAt)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                {canViewEmployeesTab && (
+                  <div className="pt-2 border-t border-slate-200 dark:border-slate-800 flex items-center justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOnlinePopover(false);
+                        onNavigateTab('employees');
+                      }}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline"
+                    >
+                      <span>Xem danh sách nhân sự</span>
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Cloud Real-Time Sync Status Button & Popover (Admin / Backup Owner) */}
           {(hasBackupAccess || cloudSyncStatus === 'synced') && (
             <div className="relative">
@@ -300,6 +480,7 @@ export const Header: React.FC<HeaderProps> = ({
               type="button"
               onClick={() => {
                 setShowCloudPopover(!showCloudPopover);
+                setShowOnlinePopover(false);
                 setShowNotifications(false);
                 setShowUserDropdown(false);
                 setCloudActionNotice(null);
@@ -505,6 +686,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => {
                 setShowNotifications(!showNotifications);
+                setShowOnlinePopover(false);
                 setShowUserDropdown(false);
                 setShowCloudPopover(false);
               }}
@@ -753,6 +935,7 @@ export const Header: React.FC<HeaderProps> = ({
             <button
               onClick={() => {
                 setShowUserDropdown(!showUserDropdown);
+                setShowOnlinePopover(false);
                 setShowNotifications(false);
                 setShowCloudPopover(false);
               }}

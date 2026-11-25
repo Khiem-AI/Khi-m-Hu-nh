@@ -69,11 +69,21 @@ export function calculateNextMaintenanceDate(
 }
 
 /**
- * Determines maintenance status relative to a reference date (defaulting to today: 2026-11-10)
+ * Returns the user's current local date formatted as YYYY-MM-DD.
+ */
+export function getTodayISODate(now: Date = new Date()): string {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Determines maintenance status relative to a reference date (defaulting to today)
  */
 export function getMaintenanceStatus(
   nextDateStr: string,
-  referenceDateStr: string = '2026-11-10'
+  referenceDateStr: string = getTodayISODate()
 ): 'Quá hạn' | 'Tới hạn' | 'Sắp tới' | 'Đúng hạn' {
   if (!nextDateStr) return 'Đúng hạn';
 
@@ -618,7 +628,7 @@ export function matchesAssignee(rawField?: string | null, user?: Employee | null
  */
 export function getInspectionDaysRemaining(
   dueDateStr: string,
-  referenceDateStr: string = '2026-11-10'
+  referenceDateStr: string = getTodayISODate()
 ): number {
   if (!dueDateStr) return 999;
   const due = new Date(dueDateStr);
@@ -636,7 +646,7 @@ export function getInspectionStatus(
   dueDateStr: string,
   leadDays: number = 30,
   isInProgress: boolean = false,
-  referenceDateStr: string = '2026-11-10'
+  referenceDateStr: string = getTodayISODate()
 ): InspectionStatus {
   if (isInProgress) return 'Đang kiểm định';
   const diff = getInspectionDaysRemaining(dueDateStr, referenceDateStr);

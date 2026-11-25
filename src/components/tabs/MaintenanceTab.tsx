@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { MaintenancePlan, MaintenanceHistory, Equipment, MaintenanceWorkType } from '../../types/cmms';
-import { canAssignWork, canDeleteRecords, canManageMaintenancePlans, canViewCosts, formatDateVN, formatVND, getHistoryWorkType, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { canAssignWork, canDeleteRecords, canManageMaintenancePlans, canViewCosts, formatDateVN, formatVND, getHistoryWorkType, getTodayISODate, parseAssigneeNames } from '../../utils/cmmsLogic';
 import { resolveImageUrl } from '../../utils/imageUtils';
 import {
   exportMaintenanceHistoryExcel,
@@ -48,7 +48,7 @@ interface MaintenanceTabProps {
   onOpenQR: (eq: Equipment) => void;
 }
 
-const APP_TODAY = '2026-11-10';
+const APP_TODAY = getTodayISODate();
 
 function parseYMD(dateStr: string): Date {
   const [y, m, d] = dateStr.split('-').map(Number);
@@ -97,8 +97,8 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
 
   // Calendar states
   const [calendarMode, setCalendarMode] = useState<'month' | 'week'>('month');
-  const [calendarRefDate, setCalendarRefDate] = useState<string>(APP_TODAY);
-  const [selectedDate, setSelectedDate] = useState<string>(APP_TODAY);
+  const [calendarRefDate, setCalendarRefDate] = useState<string>(() => getTodayISODate());
+  const [selectedDate, setSelectedDate] = useState<string>(() => getTodayISODate());
   const [draggingPlanId, setDraggingPlanId] = useState<string | null>(null);
   const [dragOverDate, setDragOverDate] = useState<string | null>(null);
   const [rescheduleDrafts, setRescheduleDrafts] = useState<Record<string, string>>({});
@@ -218,8 +218,9 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
   };
 
   const handleJumpToday = () => {
-    setCalendarRefDate(APP_TODAY);
-    setSelectedDate(APP_TODAY);
+    const todayStr = getTodayISODate();
+    setCalendarRefDate(todayStr);
+    setSelectedDate(todayStr);
   };
 
   const calendarHeading = useMemo(() => {
@@ -1340,7 +1341,7 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
                     onClick={handleJumpToday}
                     className="px-3 py-1.5 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/35 text-cyan-300 border border-cyan-500/40 text-xs font-bold transition whitespace-nowrap"
                   >
-                    Hôm nay (10/11/2026)
+                    Hôm nay ({formatDateVN(getTodayISODate())})
                   </button>
                 </div>
 

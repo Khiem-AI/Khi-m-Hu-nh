@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { CostRecord, CostCategory, CostStatus } from '../types/cmms';
+import { getTodayISODate } from '../utils/cmmsLogic';
 import { X, DollarSign, CheckCircle, AlertTriangle } from 'lucide-react';
 
 interface CostModalProps {
@@ -12,7 +13,7 @@ interface CostModalProps {
 export const CostModal: React.FC<CostModalProps> = ({ isOpen, onClose, costToEdit }) => {
   const { addCostRecord, updateCostRecord, equipment, tickets } = useCMMS();
 
-  const [ngayGhiNhan, setNgayGhiNhan] = useState(costToEdit?.ngayGhiNhan || '2026-11-10');
+  const [ngayGhiNhan, setNgayGhiNhan] = useState(costToEdit?.ngayGhiNhan || getTodayISODate());
   const [phanLoai, setPhanLoai] = useState<CostCategory>(costToEdit?.phanLoai || 'Bảo trì định kỳ');
   const [thamChieu, setThamChieu] = useState(costToEdit?.thamChieu || '');
   const [soTienVND, setSoTienVND] = useState(costToEdit?.soTienVND || 5000000);

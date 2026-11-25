@@ -12,6 +12,7 @@ import {
   formatDateVN,
   getInspectionDaysRemaining,
   getInspectionStatus,
+  getTodayISODate,
 } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
@@ -33,7 +34,7 @@ import {
   User,
 } from 'lucide-react';
 
-const APP_TODAY = '2026-11-10';
+const APP_TODAY = getTodayISODate();
 
 const INSPECTION_CATEGORIES: InspectionCategory[] = [
   'Kiểm định an toàn',

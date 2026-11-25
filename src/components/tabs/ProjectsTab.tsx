@@ -19,6 +19,7 @@ import {
   canViewCosts,
   formatDateVN,
   formatVND,
+  getTodayISODate,
   matchesAssignee,
   parseAssigneeNames,
   resolveAssigneeEmails,
@@ -78,7 +79,7 @@ const PROJECT_CATEGORIES: ProjectCategory[] = [
 
 const TASK_STATUSES: ProjectTaskStatus[] = ['Cần làm', 'Đang làm', 'Chờ duyệt', 'Hoàn thành'];
 
-const TODAY_REF = '2026-11-10';
+const TODAY_REF = getTodayISODate();
 
 const getProjectStatusBadge = (status: ProjectStatus) => {
   switch (status) {

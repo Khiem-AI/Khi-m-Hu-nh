@@ -556,6 +556,150 @@ async function startServer() {
     res.status(result.status).json(result.payload);
   });
 
+  // --- Real-Time Online User Presence API ---
+  interface PresenceSessionRecord {
+    sessionId: string;
+    maNhanVien: string;
+    tenNhanVien: string;
+    chucVu: string;
+    phongBan?: string;
+    currentTab: string;
+    currentTabLabel: string;
+    deviceType: 'Desktop' | 'Mobile';
+    lastActiveAt: number;
+  }
+
+  const PRESENCE_TTL_MS = 65_000;
+  const MAX_PRESENCE_SESSIONS = 500;
+  const presenceSessions = new Map<string, PresenceSessionRecord>();
+
+  const pruneAndAggregateOnlineUsers = () => {
+    const now = Date.now();
+    for (const [sid, session] of presenceSessions.entries()) {
+      if (now - session.lastActiveAt > PRESENCE_TTL_MS) {
+        presenceSessions.delete(sid);
+      }
+    }
+
+    const byUser = new Map<
+      string,
+      {
+        maNhanVien: string;
+        tenNhanVien: string;
+        chucVu: string;
+        phongBan?: string;
+        currentTab: string;
+        currentTabLabel: string;
+        deviceType: 'Desktop' | 'Mobile';
+        lastActiveAt: number;
+        sessionCount: number;
+        source: 'server';
+      }
+    >();
+
+    for (const s of presenceSessions.values()) {
+      const key = s.maNhanVien.trim().toUpperCase();
+      const existing = byUser.get(key);
+      if (!existing) {
+        byUser.set(key, {
+          maNhanVien: s.maNhanVien,
+          tenNhanVien: s.tenNhanVien,
+          chucVu: s.chucVu,
+          phongBan: s.phongBan,
+          currentTab: s.currentTab,
+          currentTabLabel: s.currentTabLabel,
+          deviceType: s.deviceType,
+          lastActiveAt: s.lastActiveAt,
+          sessionCount: 1,
+          source: 'server',
+        });
+      } else {
+        existing.sessionCount += 1;
+        if (s.lastActiveAt >= existing.lastActiveAt) {
+          existing.lastActiveAt = s.lastActiveAt;
+          existing.currentTab = s.currentTab;
+          existing.currentTabLabel = s.currentTabLabel;
+          existing.deviceType = s.deviceType;
+          existing.tenNhanVien = s.tenNhanVien;
+          existing.chucVu = s.chucVu;
+          existing.phongBan = s.phongBan;
+        }
+      }
+    }
+
+    return Array.from(byUser.values()).sort((a, b) => b.lastActiveAt - a.lastActiveAt);
+  };
+
+  const safeClip = (val: unknown, maxLen: number): string =>
+    typeof val === 'string' ? val.trim().slice(0, maxLen) : '';
+
+  app.post('/api/presence/heartbeat', (req, res) => {
+    const body = (req.body || {}) as Record<string, unknown>;
+    const sessionId = safeClip(body.sessionId, 80);
+    const maNhanVien = safeClip(body.maNhanVien, 40);
+    const tenNhanVien = safeClip(body.tenNhanVien, 120);
+
+    if (!sessionId || !maNhanVien || !tenNhanVien) {
+      res.status(400).json({ ok: false, message: 'Thiếu thông tin phiên người dùng.' });
+      return;
+    }
+
+    const chucVu = safeClip(body.chucVu, 80) || 'Nhân viên';
+    const phongBan = safeClip(body.phongBan, 120) || undefined;
+    const currentTab = safeClip(body.currentTab, 60) || 'dashboard';
+    const currentTabLabel = safeClip(body.currentTabLabel, 100) || 'Tổng quan';
+    const deviceType: 'Desktop' | 'Mobile' = body.deviceType === 'Mobile' ? 'Mobile' : 'Desktop';
+
+    if (presenceSessions.size >= MAX_PRESENCE_SESSIONS && !presenceSessions.has(sessionId)) {
+      pruneAndAggregateOnlineUsers();
+    }
+
+    presenceSessions.set(sessionId, {
+      sessionId,
+      maNhanVien,
+      tenNhanVien,
+      chucVu,
+      phongBan,
+      currentTab,
+      currentTabLabel,
+      deviceType,
+      lastActiveAt: Date.now(),
+    });
+
+    const onlineUsers = pruneAndAggregateOnlineUsers();
+    res.json({ ok: true, serverNow: Date.now(), onlineUsers });
+  });
+
+  app.post(
+    '/api/presence/leave',
+    express.text({ type: 'text/plain', limit: '16kb' }),
+    (req, res) => {
+      let body: Record<string, unknown> = {};
+      if (typeof req.body === 'string') {
+        try {
+          body = JSON.parse(req.body) as Record<string, unknown>;
+        } catch {
+          body = {};
+        }
+      } else if (req.body && typeof req.body === 'object') {
+        body = req.body as Record<string, unknown>;
+      }
+
+      const sessionId = safeClip(body.sessionId, 80);
+      if (sessionId) {
+        presenceSessions.delete(sessionId);
+      }
+
+      const onlineUsers = pruneAndAggregateOnlineUsers();
+      res.json({ ok: true, serverNow: Date.now(), onlineUsers });
+    }
+  );
+
+  app.get('/api/presence/online', (_req, res) => {
+    const onlineUsers = pruneAndAggregateOnlineUsers();
+    res.json({ ok: true, serverNow: Date.now(), onlineUsers });
+  });
+
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
