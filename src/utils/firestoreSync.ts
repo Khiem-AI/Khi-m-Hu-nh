@@ -2,9 +2,13 @@ import {
   collection,
   deleteDoc,
   doc,
+  DocumentData,
   getDoc,
+  getDocFromServer,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
+  Query,
   query,
   serverTimestamp,
   setDoc,
@@ -815,6 +819,27 @@ export async function deleteCloudDoc(
   }
 }
 
+export function buildCollectionQuery(
+  colName: string,
+  userEmail: string,
+  uid: string,
+  mode: 'standard' | 'private_employee' | 'email_log' = 'standard'
+): Query<DocumentData> {
+  const normalizedEmail = userEmail.trim().toLowerCase();
+  const isBootAdmin = normalizedEmail === BOOTSTRAPPED_ADMIN_EMAIL;
+
+  if (isBootAdmin) {
+    return collection(db, colName);
+  }
+  if (mode === 'private_employee') {
+    return query(collection(db, colName), where('email', '==', normalizedEmail));
+  }
+  if (mode === 'email_log') {
+    return query(collection(db, colName), where('ownerUid', '==', uid));
+  }
+  return query(collection(db, colName), where('allowedEmails', 'array-contains', normalizedEmail));
+}
+
 export function subscribeCloudCollection<T>(
   colName: string,
   userEmail: string,
@@ -823,19 +848,7 @@ export function subscribeCloudCollection<T>(
   onError: (err: Error) => void,
   mode: 'standard' | 'private_employee' | 'email_log' = 'standard'
 ): Unsubscribe {
-  const normalizedEmail = userEmail.trim().toLowerCase();
-  const isBootAdmin = normalizedEmail === BOOTSTRAPPED_ADMIN_EMAIL;
-
-  let q;
-  if (isBootAdmin) {
-    q = collection(db, colName);
-  } else if (mode === 'private_employee') {
-    q = query(collection(db, colName), where('email', '==', normalizedEmail));
-  } else if (mode === 'email_log') {
-    q = query(collection(db, colName), where('ownerUid', '==', uid));
-  } else {
-    q = query(collection(db, colName), where('allowedEmails', 'array-contains', normalizedEmail));
-  }
+  const q = buildCollectionQuery(colName, userEmail, uid, mode);
 
   return onSnapshot(
     q,
@@ -864,6 +877,305 @@ export function subscribeCloudCollection<T>(
       }
     }
   );
+}
+
+async function fetchCollectionServerFirst<T>(
+  colName: string,
+  userEmail: string,
+  uid: string,
+  mode: 'standard' | 'private_employee' | 'email_log' = 'standard',
+  knownCloudIds?: Set<string>
+): Promise<T[]> {
+  const q = buildCollectionQuery(colName, userEmail, uid, mode);
+  let snap;
+  try {
+    snap = await getDocsFromServer(q);
+  } catch (err) {
+    const code = (err as { code?: string })?.code || '';
+    if (code === 'permission-denied') {
+      throw err;
+    }
+    snap = await getDocs(q);
+  }
+  const items: T[] = [];
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as Record<string, unknown>;
+    const {
+      ownerUid: _o,
+      allowedEmails: _a,
+      createdAt: _c,
+      updatedAt: _u,
+      ...clean
+    } = data;
+    items.push(clean as unknown as T);
+    knownCloudIds?.add(`${colName}/${docSnap.id}`);
+  });
+  return items;
+}
+
+export async function checkEmailMembershipInFirestore(
+  emailLower: string
+): Promise<{ authorized: boolean; employeeCode?: string }> {
+  const normalized = emailLower.trim().toLowerCase();
+  if (!normalized) return { authorized: false };
+  if (normalized === BOOTSTRAPPED_ADMIN_EMAIL) {
+    return { authorized: true, employeeCode: 'ID1460' };
+  }
+  const q = query(collection(db, 'employees_private'), where('email', '==', normalized));
+  try {
+    const snap = await getDocsFromServer(q);
+    if (!snap.empty) {
+      const firstDoc = snap.docs[0];
+      const data = firstDoc.data() as { maNhanVien?: string };
+      return { authorized: true, employeeCode: data.maNhanVien || firstDoc.id };
+    }
+    return { authorized: false };
+  } catch {
+    try {
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const firstDoc = snap.docs[0];
+        const data = firstDoc.data() as { maNhanVien?: string };
+        return { authorized: true, employeeCode: data.maNhanVien || firstDoc.id };
+      }
+      return { authorized: false };
+    } catch {
+      return { authorized: false };
+    }
+  }
+}
+
+export interface PulledCloudWorkspaceData {
+  settings: { key: string; payload: Record<string, unknown> }[];
+  equipment: Equipment[];
+  maintenancePlans: MaintenancePlan[];
+  maintenanceHistory: MaintenanceHistory[];
+  tickets: Ticket[];
+  spareParts: SparePart[];
+  stockTransactions: StockTransaction[];
+  power10Days: Power10Days[];
+  waterMonthly: WaterMonthly[];
+  meterReadings: MeterReading[];
+  costRecords: CostRecord[];
+  employeesPublic: Partial<Employee>[];
+  employeesPrivate: Partial<Employee>[];
+  documents: FacilityDocument[];
+  projects: FacilityProject[];
+  safetyInspections: SafetyInspectionItem[];
+  tools: ToolItem[];
+  toolLogs: ToolBorrowLog[];
+  dailyAreaChecks: DailyAreaCheck[];
+  purchaseRequests: PurchaseRequest[];
+  emailLogs: EmailLog[];
+  auditLogs: AuditLog[];
+  workspaceMetaExists: boolean;
+  totalLoaded: number;
+}
+
+export async function pullLatestWorkspaceFromFirestore(
+  userEmail: string,
+  uid: string,
+  knownCloudIds?: Set<string>
+): Promise<PulledCloudWorkspaceData> {
+  const [
+    settings,
+    equipment,
+    maintenancePlans,
+    maintenanceHistory,
+    tickets,
+    spareParts,
+    stockTransactions,
+    power10Days,
+    waterMonthly,
+    meterReadings,
+    costRecords,
+    employeesPublic,
+    employeesPrivate,
+    documents,
+    projects,
+    safetyInspections,
+    tools,
+    toolLogs,
+    dailyAreaChecks,
+    purchaseRequests,
+    emailLogs,
+    auditLogs,
+  ] = await Promise.all([
+    fetchCollectionServerFirst<{ key: string; payload: Record<string, unknown> }>(
+      'settings',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<Equipment>('equipment', userEmail, uid, 'standard', knownCloudIds),
+    fetchCollectionServerFirst<MaintenancePlan>(
+      'maintenance_plans',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<MaintenanceHistory>(
+      'maintenance_history',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<Ticket>('tickets', userEmail, uid, 'standard', knownCloudIds),
+    fetchCollectionServerFirst<SparePart>('spare_parts', userEmail, uid, 'standard', knownCloudIds),
+    fetchCollectionServerFirst<StockTransaction>(
+      'stock_transactions',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<Power10Days>(
+      'power_10days',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<WaterMonthly>(
+      'water_monthly',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<MeterReading>(
+      'meter_readings',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<CostRecord>(
+      'cost_records',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<Partial<Employee>>(
+      'employees_public',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<Partial<Employee>>(
+      'employees_private',
+      userEmail,
+      uid,
+      'private_employee',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<FacilityDocument>(
+      'documents',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<FacilityProject>(
+      'projects',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<SafetyInspectionItem>(
+      'safety_inspections',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<ToolItem>('tools', userEmail, uid, 'standard', knownCloudIds),
+    fetchCollectionServerFirst<ToolBorrowLog>(
+      'tool_logs',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<DailyAreaCheck>(
+      'daily_area_checks',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<PurchaseRequest>(
+      'purchase_requests',
+      userEmail,
+      uid,
+      'standard',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<EmailLog>(
+      'email_logs',
+      userEmail,
+      uid,
+      'email_log',
+      knownCloudIds
+    ),
+    fetchCollectionServerFirst<AuditLog>('audit_logs', userEmail, uid, 'standard', knownCloudIds),
+  ]);
+
+  const workspaceMetaExists = settings.some((s) => s.key === 'workspace_meta');
+  const totalLoaded =
+    equipment.length +
+    maintenancePlans.length +
+    maintenanceHistory.length +
+    tickets.length +
+    spareParts.length +
+    stockTransactions.length +
+    power10Days.length +
+    waterMonthly.length +
+    meterReadings.length +
+    costRecords.length +
+    employeesPublic.length +
+    documents.length +
+    projects.length +
+    safetyInspections.length +
+    tools.length +
+    toolLogs.length +
+    dailyAreaChecks.length +
+    purchaseRequests.length +
+    emailLogs.length +
+    auditLogs.length;
+
+  return {
+    settings,
+    equipment,
+    maintenancePlans,
+    maintenanceHistory,
+    tickets,
+    spareParts,
+    stockTransactions,
+    power10Days,
+    waterMonthly,
+    meterReadings,
+    costRecords,
+    employeesPublic,
+    employeesPrivate,
+    documents,
+    projects,
+    safetyInspections,
+    tools,
+    toolLogs,
+    dailyAreaChecks,
+    purchaseRequests,
+    emailLogs,
+    auditLogs,
+    workspaceMetaExists,
+    totalLoaded,
+  };
 }
 
 export interface WorkspaceSnapshotData {
@@ -904,7 +1216,7 @@ export async function seedOrPushWorkspaceToFirestore(
 
   let metaExists = false;
   try {
-    const metaSnap = await getDoc(metaRef);
+    const metaSnap = await getDocFromServer(metaRef).catch(() => getDoc(metaRef));
     metaExists = metaSnap.exists();
   } catch (error) {
     handleFirestoreError(error, OperationType.GET, 'settings/workspace_meta');

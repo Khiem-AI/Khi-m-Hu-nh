@@ -178,14 +178,14 @@ export const ProfileTab: React.FC = () => {
     setSaveSuccess(`Đã lưu hồ sơ của ${updated.tenNhanVien} và đồng bộ hệ thống.`);
   };
 
-  const handlePasswordSubmit = (e: React.FormEvent) => {
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setCpNotice(null);
     if (cpNew.trim() !== cpConfirm.trim()) {
       setCpNotice({ ok: false, text: 'Mật khẩu mới và xác nhận mật khẩu không khớp.' });
       return;
     }
-    const res = changePassword(currentUser.maNhanVien, cpCurrent, cpNew);
+    const res = await changePassword(currentUser.maNhanVien, cpCurrent, cpNew);
     setCpNotice({ ok: res.success, text: res.message });
     if (res.success) {
       setCpCurrent('');

@@ -107,11 +107,14 @@ import {
 import { auth } from '../utils/firebaseClient';
 import {
   BOOTSTRAPPED_ADMIN_EMAIL,
+  PulledCloudWorkspaceData,
   WorkspaceSnapshotData,
   buildAllowedEmails,
+  checkEmailMembershipInFirestore,
   deleteCloudDoc,
   formatFirestoreSyncError,
   propagateAllowedEmails,
+  pullLatestWorkspaceFromFirestore,
   sanitizeAuditLog,
   sanitizeCostRecord,
   sanitizeDocument,
@@ -144,6 +147,7 @@ import {
 } from '../utils/firestoreSync';
 
 export type CloudSyncStatus = 'offline' | 'connecting' | 'syncing' | 'synced' | 'error';
+export type ServerSyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
 export interface CloudAccountInfo {
   uid: string;
@@ -387,12 +391,12 @@ interface CMMSContextType {
 
   // Authentication & Login
   isAuthenticated: boolean;
-  login: (username: string, password?: string) => { success: boolean; message?: string };
+  login: (username: string, password?: string) => Promise<{ success: boolean; message?: string }>;
   changePassword: (
     username: string,
     currentPassword: string,
     newPassword: string
-  ) => { success: boolean; message: string };
+  ) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
 
   // Work Assignment & Completion Reporting
@@ -419,14 +423,18 @@ interface CMMSContextType {
     userConfirmed?: boolean;
   }) => Promise<void>;
 
-  // Cloud Real-Time Synchronization
+  // Cloud & Server Real-Time Synchronization
   cloudSyncStatus: CloudSyncStatus;
   cloudUser: CloudAccountInfo | null;
   cloudSyncError: string | null;
   lastSyncedAt: string | null;
+  serverSyncStatus: ServerSyncStatus;
+  lastServerSyncedAt: string | null;
   connectCloudWithGoogle: () => Promise<{ success: boolean; message: string }>;
   disconnectCloud: () => Promise<void>;
   forceSyncLocalToCloud: () => Promise<{ success: boolean; message: string }>;
+  pullLatestFromCloud: () => Promise<{ success: boolean; message: string }>;
+  pullLatestFromServer: () => Promise<{ success: boolean; message: string }>;
 
   // Live Online Users Presence
   onlineUsers: OnlineUserPresence[];
@@ -760,13 +768,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return saved && saved.maNhanVien ? saved : INITIAL_EMPLOYEES[0];
   });
 
-  // Cloud Sync State & Refs
+  // Cloud & Shared Server Sync State & Refs
   const [cloudSyncStatus, setCloudSyncStatus] = useState<CloudSyncStatus>('offline');
   const [cloudUser, setCloudUser] = useState<CloudAccountInfo | null>(null);
   const [cloudSyncError, setCloudSyncError] = useState<string | null>(null);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [serverSyncStatus, setServerSyncStatus] = useState<ServerSyncStatus>('idle');
+  const [lastServerSyncedAt, setLastServerSyncedAt] = useState<string | null>(null);
 
   const cloudUserRef = useRef<CloudAccountInfo | null>(null);
+  const pendingCloudFbUserRef = useRef<User | null>(null);
   const knownCloudIdsRef = useRef<Set<string>>(new Set());
   const employeesRef = useRef<Employee[]>(employees);
   const currentUserRef = useRef<Employee>(currentUser);
@@ -776,6 +787,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const inFlightEmailSignaturesRef = useRef<Set<string>>(new Set());
   const autoInspectionCheckedDateRef = useRef<string>('');
   const pendingGoogleLoginAuditRef = useRef<boolean>(false);
+  // Bearer session token kept strictly in JS memory (never persisted to localStorage/sessionStorage)
+  const serverSessionTokenRef = useRef<string | null>(null);
+  const serverRevisionRef = useRef<number>(0);
+  const applyingRemoteSnapshotRef = useRef<boolean>(false);
+  const initialServerSyncDoneRef = useRef<boolean>(false);
+  const localServerPushTimerRef = useRef<number | null>(null);
+  const cloudMirrorTimerRef = useRef<number | null>(null);
+  const hasMountedSyncWatcherRef = useRef<boolean>(false);
 
   const applyCurrentUser = (nextUser: Employee, persistSession = false) => {
     currentUserRef.current = nextUser;
@@ -1232,9 +1251,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
   };
 
-  const mergeAndApplyEmployees = () => {
+  const markApplyingRemoteSnapshot = () => {
+    applyingRemoteSnapshotRef.current = true;
+    window.setTimeout(() => {
+      applyingRemoteSnapshotRef.current = false;
+    }, 600);
+  };
+
+  const mergeAndApplyEmployees = (): Employee[] => {
     const pubEntries = Object.values(cloudEmpPublicRef.current);
-    if (pubEntries.length === 0) return;
+    if (pubEntries.length === 0) return employeesRef.current;
 
     const prevById = new Map(employeesRef.current.map((e) => [e.maNhanVien, e]));
     const initById = new Map(INITIAL_EMPLOYEES.map((e) => [e.maNhanVien, e]));
@@ -1263,6 +1289,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
 
     const sorted = merged.sort((a, b) => a.maNhanVien.localeCompare(b.maNhanVien));
+    employeesRef.current = sorted;
+    markApplyingRemoteSnapshot();
     setEmployees(sorted);
 
     const activeCode = currentUserRef.current?.maNhanVien;
@@ -1272,6 +1300,624 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         applyCurrentUser(refreshedCurrent, false);
       }
     }
+
+    if (pendingCloudFbUserRef.current && !isAuthenticatedRef.current) {
+      const matched = matchOrApplyCloudUser(pendingCloudFbUserRef.current, true);
+      if (matched) {
+        pendingCloudFbUserRef.current = null;
+      }
+    }
+
+    return sorted;
+  };
+
+  const applyWorkspaceSnapshotToState = (rawSnap: Partial<WorkspaceSnapshotData>) => {
+    markApplyingRemoteSnapshot();
+    const todayIso = getTodayISODate();
+
+    if (Array.isArray(rawSnap.equipment) && rawSnap.equipment.length > 0) {
+      setEquipment([...rawSnap.equipment].sort((a, b) => a.maThietBi.localeCompare(b.maThietBi)));
+    }
+    if (Array.isArray(rawSnap.maintenancePlans)) {
+      setMaintenancePlans(
+        [...rawSnap.maintenancePlans]
+          .map((p) => ({
+            ...p,
+            trangThai: getMaintenanceStatus(p.ngayBaoTriTiepTheo, todayIso),
+          }))
+          .sort((a, b) => (a.ngayBaoTriTiepTheo || '').localeCompare(b.ngayBaoTriTiepTheo || ''))
+      );
+    }
+    if (Array.isArray(rawSnap.maintenanceHistory)) {
+      setMaintenanceHistory(
+        [...rawSnap.maintenanceHistory].sort((a, b) =>
+          (b.ngayThucHien || '').localeCompare(a.ngayThucHien || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.tickets)) {
+      setTickets(
+        [...rawSnap.tickets].sort((a, b) => (b.ngayTao || '').localeCompare(a.ngayTao || ''))
+      );
+    }
+    if (Array.isArray(rawSnap.spareParts)) {
+      setSpareParts([...rawSnap.spareParts].sort((a, b) => a.maVatTu.localeCompare(b.maVatTu)));
+    }
+    if (Array.isArray(rawSnap.stockTransactions)) {
+      setStockTransactions(
+        [...rawSnap.stockTransactions].sort((a, b) => (b.ngay || '').localeCompare(a.ngay || ''))
+      );
+    }
+    if (Array.isArray(rawSnap.power10Days)) {
+      setPower10Days(
+        [...rawSnap.power10Days].sort((a, b) =>
+          (b.tuNgay || '').localeCompare(a.tuNgay || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.waterMonthly)) {
+      setWaterMonthly(
+        [...rawSnap.waterMonthly].sort((a, b) => (b.month || '').localeCompare(a.month || ''))
+      );
+    }
+    if (Array.isArray(rawSnap.meterReadings)) {
+      setMeterReadings(
+        [...rawSnap.meterReadings].sort((a, b) =>
+          (b.timestamp || b.ngayChot || '').localeCompare(a.timestamp || a.ngayChot || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.costRecords)) {
+      setCostRecords(
+        [...rawSnap.costRecords].sort((a, b) =>
+          (b.ngayGhiNhan || '').localeCompare(a.ngayGhiNhan || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.employees) && rawSnap.employees.length > 0) {
+      const prevByCode = new Map(
+        employeesRef.current.map((e) => [e.maNhanVien.trim().toUpperCase(), e])
+      );
+      const initByCode = new Map(
+        INITIAL_EMPLOYEES.map((e) => [e.maNhanVien.trim().toUpperCase(), e])
+      );
+      const hydrated = rawSnap.employees
+        .map((emp) => {
+          const codeKey = (emp.maNhanVien || '').trim().toUpperCase();
+          const fallback = prevByCode.get(codeKey) || initByCode.get(codeKey);
+          return {
+            ...(fallback || {}),
+            ...emp,
+            password: fallback?.password,
+          } as Employee;
+        })
+        .sort((a, b) => a.maNhanVien.localeCompare(b.maNhanVien));
+      employeesRef.current = hydrated;
+      setEmployees(hydrated);
+      const activeCode = currentUserRef.current?.maNhanVien?.trim().toUpperCase();
+      if (activeCode) {
+        const refreshed = hydrated.find((e) => e.maNhanVien.trim().toUpperCase() === activeCode);
+        if (refreshed) {
+          applyCurrentUser(refreshed, false);
+        }
+      }
+    }
+    if (Array.isArray(rawSnap.documents)) {
+      setDocuments(
+        [...rawSnap.documents].sort((a, b) =>
+          (b.ngayCapNhat || '').localeCompare(a.ngayCapNhat || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.projects)) {
+      setProjects(
+        [...rawSnap.projects].sort((a, b) =>
+          (b.ngayBatDau || '').localeCompare(a.ngayBatDau || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.safetyInspections)) {
+      setSafetyInspections(
+        [...rawSnap.safetyInspections].map((item) => ({
+          ...item,
+          trangThai: getInspectionStatus(
+            item.ngayHetHan,
+            item.nhacTruocNgay,
+            item.trangThai === 'Đang kiểm định'
+          ),
+        }))
+      );
+    }
+    if (Array.isArray(rawSnap.tools)) {
+      setTools([...rawSnap.tools].sort((a, b) => a.maDungCu.localeCompare(b.maDungCu)));
+    }
+    if (Array.isArray(rawSnap.toolLogs)) {
+      setToolLogs(
+        [...rawSnap.toolLogs].sort((a, b) =>
+          (b.ngayGiaoDich || '').localeCompare(a.ngayGiaoDich || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.dailyAreaChecks)) {
+      setDailyAreaChecks(
+        [...rawSnap.dailyAreaChecks].sort((a, b) =>
+          (b.ngayKiemTra || '').localeCompare(a.ngayKiemTra || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.purchaseRequests)) {
+      setPurchaseRequests(
+        [...rawSnap.purchaseRequests].sort((a, b) =>
+          (b.ngayYeuCau || '').localeCompare(a.ngayYeuCau || '')
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.emailLogs)) {
+      setEmailLogs(
+        deduplicateById(
+          [...rawSnap.emailLogs].sort((a, b) =>
+            (b.timestamp || '').localeCompare(a.timestamp || '')
+          ),
+          'EML'
+        )
+      );
+    }
+    if (Array.isArray(rawSnap.auditLogs)) {
+      setAuditLogs(
+        deduplicateById(
+          [...rawSnap.auditLogs].sort((a, b) =>
+            (b.thoiGian || '').localeCompare(a.thoiGian || '')
+          ),
+          'LOG'
+        )
+      );
+    }
+    if (rawSnap.emailConfig && typeof rawSnap.emailConfig === 'object') {
+      setEmailConfig((prev) => ({
+        ...INITIAL_EMAIL_CONFIG,
+        ...prev,
+        ...rawSnap.emailConfig,
+      }));
+    }
+    if (rawSnap.tariffConfig && typeof rawSnap.tariffConfig === 'object') {
+      setTariffConfig((prev) => ({
+        ...DEFAULT_ENERGY_TARIFF_CONFIG,
+        ...prev,
+        ...rawSnap.tariffConfig,
+      }));
+    }
+    if (rawSnap.morningCheckTemplates && typeof rawSnap.morningCheckTemplates === 'object') {
+      setMorningCheckTemplates((prev) => ({
+        ...DEFAULT_MORNING_CHECK_TEMPLATES,
+        ...prev,
+        ...rawSnap.morningCheckTemplates,
+      }));
+    }
+    if (rawSnap.monthlyBoardReports && typeof rawSnap.monthlyBoardReports === 'object') {
+      const incomingStore = rawSnap.monthlyBoardReports;
+      setMonthlyBoardReports((prev) => ({
+        defaultBoardRecipients:
+          typeof incomingStore.defaultBoardRecipients === 'string'
+            ? incomingStore.defaultBoardRecipients
+            : prev.defaultBoardRecipients,
+        defaultCcRecipients:
+          typeof incomingStore.defaultCcRecipients === 'string'
+            ? incomingStore.defaultCcRecipients
+            : prev.defaultCcRecipients,
+        reportsByMonth:
+          incomingStore.reportsByMonth && typeof incomingStore.reportsByMonth === 'object'
+            ? incomingStore.reportsByMonth
+            : prev.reportsByMonth,
+      }));
+    }
+  };
+
+  const applyPulledCloudDataToState = (pulled: PulledCloudWorkspaceData): WorkspaceSnapshotData => {
+    markApplyingRemoteSnapshot();
+
+    if (pulled.workspaceMetaExists) {
+      workspaceReadyRef.current = true;
+    }
+
+    let nextEmailConfig = latestSnapshotRef.current.emailConfig;
+    let nextTariffConfig = latestSnapshotRef.current.tariffConfig;
+    let nextMorningTemplates = latestSnapshotRef.current.morningCheckTemplates;
+    let nextMonthlyBoardReports = latestSnapshotRef.current.monthlyBoardReports;
+
+    for (const s of pulled.settings) {
+      if (s.key === 'email_config' && s.payload) {
+        nextEmailConfig = {
+          ...INITIAL_EMAIL_CONFIG,
+          ...nextEmailConfig,
+          ...(s.payload as Partial<EmailConfig>),
+        };
+      } else if (s.key === 'tariff_config' && s.payload) {
+        nextTariffConfig = {
+          ...DEFAULT_ENERGY_TARIFF_CONFIG,
+          ...nextTariffConfig,
+          ...(s.payload as Partial<EnergyTariffConfig>),
+        };
+      } else if (s.key === 'morning_check_templates' && s.payload) {
+        nextMorningTemplates = {
+          ...DEFAULT_MORNING_CHECK_TEMPLATES,
+          ...(nextMorningTemplates || {}),
+          ...(s.payload as Partial<MorningCheckTemplatesMap>),
+        };
+      } else if (s.key === 'monthly_board_reports' && s.payload) {
+        const incomingStore = s.payload as Partial<MonthlyBoardReportsStore>;
+        nextMonthlyBoardReports = {
+          defaultBoardRecipients:
+            typeof incomingStore.defaultBoardRecipients === 'string'
+              ? incomingStore.defaultBoardRecipients
+              : nextMonthlyBoardReports?.defaultBoardRecipients || '',
+          defaultCcRecipients:
+            typeof incomingStore.defaultCcRecipients === 'string'
+              ? incomingStore.defaultCcRecipients
+              : nextMonthlyBoardReports?.defaultCcRecipients || '',
+          reportsByMonth:
+            incomingStore.reportsByMonth && typeof incomingStore.reportsByMonth === 'object'
+              ? incomingStore.reportsByMonth
+              : nextMonthlyBoardReports?.reportsByMonth || {},
+        };
+      } else if (s.key && s.key.startsWith('presence_') && s.payload) {
+        const p = s.payload as Record<string, unknown>;
+        const maNV = typeof p.maNhanVien === 'string' ? p.maNhanVien : '';
+        const lastActiveAt = typeof p.lastActiveAt === 'number' ? p.lastActiveAt : 0;
+        if (maNV && lastActiveAt > 0) {
+          cloudPresenceRef.current.set(maNV.trim().toUpperCase(), {
+            maNhanVien: maNV,
+            tenNhanVien: typeof p.tenNhanVien === 'string' ? p.tenNhanVien : maNV,
+            chucVu: typeof p.chucVu === 'string' ? p.chucVu : 'Nhân viên',
+            phongBan: typeof p.phongBan === 'string' ? p.phongBan : undefined,
+            currentTab: typeof p.currentTab === 'string' ? p.currentTab : 'dashboard',
+            currentTabLabel:
+              typeof p.currentTabLabel === 'string' ? p.currentTabLabel : 'Tổng quan',
+            deviceType: p.deviceType === 'Mobile' ? 'Mobile' : 'Desktop',
+            lastActiveAt,
+            sessionCount: 1,
+            source: 'cloud',
+          });
+        }
+      }
+    }
+
+    if (pulled.employeesPublic.length > 0) {
+      const nextPub: Record<string, Partial<Employee>> = {};
+      pulled.employeesPublic.forEach((item) => {
+        if (item.maNhanVien) nextPub[item.maNhanVien] = item;
+      });
+      cloudEmpPublicRef.current = nextPub;
+    }
+    if (pulled.employeesPrivate.length > 0) {
+      const nextPriv: Record<string, Partial<Employee>> = { ...cloudEmpPrivateRef.current };
+      pulled.employeesPrivate.forEach((item) => {
+        if (item.maNhanVien) nextPriv[item.maNhanVien] = item;
+      });
+      cloudEmpPrivateRef.current = nextPriv;
+    }
+    const mergedEmployees =
+      pulled.employeesPublic.length > 0 ? mergeAndApplyEmployees() : employeesRef.current;
+
+    const currentSnap = latestSnapshotRef.current;
+    const ready = pulled.workspaceMetaExists || workspaceReadyRef.current;
+    const mergedSnapshot: WorkspaceSnapshotData = {
+      equipment:
+        pulled.equipment.length > 0 || ready ? pulled.equipment : currentSnap.equipment,
+      maintenancePlans:
+        pulled.maintenancePlans.length > 0 || ready
+          ? pulled.maintenancePlans
+          : currentSnap.maintenancePlans,
+      maintenanceHistory:
+        pulled.maintenanceHistory.length > 0 || ready
+          ? pulled.maintenanceHistory
+          : currentSnap.maintenanceHistory,
+      tickets: pulled.tickets.length > 0 || ready ? pulled.tickets : currentSnap.tickets,
+      spareParts:
+        pulled.spareParts.length > 0 || ready ? pulled.spareParts : currentSnap.spareParts,
+      stockTransactions:
+        pulled.stockTransactions.length > 0 || ready
+          ? pulled.stockTransactions
+          : currentSnap.stockTransactions,
+      power10Days:
+        pulled.power10Days.length > 0 || ready ? pulled.power10Days : currentSnap.power10Days,
+      waterMonthly:
+        pulled.waterMonthly.length > 0 || ready ? pulled.waterMonthly : currentSnap.waterMonthly,
+      meterReadings:
+        pulled.meterReadings.length > 0 || ready
+          ? pulled.meterReadings
+          : currentSnap.meterReadings,
+      costRecords:
+        pulled.costRecords.length > 0 || ready ? pulled.costRecords : currentSnap.costRecords,
+      employees: mergedEmployees,
+      documents: pulled.documents.length > 0 || ready ? pulled.documents : currentSnap.documents,
+      projects: pulled.projects.length > 0 || ready ? pulled.projects : currentSnap.projects,
+      safetyInspections:
+        pulled.safetyInspections.length > 0 || ready
+          ? pulled.safetyInspections
+          : currentSnap.safetyInspections,
+      tools: pulled.tools.length > 0 || ready ? pulled.tools : currentSnap.tools,
+      toolLogs: pulled.toolLogs.length > 0 || ready ? pulled.toolLogs : currentSnap.toolLogs,
+      dailyAreaChecks:
+        pulled.dailyAreaChecks.length > 0 || ready
+          ? pulled.dailyAreaChecks
+          : currentSnap.dailyAreaChecks,
+      purchaseRequests:
+        pulled.purchaseRequests.length > 0 || ready
+          ? pulled.purchaseRequests
+          : currentSnap.purchaseRequests,
+      emailLogs: pulled.emailLogs.length > 0 || ready ? pulled.emailLogs : currentSnap.emailLogs,
+      auditLogs: pulled.auditLogs.length > 0 || ready ? pulled.auditLogs : currentSnap.auditLogs,
+      emailConfig: nextEmailConfig,
+      tariffConfig: nextTariffConfig,
+      morningCheckTemplates: nextMorningTemplates,
+      monthlyBoardReports: nextMonthlyBoardReports,
+    };
+
+    applyWorkspaceSnapshotToState(mergedSnapshot);
+    latestSnapshotRef.current = mergedSnapshot;
+    recomputeMergedOnlineUsers();
+    return mergedSnapshot;
+  };
+
+  const establishCloudServerSession = async (fbUser: User): Promise<boolean> => {
+    try {
+      const idToken = await fbUser.getIdToken();
+      const resp = await fetch('/api/auth/cloud-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      if (!resp.ok) return false;
+      const data = (await resp.json()) as {
+        ok?: boolean;
+        token?: string;
+        workspaceRevision?: number;
+      };
+      if (data.ok && data.token) {
+        serverSessionTokenRef.current = data.token;
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const buildSanitizedServerPayload = (snap: WorkspaceSnapshotData): Record<string, unknown> => {
+    const cleanEmployees = snap.employees.map((emp) => {
+      const { password: _removed, ...rest } = emp;
+      return rest;
+    });
+    return {
+      ...snap,
+      employees: cleanEmployees,
+    };
+  };
+
+  const buildAdminCredentialSeeds = (
+    empList: Employee[]
+  ): Array<{ maNhanVien: string; password: string }> => {
+    const initByCode = new Map(
+      INITIAL_EMPLOYEES.map((e) => [e.maNhanVien.trim().toUpperCase(), e])
+    );
+    const seeds: Array<{ maNhanVien: string; password: string }> = [];
+    for (const emp of empList) {
+      const code = emp.maNhanVien?.trim();
+      if (!code) continue;
+      const initMatch = initByCode.get(code.toUpperCase());
+      const pass = (emp.password || initMatch?.password || '123456').trim();
+      if (pass.length >= 4) {
+        seeds.push({ maNhanVien: code, password: pass });
+      }
+    }
+    return seeds;
+  };
+
+  const pullLatestFromServerInternal = async (
+    forceFull = false
+  ): Promise<{ success: boolean; updated: boolean; message: string }> => {
+    if (!serverSessionTokenRef.current && auth.currentUser) {
+      await establishCloudServerSession(auth.currentUser);
+    }
+    const token = serverSessionTokenRef.current;
+    if (!token) {
+      return {
+        success: false,
+        updated: false,
+        message: 'Chưa có phiên đồng bộ máy chủ. Vui lòng đăng nhập lại hoặc kết nối Google Cloud.',
+      };
+    }
+
+    setServerSyncStatus('syncing');
+    try {
+      const sinceParam = forceFull ? 0 : serverRevisionRef.current;
+      const resp = await fetch(`/api/workspace/state?since=${sinceParam}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (resp.status === 401) {
+        serverSessionTokenRef.current = null;
+        if (auth.currentUser) {
+          const refreshed = await establishCloudServerSession(auth.currentUser);
+          if (refreshed) {
+            return pullLatestFromServerInternal(forceFull);
+          }
+        }
+        setServerSyncStatus('error');
+        return {
+          success: false,
+          updated: false,
+          message: 'Phiên đồng bộ đã hết hạn. Vui lòng đăng nhập lại để tải dữ liệu mới nhất.',
+        };
+      }
+
+      if (!resp.ok) {
+        setServerSyncStatus('error');
+        return {
+          success: false,
+          updated: false,
+          message: `Không thể tải dữ liệu từ máy chủ (HTTP ${resp.status}).`,
+        };
+      }
+
+      const data = (await resp.json()) as {
+        ok?: boolean;
+        updated?: boolean;
+        revision?: number;
+        updatedAt?: string | null;
+        updatedBy?: string | null;
+        snapshot?: Partial<WorkspaceSnapshotData>;
+      };
+
+      const prevRev = serverRevisionRef.current;
+      if (typeof data.revision === 'number' && data.revision > 0) {
+        serverRevisionRef.current = data.revision;
+      }
+      initialServerSyncDoneRef.current = true;
+      setServerSyncStatus('synced');
+      setLastServerSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+
+      if (data.updated && data.snapshot) {
+        applyWorkspaceSnapshotToState(data.snapshot);
+        // If this browser is connected as Cloud Admin and received newer edits from another device (e.g. internal user),
+        // mirror those changes up to Cloud Firestore so Cloud stays permanently updated too.
+        const cloudU = cloudUserRef.current;
+        if (
+          !forceFull &&
+          prevRev > 0 &&
+          typeof data.revision === 'number' &&
+          data.revision > prevRev &&
+          cloudU &&
+          cloudU.email.trim().toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL
+        ) {
+          const mergedForCloud: WorkspaceSnapshotData = {
+            ...latestSnapshotRef.current,
+            ...data.snapshot,
+            employees: employeesRef.current,
+          };
+          void seedOrPushWorkspaceToFirestore(cloudU.uid, cloudU.email, mergedForCloud, {
+            forcePushAll: true,
+            knownCloudIds: knownCloudIdsRef.current,
+          })
+            .then(() => {
+              setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+              setCloudSyncStatus('synced');
+            })
+            .catch(() => {
+              // Non-fatal background mirror
+            });
+        }
+        return {
+          success: true,
+          updated: true,
+          message: `Đã tải dữ liệu mới nhất thành công (phiên bản #${data.revision || 1}${
+            data.updatedBy ? ` • cập nhật bởi ${data.updatedBy}` : ''
+          }).`,
+        };
+      }
+
+      return {
+        success: true,
+        updated: false,
+        message:
+          (data.revision || 0) === 0
+            ? 'Máy chủ chưa có bản đồng bộ mới. Hãy kết nối Google Cloud để tải dữ liệu đám mây.'
+            : `Dữ liệu hiện tại đã là phiên bản mới nhất (#${data.revision}).`,
+      };
+    } catch {
+      setServerSyncStatus('error');
+      return {
+        success: false,
+        updated: false,
+        message: 'Không thể kết nối máy chủ đồng bộ. Vui lòng kiểm tra kết nối mạng.',
+      };
+    }
+  };
+
+  const pushSnapshotToServer = async (
+    source: 'cloud' | 'local',
+    overrideSnapshot?: WorkspaceSnapshotData
+  ): Promise<boolean> => {
+    if (!serverSessionTokenRef.current && auth.currentUser) {
+      await establishCloudServerSession(auth.currentUser);
+    }
+    const token = serverSessionTokenRef.current;
+    if (!token) return false;
+
+    const snap = overrideSnapshot || latestSnapshotRef.current;
+    const isAdminActor =
+      cloudUserRef.current?.email.trim().toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL ||
+      canAccessBackup(currentUserRef.current) ||
+      isAdminLevel(currentUserRef.current);
+
+    const payload: Record<string, unknown> = {
+      snapshot: buildSanitizedServerPayload(snap),
+      baseRevision: serverRevisionRef.current,
+      source,
+    };
+
+    if (isAdminActor && (source === 'cloud' || serverRevisionRef.current === 0)) {
+      payload.credentialSeeds = buildAdminCredentialSeeds(snap.employees);
+    }
+
+    setServerSyncStatus('syncing');
+    try {
+      const resp = await fetch('/api/workspace/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.status === 409) {
+        // Server has newer edits from another computer -> pull first instead of clobbering
+        await pullLatestFromServerInternal(true);
+        return false;
+      }
+
+      if (resp.status === 401) {
+        serverSessionTokenRef.current = null;
+        if (auth.currentUser) {
+          const refreshed = await establishCloudServerSession(auth.currentUser);
+          if (refreshed) {
+            return pushSnapshotToServer(source, overrideSnapshot);
+          }
+        }
+        setServerSyncStatus('error');
+        return false;
+      }
+
+      if (!resp.ok) {
+        setServerSyncStatus('error');
+        return false;
+      }
+
+      const data = (await resp.json()) as { ok?: boolean; revision?: number };
+      if (data.ok && typeof data.revision === 'number') {
+        serverRevisionRef.current = data.revision;
+      }
+      initialServerSyncDoneRef.current = true;
+      setServerSyncStatus('synced');
+      setLastServerSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+      return true;
+    } catch {
+      setServerSyncStatus('error');
+      return false;
+    }
+  };
+
+  const scheduleCloudMirrorToServer = () => {
+    if (cloudMirrorTimerRef.current) {
+      window.clearTimeout(cloudMirrorTimerRef.current);
+    }
+    cloudMirrorTimerRef.current = window.setTimeout(() => {
+      cloudMirrorTimerRef.current = null;
+      if (cloudUserRef.current && serverSessionTokenRef.current) {
+        void pushSnapshotToServer('cloud');
+      }
+    }, 1500);
   };
 
   const matchOrApplyCloudUser = (fbUser: User, recordLoginAudit = false): boolean => {
@@ -1325,6 +1971,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!fbUser || !fbUser.email) {
         cloudUserRef.current = null;
+        pendingCloudFbUserRef.current = null;
         workspaceReadyRef.current = false;
         setCloudUser(null);
         setCloudSyncStatus('offline');
@@ -1334,15 +1981,22 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const emailLower = fbUser.email.trim().toLowerCase();
       const isBootAdmin = emailLower === BOOTSTRAPPED_ADMIN_EMAIL;
-      const isAuthorizedInList =
+      let isAuthorizedInList =
         isBootAdmin ||
         employeesRef.current.some((e) => (e.email || '').trim().toLowerCase() === emailLower);
 
+      // Verify against live Cloud Firestore if not in local cache (e.g. fresh computer / newly added employee)
+      if (!isAuthorizedInList) {
+        const cloudCheck = await checkEmailMembershipInFirestore(emailLower);
+        if (cancelled) return;
+        isAuthorizedInList = cloudCheck.authorized;
+      }
+
       if (!isAuthorizedInList) {
         cloudUserRef.current = null;
+        pendingCloudFbUserRef.current = null;
         workspaceReadyRef.current = false;
         setCloudUser(null);
-        // Clear unauthorized cached Google session so internal users never get stuck with Cloud permission errors
         void signOutGmail();
         if (sessionStorage.getItem('cmms_authenticated') === 'true') {
           setCloudSyncStatus('offline');
@@ -1350,7 +2004,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } else {
           setCloudSyncStatus('error');
           setCloudSyncError(
-            `Tài khoản Google (${fbUser.email}) chưa được cấp quyền Cloud. Chỉ tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) dùng để đồng bộ Cloud; nhân viên vui lòng đăng nhập bằng Mã nhân viên & Mật khẩu bên dưới.`
+            `Tài khoản Google (${fbUser.email}) chưa có trong danh sách nhân viên được cấp quyền Cloud. Vui lòng nhờ Admin cập nhật Gmail của bạn trong mục Nhân sự hoặc đăng nhập bằng Mã nhân viên & Mật khẩu bên dưới.`
           );
         }
         return;
@@ -1363,6 +2017,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         photoURL: fbUser.photoURL || undefined,
       };
       cloudUserRef.current = info;
+      pendingCloudFbUserRef.current = fbUser;
       setCloudUser(info);
       setCloudSyncStatus('syncing');
       setCloudSyncError(null);
@@ -1371,8 +2026,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const shouldAuditGoogleLogin = pendingGoogleLoginAuditRef.current || !wasAuthed;
       pendingGoogleLoginAuditRef.current = false;
       if (!wasAuthed || isBootAdmin) {
-        matchOrApplyCloudUser(fbUser, shouldAuditGoogleLogin);
+        const matchedNow = matchOrApplyCloudUser(fbUser, shouldAuditGoogleLogin);
+        if (matchedNow) {
+          pendingCloudFbUserRef.current = null;
+        }
       }
+
+      // Establish authenticated server sync session in parallel
+      const serverSessionPromise = establishCloudServerSession(fbUser);
 
       if (isBootAdmin) {
         try {
@@ -1382,22 +2043,6 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
             latestSnapshotRef.current,
             { knownCloudIds: knownCloudIdsRef.current }
           );
-          await syncAllowedEmailsIfNeeded(
-            fbUser.uid,
-            fbUser.email,
-            latestSnapshotRef.current.employees,
-            knownCloudIdsRef.current
-          );
-          const waterSeedUpdated = await syncWaterMonthlySeedToFirestoreIfNeeded(
-            fbUser.uid,
-            fbUser.email,
-            INITIAL_WATER_MONTHLY,
-            latestSnapshotRef.current.employees,
-            knownCloudIdsRef.current
-          );
-          if (waterSeedUpdated && !cancelled) {
-            setWaterMonthly([...INITIAL_WATER_MONTHLY].sort((a, b) => b.month.localeCompare(a.month)));
-          }
           if (cancelled) return;
           workspaceReadyRef.current = true;
         } catch (err) {
@@ -1405,6 +2050,67 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCloudSyncError(formatFirestoreSyncError(err));
           setCloudSyncStatus('error');
         }
+      }
+
+      // Force a server-first pull from Firestore immediately so new computers bypass stale cache
+      // and NEVER overwrite Cloud with stale local seed data
+      try {
+        const pulled = await pullLatestWorkspaceFromFirestore(
+          fbUser.email,
+          fbUser.uid,
+          knownCloudIdsRef.current
+        );
+        if (cancelled) return;
+        const freshSnapshot = applyPulledCloudDataToState(pulled);
+        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+        setCloudSyncStatus('synced');
+        setCloudSyncError(null);
+
+        if (pendingCloudFbUserRef.current && (!wasAuthed || !isAuthenticatedRef.current)) {
+          const matchedAfterPull = matchOrApplyCloudUser(
+            pendingCloudFbUserRef.current,
+            shouldAuditGoogleLogin
+          );
+          if (matchedAfterPull) {
+            pendingCloudFbUserRef.current = null;
+          }
+        }
+
+        // Now that Cloud employees are freshly downloaded, safely ensure allowedEmails & water seed are up to date
+        if (isBootAdmin) {
+          void syncAllowedEmailsIfNeeded(
+            fbUser.uid,
+            fbUser.email,
+            freshSnapshot.employees,
+            knownCloudIdsRef.current
+          ).catch(() => {});
+
+          void syncWaterMonthlySeedToFirestoreIfNeeded(
+            fbUser.uid,
+            fbUser.email,
+            INITIAL_WATER_MONTHLY,
+            freshSnapshot.employees,
+            knownCloudIdsRef.current
+          )
+            .then((waterSeedUpdated) => {
+              if (waterSeedUpdated && !cancelled) {
+                setWaterMonthly(
+                  [...INITIAL_WATER_MONTHLY].sort((a, b) => b.month.localeCompare(a.month))
+                );
+              }
+            })
+            .catch(() => {});
+        }
+
+        // Mirror fresh Cloud data to Express server so all internal users on other devices receive it immediately
+        const hasServerSession = await serverSessionPromise;
+        if (!cancelled && hasServerSession && (pulled.workspaceMetaExists || pulled.totalLoaded > 0)) {
+          await pushSnapshotToServer('cloud', freshSnapshot);
+        }
+      } catch (err) {
+        if (cancelled) return;
+        setCloudSyncError(formatFirestoreSyncError(err));
+        setCloudSyncStatus('error');
       }
 
       if (cancelled) return;
@@ -1416,9 +2122,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           !canAccessBackup(currentUserRef.current) &&
           /chưa được cấp quyền|permission-denied/i.test(msg)
         ) {
-          // Regular employee using internal account should not be blocked by stale Google cache
           cleanupListeners();
           cloudUserRef.current = null;
+          pendingCloudFbUserRef.current = null;
           setCloudUser(null);
           setCloudSyncStatus('offline');
           setCloudSyncError(null);
@@ -1430,10 +2136,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
 
       const markSynced = (paths: string[]) => {
+        markApplyingRemoteSnapshot();
         paths.forEach((p) => knownCloudIdsRef.current.add(p));
         setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
         setCloudSyncStatus('synced');
         setCloudSyncError(null);
+        scheduleCloudMirrorToServer();
       };
 
       unsubs = [
@@ -1837,20 +2545,26 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { user } = await signInWithGoogleAccount();
       const emailLower = (user.email || '').trim().toLowerCase();
-      const isAuthorized =
+      let isAuthorized =
         emailLower === BOOTSTRAPPED_ADMIN_EMAIL ||
         employeesRef.current.some((e) => (e.email || '').trim().toLowerCase() === emailLower);
+
+      if (!isAuthorized) {
+        const cloudCheck = await checkEmailMembershipInFirestore(emailLower);
+        isAuthorized = cloudCheck.authorized;
+      }
+
       if (!isAuthorized) {
         pendingGoogleLoginAuditRef.current = false;
         await signOutGmail();
-        const msg = `Tài khoản Google (${user.email || ''}) không phải Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) và chưa được cấp quyền Cloud. Vui lòng đăng nhập bằng tài khoản Admin (${BOOTSTRAPPED_ADMIN_EMAIL}).`;
+        const msg = `Tài khoản Google (${user.email || ''}) chưa có trong danh sách nhân viên được cấp quyền Cloud. Vui lòng nhờ Admin cập nhật Gmail trong mục Nhân sự hoặc đăng nhập bằng Mã nhân viên & Mật khẩu.`;
         setCloudSyncStatus('error');
         setCloudSyncError(msg);
         return { success: false, message: msg };
       }
       return {
         success: true,
-        message: `Đã kết nối đồng bộ Cloud (${user.email}) thành công!`,
+        message: `Đã kết nối đồng bộ Cloud (${user.email}) và đang tải dữ liệu mới nhất!`,
       };
     } catch (err) {
       pendingGoogleLoginAuditRef.current = false;
@@ -1864,10 +2578,56 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const disconnectCloud = async (): Promise<void> => {
     await signOutGmail();
     cloudUserRef.current = null;
+    pendingCloudFbUserRef.current = null;
     workspaceReadyRef.current = false;
     setCloudUser(null);
     setCloudSyncStatus('offline');
     setCloudSyncError(null);
+  };
+
+  const pullLatestFromCloud = async (): Promise<{ success: boolean; message: string }> => {
+    const user = cloudUserRef.current;
+    if (!user) {
+      return {
+        success: false,
+        message: 'Vui lòng kết nối tài khoản Google trước khi tải dữ liệu từ Cloud.',
+      };
+    }
+    setCloudSyncStatus('syncing');
+    setCloudSyncError(null);
+    try {
+      const pulled = await pullLatestWorkspaceFromFirestore(
+        user.email,
+        user.uid,
+        knownCloudIdsRef.current
+      );
+      const freshSnapshot = applyPulledCloudDataToState(pulled);
+      setCloudSyncStatus('synced');
+      setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+
+      // Also mirror freshly pulled Cloud data to Express server so all internal users receive it
+      if (auth.currentUser && !serverSessionTokenRef.current) {
+        await establishCloudServerSession(auth.currentUser);
+      }
+      if (serverSessionTokenRef.current && (pulled.workspaceMetaExists || pulled.totalLoaded > 0)) {
+        await pushSnapshotToServer('cloud', freshSnapshot);
+      }
+
+      return {
+        success: true,
+        message: `Đã tải dữ liệu mới nhất từ Cloud thành công (${pulled.totalLoaded} bản ghi)!`,
+      };
+    } catch (err) {
+      const msg = formatFirestoreSyncError(err);
+      setCloudSyncError(msg);
+      setCloudSyncStatus('error');
+      return { success: false, message: msg };
+    }
+  };
+
+  const pullLatestFromServer = async (): Promise<{ success: boolean; message: string }> => {
+    const res = await pullLatestFromServerInternal(true);
+    return { success: res.success, message: res.message };
   };
 
   const forceSyncLocalToCloud = async (): Promise<{ success: boolean; message: string }> => {
@@ -1889,9 +2649,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       setCloudSyncStatus('synced');
       setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+
+      if (auth.currentUser && !serverSessionTokenRef.current) {
+        await establishCloudServerSession(auth.currentUser);
+      }
+      if (serverSessionTokenRef.current) {
+        await pushSnapshotToServer('cloud', latestSnapshotRef.current);
+      }
+
       return {
         success: true,
-        message: `Đã đồng bộ thành công ${res.totalWritten} bản ghi lên Cloud Firestore!`,
+        message: `Đã đẩy thành công ${res.totalWritten} bản ghi từ máy này lên Cloud và máy chủ!`,
       };
     } catch (err) {
       const msg = formatFirestoreSyncError(err);
@@ -1900,6 +2668,86 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: msg };
     }
   };
+
+  // Automatic background polling for cross-device Server Workspace Sync (12s interval + focus/visibility)
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const pollNow = () => {
+      if (serverSessionTokenRef.current) {
+        void pullLatestFromServerInternal(false);
+      }
+    };
+
+    const intervalId = window.setInterval(pollNow, 12_000);
+    const onFocusOrVisible = () => {
+      if (document.visibilityState === 'visible') {
+        pollNow();
+      }
+    };
+    window.addEventListener('focus', onFocusOrVisible);
+    document.addEventListener('visibilitychange', onFocusOrVisible);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onFocusOrVisible);
+      document.removeEventListener('visibilitychange', onFocusOrVisible);
+    };
+  }, [isAuthenticated]);
+
+  // Debounced auto-push of local user edits to shared Server Workspace (guarded against echo loops and cold starts)
+  useEffect(() => {
+    if (!hasMountedSyncWatcherRef.current) {
+      hasMountedSyncWatcherRef.current = true;
+      return;
+    }
+    if (!isAuthenticated || !serverSessionTokenRef.current || !initialServerSyncDoneRef.current) {
+      return;
+    }
+    if (applyingRemoteSnapshotRef.current) {
+      return;
+    }
+
+    if (localServerPushTimerRef.current) {
+      window.clearTimeout(localServerPushTimerRef.current);
+    }
+    localServerPushTimerRef.current = window.setTimeout(() => {
+      localServerPushTimerRef.current = null;
+      if (!applyingRemoteSnapshotRef.current && serverSessionTokenRef.current) {
+        void pushSnapshotToServer('local');
+      }
+    }, 1200);
+
+    return () => {
+      if (localServerPushTimerRef.current) {
+        window.clearTimeout(localServerPushTimerRef.current);
+      }
+    };
+  }, [
+    isAuthenticated,
+    equipment,
+    maintenancePlans,
+    maintenanceHistory,
+    tickets,
+    spareParts,
+    stockTransactions,
+    power10Days,
+    waterMonthly,
+    meterReadings,
+    costRecords,
+    employees,
+    documents,
+    projects,
+    safetyInspections,
+    tools,
+    toolLogs,
+    dailyAreaChecks,
+    morningCheckTemplates,
+    monthlyBoardReports,
+    purchaseRequests,
+    emailConfig,
+    tariffConfig,
+  ]);
 
   // Sync state to localStorage
   useEffect(() => {
@@ -3483,7 +4331,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   };
 
-  const login = (usernameInput: string, passwordInput?: string): { success: boolean; message?: string } => {
+  const login = async (
+    usernameInput: string,
+    passwordInput?: string
+  ): Promise<{ success: boolean; message?: string }> => {
     const cleanUser = usernameInput.trim().toLowerCase();
     if (!cleanUser) {
       return { success: false, message: 'Vui lòng nhập mã nhân viên hoặc tên đăng nhập!' };
@@ -3493,7 +4344,59 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Vui lòng nhập mật khẩu đăng nhập!' };
     }
 
-    const found = employees.find(
+    const cleanPassword = passwordInput.trim();
+
+    // 1. Try authenticated Express server login first so new computers immediately receive the latest synced workspace
+    try {
+      const resp = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: cleanUser, password: cleanPassword }),
+      });
+
+      if (resp.ok) {
+        const data = (await resp.json()) as {
+          ok?: boolean;
+          token?: string;
+          employee?: Employee;
+        };
+        if (data.ok && data.token && data.employee) {
+          serverSessionTokenRef.current = data.token;
+          const localMatch = employeesRef.current.find(
+            (e) =>
+              e.maNhanVien.trim().toUpperCase() === data.employee!.maNhanVien.trim().toUpperCase()
+          );
+          const hydratedUser: Employee = {
+            ...(localMatch || {}),
+            ...data.employee,
+          };
+          applyCurrentUser(hydratedUser, true);
+          setIsAuthenticated(true);
+          // Immediately pull the latest workspace snapshot from server before user interacts
+          await pullLatestFromServerInternal(true);
+          addAuditLog(
+            'Đăng nhập',
+            'Hệ thống',
+            hydratedUser.maNhanVien,
+            `Người dùng ${hydratedUser.tenNhanVien} (${hydratedUser.maNhanVien} - ${hydratedUser.chucVu}) đăng nhập và đồng bộ dữ liệu thành công`,
+            hydratedUser
+          );
+          return { success: true };
+        }
+      } else if (resp.status === 401) {
+        const errData = (await resp.json().catch(() => ({}))) as { message?: string };
+        return {
+          success: false,
+          message: errData.message || 'Tên đăng nhập hoặc mật khẩu không chính xác!',
+        };
+      }
+      // 404 (serverNotInitialized) or 5xx -> fall through cleanly to local verification
+    } catch {
+      // Offline / network unavailable -> fall through to local verification
+    }
+
+    // 2. Local fallback (offline mode or cold-started server before first Cloud sync)
+    const found = employeesRef.current.find(
       (e) =>
         e.maNhanVien.toLowerCase() === cleanUser ||
         (e.username && e.username.toLowerCase() === cleanUser) ||
@@ -3505,7 +4408,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const expectedPass = found.password || '123456';
-    if (passwordInput.trim() !== expectedPass) {
+    if (cleanPassword !== expectedPass) {
       return { success: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' };
     }
 
@@ -3521,11 +4424,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: true };
   };
 
-  const changePassword = (
+  const changePassword = async (
     usernameInput: string,
     currentPasswordInput: string,
     newPasswordInput: string
-  ): { success: boolean; message: string } => {
+  ): Promise<{ success: boolean; message: string }> => {
     const cleanUser = usernameInput.trim().toLowerCase();
     if (!cleanUser) {
       return { success: false, message: 'Vui lòng nhập mã nhân viên hoặc tên đăng nhập!' };
@@ -3537,42 +4440,99 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Mật khẩu mới phải có ít nhất 4 ký tự!' };
     }
 
-    const found = employees.find(
+    const cleanCurrent = currentPasswordInput.trim();
+    const cleanNew = newPasswordInput.trim();
+    let serverUpdated = false;
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (serverSessionTokenRef.current) {
+        headers.Authorization = `Bearer ${serverSessionTokenRef.current}`;
+      }
+      const resp = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          username: cleanUser,
+          currentPassword: cleanCurrent,
+          newPassword: cleanNew,
+        }),
+      });
+      if (resp.ok) {
+        serverUpdated = true;
+      } else if (resp.status === 401 || resp.status === 400) {
+        const errData = (await resp.json().catch(() => ({}))) as { message?: string };
+        return {
+          success: false,
+          message: errData.message || 'Thông tin tài khoản hoặc mật khẩu hiện tại không chính xác!',
+        };
+      }
+    } catch {
+      // Offline fallback below
+    }
+
+    const found = employeesRef.current.find(
       (e) =>
         e.maNhanVien.toLowerCase() === cleanUser ||
         (e.username && e.username.toLowerCase() === cleanUser) ||
         e.email.toLowerCase() === cleanUser
     );
 
-    if (!found) {
+    if (!found && !serverUpdated) {
       return { success: false, message: 'Thông tin tài khoản hoặc mật khẩu hiện tại không chính xác!' };
     }
 
-    const expectedPass = found.password || '123456';
-    if (currentPasswordInput.trim() !== expectedPass) {
-      return { success: false, message: 'Thông tin tài khoản hoặc mật khẩu hiện tại không chính xác!' };
+    if (found) {
+      if (!serverUpdated) {
+        const expectedPass = found.password || '123456';
+        if (cleanCurrent !== expectedPass) {
+          return {
+            success: false,
+            message: 'Thông tin tài khoản hoặc mật khẩu hiện tại không chính xác!',
+          };
+        }
+      }
+
+      const updatedEmp: Employee = { ...found, password: cleanNew };
+      setEmployees((prev) =>
+        prev.map((e) => (e.maNhanVien === found.maNhanVien ? updatedEmp : e))
+      );
+      if (currentUserRef.current.maNhanVien === found.maNhanVien) {
+        applyCurrentUser(updatedEmp, false);
+      }
+
+      addAuditLog(
+        'Cập nhật',
+        'Bảo mật tài khoản',
+        found.maNhanVien,
+        `Người dùng ${found.tenNhanVien} (${found.maNhanVien}) đã đổi mật khẩu đăng nhập.`,
+        found
+      );
     }
 
-    const updatedEmp: Employee = { ...found, password: newPasswordInput.trim() };
-    setEmployees((prev) => prev.map((e) => (e.maNhanVien === found.maNhanVien ? updatedEmp : e)));
-    if (currentUserRef.current.maNhanVien === found.maNhanVien) {
-      applyCurrentUser(updatedEmp, false);
-    }
-
-    addAuditLog(
-      'Cập nhật',
-      'Bảo mật tài khoản',
-      found.maNhanVien,
-      `Người dùng ${found.tenNhanVien} (${found.maNhanVien}) đã đổi mật khẩu đăng nhập.`,
-      found
-    );
-
-    return { success: true, message: 'Đổi mật khẩu thành công! Bạn có thể sử dụng mật khẩu mới ngay.' };
+    return {
+      success: true,
+      message: serverUpdated
+        ? 'Đổi mật khẩu thành công! Mật khẩu mới đã được đồng bộ cho tất cả thiết bị.'
+        : 'Đổi mật khẩu thành công! Bạn có thể sử dụng mật khẩu mới ngay.',
+    };
   };
 
   const logout = () => {
     const actor = currentUserRef.current || currentUser;
     leavePresenceSession(false);
+    const activeToken = serverSessionTokenRef.current;
+    serverSessionTokenRef.current = null;
+    serverRevisionRef.current = 0;
+    initialServerSyncDoneRef.current = false;
+    setServerSyncStatus('idle');
+    if (activeToken) {
+      void fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${activeToken}` },
+        keepalive: true,
+      }).catch(() => {});
+    }
     addAuditLog(
       'Đăng xuất',
       'Hệ thống',
@@ -4979,9 +5939,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cloudUser,
         cloudSyncError,
         lastSyncedAt,
+        serverSyncStatus,
+        lastServerSyncedAt,
         connectCloudWithGoogle,
         disconnectCloud,
         forceSyncLocalToCloud,
+        pullLatestFromCloud,
+        pullLatestFromServer,
         onlineUsers,
         activeViewId,
         setActiveViewId,

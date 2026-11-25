@@ -80,9 +80,13 @@ export const Header: React.FC<HeaderProps> = ({
     cloudUser,
     cloudSyncError,
     lastSyncedAt,
+    serverSyncStatus,
+    lastServerSyncedAt,
     connectCloudWithGoogle,
     disconnectCloud,
     forceSyncLocalToCloud,
+    pullLatestFromCloud,
+    pullLatestFromServer,
     webNotifications,
     browserNotificationPermission,
     requestBrowserNotificationPermission,
@@ -151,7 +155,7 @@ export const Header: React.FC<HeaderProps> = ({
   const unreadWebCount = webNotifications.filter((n) => !n.read).length;
   const totalBellCount = totalAlerts + unreadWebCount;
 
-  const handleLoginFormSubmit = (e: React.FormEvent) => {
+  const handleLoginFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setLoginSuccessMessage('');
@@ -161,9 +165,9 @@ export const Header: React.FC<HeaderProps> = ({
       return;
     }
 
-    const res = login(inputUsername.trim(), inputPassword.trim());
+    const res = await login(inputUsername.trim(), inputPassword.trim());
     if (res.success) {
-      setLoginSuccessMessage('Đăng nhập thành công!');
+      setLoginSuccessMessage('Đăng nhập và đồng bộ dữ liệu thành công!');
       setTimeout(() => {
         setShowLoginModal(false);
         setInputUsername('');
@@ -175,7 +179,7 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
-  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
     setLoginSuccessMessage('');
@@ -193,7 +197,7 @@ export const Header: React.FC<HeaderProps> = ({
       return;
     }
 
-    const res = changePassword(currentUser.maNhanVien, cpCurrentPass, cpNewPass);
+    const res = await changePassword(currentUser.maNhanVien, cpCurrentPass, cpNewPass);
     if (res.success) {
       setLoginSuccessMessage(res.message);
       setCpCurrentPass('');
@@ -473,9 +477,8 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Cloud Real-Time Sync Status Button & Popover (Admin / Backup Owner) */}
-          {(hasBackupAccess || cloudSyncStatus === 'synced') && (
-            <div className="relative">
+          {/* Cloud & Multi-Device Sync Status Button & Popover (Available for all authenticated users) */}
+          <div className="relative">
             <button
               type="button"
               onClick={() => {
@@ -488,16 +491,18 @@ export const Header: React.FC<HeaderProps> = ({
               title={
                 cloudSyncStatus === 'synced'
                   ? `Đã đồng bộ Cloud (${cloudUser?.email || ''})`
-                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting'
-                  ? 'Đang đồng bộ dữ liệu Cloud...'
+                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
+                  ? 'Đang đồng bộ dữ liệu mới nhất...'
                   : cloudSyncStatus === 'error'
                   ? 'Lỗi đồng bộ Cloud — nhấn để xem chi tiết'
-                  : 'Chế độ nội bộ — nhấn để bật đồng bộ Cloud'
+                  : serverSyncStatus === 'synced'
+                  ? `Đã đồng bộ máy chủ${lastServerSyncedAt ? ` (${lastServerSyncedAt})` : ''}`
+                  : 'Nhấn để tải dữ liệu mới nhất hoặc kết nối Google Cloud'
               }
               className={`h-9 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold transition whitespace-nowrap shrink-0 ${
-                cloudSyncStatus === 'synced'
+                cloudSyncStatus === 'synced' || serverSyncStatus === 'synced'
                   ? 'bg-emerald-50 dark:bg-emerald-500/15 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
-                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting'
+                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
                   ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/40'
                   : cloudSyncStatus === 'error'
                   ? 'bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/40'
@@ -509,7 +514,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                   <span className="hidden xl:inline">Cloud Sync</span>
                 </>
-              ) : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' ? (
+              ) : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing' ? (
                 <>
                   <RefreshCw className="w-4 h-4 animate-spin text-cyan-600 dark:text-cyan-400" />
                   <span className="hidden xl:inline">Đang đồng bộ...</span>
@@ -519,28 +524,33 @@ export const Header: React.FC<HeaderProps> = ({
                   <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   <span className="hidden xl:inline">Lỗi Cloud</span>
                 </>
+              ) : serverSyncStatus === 'synced' ? (
+                <>
+                  <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="hidden xl:inline">Đã đồng bộ</span>
+                </>
               ) : (
                 <>
                   <CloudOff className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                  <span className="hidden xl:inline">Bật Cloud</span>
+                  <span className="hidden xl:inline">Đồng bộ</span>
                 </>
               )}
             </button>
 
             {showCloudPopover && (
-              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3 text-xs">
+              <div className="absolute right-0 mt-2 w-80 sm:w-88 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3 text-xs">
                 <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                   <div className="flex items-center gap-2">
                     <Cloud className="w-4 h-4 text-cyan-500" />
                     <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                      Đồng Bộ Đám Mây
+                      Đồng Bộ Đa Thiết Bị
                     </span>
                   </div>
                   <span
                     className={`font-bold text-[11px] px-2 py-0.5 rounded-lg ${
-                      cloudSyncStatus === 'synced'
+                      cloudSyncStatus === 'synced' || serverSyncStatus === 'synced'
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
-                        : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting'
+                        : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
                         ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
                         : cloudSyncStatus === 'error'
                         ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300'
@@ -548,14 +558,16 @@ export const Header: React.FC<HeaderProps> = ({
                     }`}
                   >
                     {cloudSyncStatus === 'synced'
-                      ? 'Trực tuyến'
-                      : cloudSyncStatus === 'syncing'
+                      ? 'Cloud trực tuyến'
+                      : cloudSyncStatus === 'syncing' || serverSyncStatus === 'syncing'
                       ? 'Đang đồng bộ'
                       : cloudSyncStatus === 'connecting'
                       ? 'Đang kết nối'
                       : cloudSyncStatus === 'error'
                       ? 'Gặp lỗi'
-                      : 'Chế độ nội bộ'}
+                      : serverSyncStatus === 'synced'
+                      ? 'Máy chủ trực tuyến'
+                      : 'Chưa kết nối Cloud'}
                   </span>
                 </div>
 
@@ -569,14 +581,28 @@ export const Header: React.FC<HeaderProps> = ({
                     </div>
                     {lastSyncedAt && (
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Cập nhật lúc: <span className="font-mono">{lastSyncedAt}</span>
+                        Đồng bộ Cloud lúc: <span className="font-mono">{lastSyncedAt}</span>
+                      </div>
+                    )}
+                    {lastServerSyncedAt && (
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Đồng bộ máy chủ lúc: <span className="font-mono">{lastServerSyncedAt}</span>
                       </div>
                     )}
                   </div>
                 ) : (
-                  <p className="text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Chỉ cần tài khoản Admin (<span className="font-semibold text-slate-800 dark:text-slate-200">khiemhuynhggs@gmail.com</span>) đăng nhập Google để đồng bộ &amp; sao lưu dữ liệu Cloud.
-                  </p>
+                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-1">
+                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                      {serverSyncStatus === 'synced'
+                        ? 'Đang tự động đồng bộ dữ liệu mới nhất qua máy chủ dùng chung giữa các máy tính.'
+                        : 'Kết nối Google Cloud bằng Gmail đã đăng ký trong hệ thống để nhận dữ liệu mới nhất trực tiếp từ đám mây.'}
+                    </p>
+                    {lastServerSyncedAt && (
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        Cập nhật lúc: <span className="font-mono">{lastServerSyncedAt}</span>
+                      </div>
+                    )}
+                  </div>
                 )}
 
                 {cloudSyncError && (
@@ -598,46 +624,47 @@ export const Header: React.FC<HeaderProps> = ({
                 )}
 
                 <div className="space-y-1.5 pt-1">
-                  {!cloudUser || cloudSyncStatus === 'offline' ? (
-                    <button
-                      type="button"
-                      disabled={isCloudActionLoading}
-                      onClick={async () => {
-                        setIsCloudActionLoading(true);
-                        setCloudActionNotice(null);
-                        const res = await connectCloudWithGoogle();
-                        setIsCloudActionLoading(false);
-                        setCloudActionNotice({ ok: res.success, text: res.message });
-                      }}
-                      className="w-full py-2 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
-                    >
-                      {isCloudActionLoading ? (
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <Cloud className="w-4 h-4" />
-                      )}
-                      <span>Kết nối Google Cloud (Admin)</span>
-                    </button>
-                  ) : (
+                  {cloudUser && cloudSyncStatus !== 'offline' ? (
                     <>
+                      <button
+                        type="button"
+                        disabled={isCloudActionLoading}
+                        onClick={async () => {
+                          setIsCloudActionLoading(true);
+                          setCloudActionNotice(null);
+                          const res = await pullLatestFromCloud();
+                          setIsCloudActionLoading(false);
+                          setCloudActionNotice({ ok: res.success, text: res.message });
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        <span>Tải dữ liệu mới nhất từ Cloud</span>
+                      </button>
+
                       {hasBackupAccess && (
-                        <button
-                          type="button"
-                          disabled={isCloudActionLoading}
-                          onClick={async () => {
-                            setIsCloudActionLoading(true);
-                            setCloudActionNotice(null);
-                            const res = await forceSyncLocalToCloud();
-                            setIsCloudActionLoading(false);
-                            setCloudActionNotice({ ok: res.success, text: res.message });
-                          }}
-                          className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
-                        >
-                          <RefreshCw
-                            className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
-                          />
-                          <span>Đẩy lại toàn bộ dữ liệu lên Cloud</span>
-                        </button>
+                        <div className="space-y-1">
+                          <button
+                            type="button"
+                            disabled={isCloudActionLoading}
+                            onClick={async () => {
+                              setIsCloudActionLoading(true);
+                              setCloudActionNotice(null);
+                              const res = await forceSyncLocalToCloud();
+                              setIsCloudActionLoading(false);
+                              setCloudActionNotice({ ok: res.success, text: res.message });
+                            }}
+                            className="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                          >
+                            <RefreshCw
+                              className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
+                            />
+                            <span>Đẩy dữ liệu máy này lên Cloud</span>
+                          </button>
+                          <p className="text-[10px] text-slate-500 dark:text-slate-400 px-1">
+                            Chỉ bấm khi máy này đang giữ dữ liệu mới hơn Cloud.
+                          </p>
+                        </div>
                       )}
 
                       <button
@@ -674,12 +701,51 @@ export const Header: React.FC<HeaderProps> = ({
                         <span>Ngắt kết nối Google Cloud</span>
                       </button>
                     </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        disabled={isCloudActionLoading}
+                        onClick={async () => {
+                          setIsCloudActionLoading(true);
+                          setCloudActionNotice(null);
+                          const res = await pullLatestFromServer();
+                          setIsCloudActionLoading(false);
+                          setCloudActionNotice({ ok: res.success, text: res.message });
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        <RefreshCw
+                          className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
+                        />
+                        <span>Tải dữ liệu mới nhất ngay</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isCloudActionLoading}
+                        onClick={async () => {
+                          setIsCloudActionLoading(true);
+                          setCloudActionNotice(null);
+                          const res = await connectCloudWithGoogle();
+                          setIsCloudActionLoading(false);
+                          setCloudActionNotice({ ok: res.success, text: res.message });
+                        }}
+                        className="w-full py-2 px-3 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        {isCloudActionLoading ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Cloud className="w-4 h-4" />
+                        )}
+                        <span>Kết nối Google Cloud trực tiếp</span>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
             )}
-            </div>
-          )}
+          </div>
 
           {/* Notifications Bell */}
           <div className="relative">

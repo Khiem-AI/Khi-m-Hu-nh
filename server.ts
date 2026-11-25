@@ -1,4 +1,6 @@
 import express from 'express';
+import crypto from 'node:crypto';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import nodemailer from 'nodemailer';
@@ -291,7 +293,14 @@ async function dispatchViaSmtp(params: {
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '2mb' }));
+  const defaultJsonParser = express.json({ limit: '2mb' });
+  app.use((req, res, next) => {
+    if (req.path === '/api/workspace/sync') {
+      next();
+      return;
+    }
+    defaultJsonParser(req, res, next);
+  });
 
   app.get('/api/email-status', (_req, res) => {
     res.json(getEmailChannelStatus());
@@ -699,6 +708,647 @@ async function startServer() {
     const onlineUsers = pruneAndAggregateOnlineUsers();
     res.json({ ok: true, serverNow: Date.now(), onlineUsers });
   });
+
+  // --- Shared Authenticated Workspace Sync Hub (Cross-Device Sync for Internal & Cloud Users) ---
+  const BOOTSTRAPPED_ADMIN_EMAIL = 'khiemhuynhggs@gmail.com';
+  const SERVER_DATA_DIR = path.resolve(__dirname, '.cmms-server-data');
+  const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+  const MAX_ACTIVE_SESSIONS = 1000;
+
+  let firebaseProjectId = 'gen-lang-client-0762337637';
+  try {
+    const cfgPath = path.resolve(__dirname, 'firebase-applet-config.json');
+    if (cfgPath.startsWith(path.resolve(__dirname) + path.sep)) {
+      const cfgRaw = await fs.readFile(cfgPath, 'utf8');
+      const cfg = JSON.parse(cfgRaw) as { projectId?: string };
+      if (typeof cfg.projectId === 'string' && cfg.projectId.trim()) {
+        firebaseProjectId = cfg.projectId.trim();
+      }
+    }
+  } catch {
+    // Use default projectId if config file is unavailable
+  }
+
+  function resolveServerDataFile(fileName: string): string {
+    const safeName = path.basename(fileName);
+    const resolved = path.resolve(SERVER_DATA_DIR, safeName);
+    if (!resolved.startsWith(SERVER_DATA_DIR + path.sep)) {
+      throw new Error('Invalid server data file path');
+    }
+    return resolved;
+  }
+
+  interface StoredCredential {
+    salt: string;
+    hash: string;
+    userModified?: boolean;
+    updatedAt: string;
+  }
+
+  interface WorkspaceStoreState {
+    revision: number;
+    updatedAt: string | null;
+    updatedBy: string | null;
+    snapshot: Record<string, unknown> | null;
+  }
+
+  interface AuthSessionRecord {
+    token: string;
+    maNhanVien: string;
+    tenNhanVien: string;
+    chucVu: string;
+    email: string;
+    isAdmin: boolean;
+    authType: 'cloud' | 'internal';
+    expiresAt: number;
+  }
+
+  const activeSessions = new Map<string, AuthSessionRecord>();
+  const credentialsStore = new Map<string, StoredCredential>();
+  const workspaceStore: WorkspaceStoreState = {
+    revision: 0,
+    updatedAt: null,
+    updatedBy: null,
+    snapshot: null,
+  };
+
+  function hashPasswordScrypt(password: string, existingSalt?: string): { salt: string; hash: string } {
+    const salt = existingSalt || crypto.randomBytes(16).toString('hex');
+    const derived = crypto.scryptSync(password, salt, 64).toString('hex');
+    return { salt, hash: derived };
+  }
+
+  function verifyPasswordScrypt(password: string, record: StoredCredential): boolean {
+    try {
+      const candidate = crypto.scryptSync(password, record.salt, 64);
+      const expected = Buffer.from(record.hash, 'hex');
+      if (candidate.length !== expected.length) return false;
+      return crypto.timingSafeEqual(candidate, expected);
+    } catch {
+      return false;
+    }
+  }
+
+  function stripEmployeePasswords(snapshot: Record<string, unknown>): Record<string, unknown> {
+    const copy: Record<string, unknown> = { ...snapshot };
+    if (Array.isArray(copy.employees)) {
+      copy.employees = copy.employees.map((raw) => {
+        if (!raw || typeof raw !== 'object') return raw;
+        const { password: _removed, ...rest } = raw as Record<string, unknown>;
+        return rest;
+      });
+    }
+    return copy;
+  }
+
+  function isRoleAdmin(chucVu: unknown, maNhanVien?: unknown, email?: unknown): boolean {
+    const role = String(chucVu || '').trim().toLowerCase();
+    const code = String(maNhanVien || '').trim().toUpperCase();
+    const mail = String(email || '').trim().toLowerCase();
+    return (
+      mail === BOOTSTRAPPED_ADMIN_EMAIL ||
+      code === 'ID1460' ||
+      role.includes('admin') ||
+      role.includes('giám đốc') ||
+      role.includes('director') ||
+      role.includes('trưởng phòng') ||
+      role.includes('manager')
+    );
+  }
+
+  async function atomicWriteJson(fileName: string, data: unknown): Promise<void> {
+    await fs.mkdir(SERVER_DATA_DIR, { recursive: true });
+    const target = resolveServerDataFile(fileName);
+    const tmp = resolveServerDataFile(`${fileName}.${crypto.randomBytes(6).toString('hex')}.tmp`);
+    await fs.writeFile(tmp, JSON.stringify(data), 'utf8');
+    await fs.rename(tmp, target);
+  }
+
+  async function loadPersistedWorkspaceState(): Promise<void> {
+    try {
+      const wsRaw = await fs.readFile(resolveServerDataFile('workspace.json'), 'utf8');
+      const parsed = JSON.parse(wsRaw) as Partial<WorkspaceStoreState>;
+      if (typeof parsed.revision === 'number' && parsed.snapshot && typeof parsed.snapshot === 'object') {
+        workspaceStore.revision = parsed.revision;
+        workspaceStore.updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null;
+        workspaceStore.updatedBy = typeof parsed.updatedBy === 'string' ? parsed.updatedBy : null;
+        workspaceStore.snapshot = stripEmployeePasswords(parsed.snapshot as Record<string, unknown>);
+      }
+    } catch {
+      // Fresh server start — workspace will populate on first sync
+    }
+
+    try {
+      const credRaw = await fs.readFile(resolveServerDataFile('credentials.json'), 'utf8');
+      const parsed = JSON.parse(credRaw) as Record<string, StoredCredential>;
+      if (parsed && typeof parsed === 'object') {
+        for (const [key, val] of Object.entries(parsed)) {
+          if (val && typeof val.salt === 'string' && typeof val.hash === 'string') {
+            credentialsStore.set(key.toUpperCase(), val);
+          }
+        }
+      }
+    } catch {
+      // Fresh server start — credentials will populate on first Admin sync
+    }
+  }
+
+  async function persistCredentials(): Promise<void> {
+    const obj: Record<string, StoredCredential> = {};
+    for (const [key, val] of credentialsStore.entries()) {
+      obj[key] = val;
+    }
+    try {
+      await atomicWriteJson('credentials.json', obj);
+    } catch {
+      // Non-fatal on read-only environments
+    }
+  }
+
+  async function persistWorkspace(): Promise<void> {
+    try {
+      await atomicWriteJson('workspace.json', {
+        revision: workspaceStore.revision,
+        updatedAt: workspaceStore.updatedAt,
+        updatedBy: workspaceStore.updatedBy,
+        snapshot: workspaceStore.snapshot,
+      });
+    } catch {
+      // Non-fatal on read-only environments
+    }
+  }
+
+  await loadPersistedWorkspaceState();
+
+  function pruneExpiredSessions(): void {
+    const now = Date.now();
+    for (const [tok, rec] of activeSessions.entries()) {
+      if (rec.expiresAt <= now) {
+        activeSessions.delete(tok);
+      }
+    }
+  }
+
+  function createAuthSession(info: Omit<AuthSessionRecord, 'token' | 'expiresAt'>): AuthSessionRecord {
+    pruneExpiredSessions();
+    if (activeSessions.size >= MAX_ACTIVE_SESSIONS) {
+      const oldestKey = activeSessions.keys().next().value;
+      if (oldestKey) activeSessions.delete(oldestKey);
+    }
+    const token = crypto.randomBytes(32).toString('hex');
+    const record: AuthSessionRecord = {
+      ...info,
+      token,
+      expiresAt: Date.now() + SESSION_TTL_MS,
+    };
+    activeSessions.set(token, record);
+    return record;
+  }
+
+  function authenticateBearerRequest(req: express.Request): AuthSessionRecord | null {
+    const authHeader = req.headers.authorization || '';
+    if (!authHeader.startsWith('Bearer ')) return null;
+    const token = authHeader.slice(7).trim();
+    if (!token) return null;
+    const session = activeSessions.get(token);
+    if (!session) return null;
+    if (session.expiresAt <= Date.now()) {
+      activeSessions.delete(token);
+      return null;
+    }
+    return session;
+  }
+
+  // Google Firebase ID Token verification using Google's public x509 certificates
+  let googleCertCache: { certs: Record<string, string>; expiresAt: number } | null = null;
+
+  async function getFirebasePublicCerts(): Promise<Record<string, string>> {
+    const now = Date.now();
+    if (googleCertCache && googleCertCache.expiresAt > now) {
+      return googleCertCache.certs;
+    }
+    const resp = await fetch(
+      'https://www.googleapis.com/robot/v1/metadata/x509/securetoken@system.gserviceaccount.com'
+    );
+    if (!resp.ok) {
+      throw new Error(`Không thể tải chứng chỉ xác thực Google (HTTP ${resp.status})`);
+    }
+    const certs = (await resp.json()) as Record<string, string>;
+    const cc = resp.headers.get('cache-control') || '';
+    const maxAgeMatch = cc.match(/max-age=(\d+)/i);
+    const maxAgeMs = maxAgeMatch ? Math.max(60, Number(maxAgeMatch[1])) * 1000 : 3600 * 1000;
+    googleCertCache = { certs, expiresAt: now + maxAgeMs };
+    return certs;
+  }
+
+  async function verifyFirebaseIdToken(
+    idToken: string
+  ): Promise<{ uid: string; email: string; name?: string }> {
+    const parts = idToken.split('.');
+    if (parts.length !== 3) {
+      throw new Error('Token xác thực Google không hợp lệ.');
+    }
+    const [headerB64, payloadB64, sigB64] = parts;
+    const header = JSON.parse(Buffer.from(headerB64, 'base64url').toString('utf8')) as {
+      alg?: string;
+      kid?: string;
+    };
+    const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf8')) as {
+      aud?: string;
+      iss?: string;
+      sub?: string;
+      exp?: number;
+      iat?: number;
+      email?: string;
+      email_verified?: boolean;
+      name?: string;
+    };
+
+    if (header.alg !== 'RS256' || !header.kid) {
+      throw new Error('Thuật toán chữ ký token không hợp lệ.');
+    }
+
+    const certs = await getFirebasePublicCerts();
+    const certPem = certs[header.kid];
+    if (!certPem) {
+      throw new Error('Không tìm thấy khóa công khai Google phù hợp.');
+    }
+
+    const verifier = crypto.createVerify('RSA-SHA256');
+    verifier.update(`${headerB64}.${payloadB64}`);
+    verifier.end();
+    const signature = Buffer.from(sigB64, 'base64url');
+    if (!verifier.verify(certPem, signature)) {
+      throw new Error('Chữ ký token Google không hợp lệ.');
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const expectedIss = `https://securetoken.google.com/${firebaseProjectId}`;
+    if (
+      payload.aud !== firebaseProjectId ||
+      payload.iss !== expectedIss ||
+      !payload.sub ||
+      typeof payload.exp !== 'number' ||
+      payload.exp <= nowSec ||
+      typeof payload.iat !== 'number' ||
+      payload.iat > nowSec + 300 ||
+      !payload.email ||
+      payload.email_verified !== true
+    ) {
+      throw new Error('Phiên Google không hợp lệ hoặc đã hết hạn.');
+    }
+
+    return {
+      uid: payload.sub,
+      email: payload.email.trim().toLowerCase(),
+      name: payload.name,
+    };
+  }
+
+  function getServerEmployeesList(): Record<string, unknown>[] {
+    const snap = workspaceStore.snapshot;
+    if (!snap || !Array.isArray(snap.employees)) return [];
+    return snap.employees.filter((e): e is Record<string, unknown> => Boolean(e && typeof e === 'object'));
+  }
+
+  app.post('/api/auth/cloud-session', async (req, res) => {
+    const body = (req.body || {}) as { idToken?: unknown };
+    if (typeof body.idToken !== 'string' || body.idToken.length < 20) {
+      res.status(400).json({ ok: false, message: 'Thiếu token xác thực Google.' });
+      return;
+    }
+
+    try {
+      const verified = await verifyFirebaseIdToken(body.idToken);
+      const emailLower = verified.email;
+      const employeesList = getServerEmployeesList();
+      const matched = employeesList.find(
+        (e) => String(e.email || '').trim().toLowerCase() === emailLower
+      );
+      const isBootAdmin = emailLower === BOOTSTRAPPED_ADMIN_EMAIL;
+
+      if (!isBootAdmin && employeesList.length > 0 && !matched) {
+        res.status(403).json({
+          ok: false,
+          message: `Tài khoản Google (${emailLower}) chưa có trong danh sách nhân viên được cấp quyền.`,
+        });
+        return;
+      }
+
+      const maNhanVien = String(matched?.maNhanVien || (isBootAdmin ? 'ID1460' : verified.uid)).trim();
+      const tenNhanVien = String(matched?.tenNhanVien || verified.name || emailLower).trim();
+      const chucVu = String(matched?.chucVu || (isBootAdmin ? 'Admin' : 'Kỹ thuật viên')).trim();
+      const session = createAuthSession({
+        maNhanVien,
+        tenNhanVien,
+        chucVu,
+        email: emailLower,
+        isAdmin: isRoleAdmin(chucVu, maNhanVien, emailLower),
+        authType: 'cloud',
+      });
+
+      res.json({
+        ok: true,
+        token: session.token,
+        expiresAt: session.expiresAt,
+        workspaceRevision: workspaceStore.revision,
+        updatedAt: workspaceStore.updatedAt,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Xác thực Google thất bại.';
+      res.status(401).json({ ok: false, message: msg });
+    }
+  });
+
+  app.post('/api/auth/login', (req, res) => {
+    const body = (req.body || {}) as { username?: unknown; password?: unknown };
+    const cleanUser = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
+    const password = typeof body.password === 'string' ? body.password.trim() : '';
+
+    if (!cleanUser || !password) {
+      res.status(400).json({ ok: false, message: 'Vui lòng nhập đầy đủ tên đăng nhập và mật khẩu!' });
+      return;
+    }
+
+    const employeesList = getServerEmployeesList();
+    if (employeesList.length === 0) {
+      res.status(404).json({
+        ok: false,
+        serverNotInitialized: true,
+        message: 'Máy chủ chưa có dữ liệu đồng bộ.',
+      });
+      return;
+    }
+
+    const found = employeesList.find((e) => {
+      const code = String(e.maNhanVien || '').trim().toLowerCase();
+      const uname = String(e.username || '').trim().toLowerCase();
+      const email = String(e.email || '').trim().toLowerCase();
+      return code === cleanUser || (uname && uname === cleanUser) || (email && email === cleanUser);
+    });
+
+    if (!found) {
+      res.status(401).json({ ok: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' });
+      return;
+    }
+
+    const empCode = String(found.maNhanVien || '').trim();
+    const empCodeKey = empCode.toUpperCase();
+    const storedCred = credentialsStore.get(empCodeKey);
+    if (!storedCred || !verifyPasswordScrypt(password, storedCred)) {
+      res.status(401).json({ ok: false, message: 'Tên đăng nhập hoặc mật khẩu không chính xác!' });
+      return;
+    }
+
+    const tenNhanVien = String(found.tenNhanVien || empCode);
+    const chucVu = String(found.chucVu || 'Kỹ thuật viên');
+    const email = String(found.email || '').trim().toLowerCase();
+    const session = createAuthSession({
+      maNhanVien: empCode,
+      tenNhanVien,
+      chucVu,
+      email,
+      isAdmin: isRoleAdmin(chucVu, empCode, email),
+      authType: 'internal',
+    });
+
+    const { password: _removed, ...safeEmployee } = found;
+    res.json({
+      ok: true,
+      token: session.token,
+      expiresAt: session.expiresAt,
+      employee: safeEmployee,
+      workspaceRevision: workspaceStore.revision,
+      updatedAt: workspaceStore.updatedAt,
+    });
+  });
+
+  app.post('/api/auth/change-password', async (req, res) => {
+    const session = authenticateBearerRequest(req);
+    const body = (req.body || {}) as {
+      username?: unknown;
+      currentPassword?: unknown;
+      newPassword?: unknown;
+    };
+    const cleanUser = typeof body.username === 'string' ? body.username.trim().toLowerCase() : '';
+    const currentPassword = typeof body.currentPassword === 'string' ? body.currentPassword.trim() : '';
+    const newPassword = typeof body.newPassword === 'string' ? body.newPassword.trim() : '';
+
+    if (!cleanUser || !newPassword || newPassword.length < 4) {
+      res.status(400).json({
+        ok: false,
+        message: 'Mật khẩu mới phải có ít nhất 4 ký tự!',
+      });
+      return;
+    }
+
+    const employeesList = getServerEmployeesList();
+    if (employeesList.length === 0) {
+      res.status(404).json({ ok: false, serverNotInitialized: true });
+      return;
+    }
+
+    const found = employeesList.find((e) => {
+      const code = String(e.maNhanVien || '').trim().toLowerCase();
+      const uname = String(e.username || '').trim().toLowerCase();
+      const email = String(e.email || '').trim().toLowerCase();
+      return code === cleanUser || (uname && uname === cleanUser) || (email && email === cleanUser);
+    });
+
+    if (!found) {
+      res.status(401).json({
+        ok: false,
+        message: 'Thông tin tài khoản hoặc mật khẩu hiện tại không chính xác!',
+      });
+      return;
+    }
+
+    const empCodeKey = String(found.maNhanVien || '').trim().toUpperCase();
+    const existingCred = credentialsStore.get(empCodeKey);
+    const isAdminReset = Boolean(session?.isAdmin && session.maNhanVien.toUpperCase() !== empCodeKey);
+
+    if (!isAdminReset) {
+      if (!currentPassword || !existingCred || !verifyPasswordScrypt(currentPassword, existingCred)) {
+        res.status(401).json({
+          ok: false,
+          message: 'Thông tin tài khoản hoặc mật khẩu hiện tại không chính xác!',
+        });
+        return;
+      }
+    }
+
+    const hashed = hashPasswordScrypt(newPassword);
+    credentialsStore.set(empCodeKey, {
+      salt: hashed.salt,
+      hash: hashed.hash,
+      userModified: true,
+      updatedAt: new Date().toISOString(),
+    });
+    await persistCredentials();
+    res.json({
+      ok: true,
+      message: 'Đổi mật khẩu thành công! Mật khẩu mới đã được cập nhật cho tất cả thiết bị.',
+    });
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    const authHeader = req.headers.authorization || '';
+    if (authHeader.startsWith('Bearer ')) {
+      activeSessions.delete(authHeader.slice(7).trim());
+    }
+    res.json({ ok: true });
+  });
+
+  app.get('/api/workspace/state', (req, res) => {
+    const session = authenticateBearerRequest(req);
+    if (!session) {
+      res.status(401).json({ ok: false, message: 'Phiên đồng bộ đã hết hạn hoặc chưa xác thực.' });
+      return;
+    }
+    const since = Number(req.query.since) || 0;
+    if (workspaceStore.revision === 0 || !workspaceStore.snapshot) {
+      res.json({ ok: true, updated: false, revision: 0, updatedAt: null });
+      return;
+    }
+    if (since >= workspaceStore.revision) {
+      res.json({
+        ok: true,
+        updated: false,
+        revision: workspaceStore.revision,
+        updatedAt: workspaceStore.updatedAt,
+        updatedBy: workspaceStore.updatedBy,
+      });
+      return;
+    }
+    res.json({
+      ok: true,
+      updated: true,
+      revision: workspaceStore.revision,
+      updatedAt: workspaceStore.updatedAt,
+      updatedBy: workspaceStore.updatedBy,
+      snapshot: workspaceStore.snapshot,
+    });
+  });
+
+  app.post(
+    '/api/workspace/sync',
+    express.json({ limit: '25mb' }),
+    async (req, res) => {
+      const session = authenticateBearerRequest(req);
+      if (!session) {
+        res.status(401).json({ ok: false, message: 'Phiên đồng bộ đã hết hạn hoặc chưa xác thực.' });
+        return;
+      }
+
+      const body = (req.body || {}) as {
+        snapshot?: unknown;
+        baseRevision?: unknown;
+        source?: unknown;
+        credentialSeeds?: unknown;
+      };
+
+      if (!body.snapshot || typeof body.snapshot !== 'object' || Array.isArray(body.snapshot)) {
+        res.status(400).json({ ok: false, message: 'Dữ liệu đồng bộ không hợp lệ.' });
+        return;
+      }
+
+      const incomingRaw = body.snapshot as Record<string, unknown>;
+      const hasKnownCollections =
+        Array.isArray(incomingRaw.equipment) && Array.isArray(incomingRaw.employees);
+      if (!hasKnownCollections) {
+        res.status(400).json({ ok: false, message: 'Thiếu danh mục thiết bị hoặc nhân sự trong gói đồng bộ.' });
+        return;
+      }
+
+      const source = body.source === 'cloud' ? 'cloud' : 'local';
+      const baseRevision = typeof body.baseRevision === 'number' ? body.baseRevision : 0;
+
+      // Guard: prevent stale local device from overwriting newer server workspace
+      if (
+        workspaceStore.revision > 0 &&
+        source !== 'cloud' &&
+        baseRevision < workspaceStore.revision
+      ) {
+        res.status(409).json({
+          ok: false,
+          conflict: true,
+          revision: workspaceStore.revision,
+          updatedAt: workspaceStore.updatedAt,
+          message: 'Máy chủ đã có phiên bản dữ liệu mới hơn.',
+        });
+        return;
+      }
+
+      // Preserve existing private fields (email / phone) if a non-admin client sends partial employee docs
+      const existingByCode = new Map<string, Record<string, unknown>>();
+      for (const emp of getServerEmployeesList()) {
+        const code = String(emp.maNhanVien || '').trim().toUpperCase();
+        if (code) existingByCode.set(code, emp);
+      }
+
+      const cleanSnapshot = stripEmployeePasswords(incomingRaw);
+      if (!session.isAdmin && Array.isArray(cleanSnapshot.employees)) {
+        cleanSnapshot.employees = cleanSnapshot.employees.map((raw) => {
+          if (!raw || typeof raw !== 'object') return raw;
+          const empObj = raw as Record<string, unknown>;
+          const code = String(empObj.maNhanVien || '').trim().toUpperCase();
+          const prev = existingByCode.get(code);
+          if (!prev) return empObj;
+          return {
+            ...empObj,
+            email:
+              typeof empObj.email === 'string' && empObj.email.trim()
+                ? empObj.email
+                : prev.email || '',
+            soDienThoai:
+              typeof empObj.soDienThoai === 'string' && empObj.soDienThoai.trim()
+                ? empObj.soDienThoai
+                : prev.soDienThoai || '',
+          };
+        });
+      }
+
+      // Allow Admin sessions to seed initial scrypt password hashes for employees without overwriting user-changed passwords
+      let credentialsChanged = false;
+      if (session.isAdmin && Array.isArray(body.credentialSeeds)) {
+        for (const seed of body.credentialSeeds) {
+          if (!seed || typeof seed !== 'object') continue;
+          const s = seed as { maNhanVien?: unknown; password?: unknown; force?: unknown };
+          const codeKey = typeof s.maNhanVien === 'string' ? s.maNhanVien.trim().toUpperCase() : '';
+          const rawPass = typeof s.password === 'string' ? s.password.trim() : '';
+          if (!codeKey || rawPass.length < 4) continue;
+          const existing = credentialsStore.get(codeKey);
+          if (!existing || (Boolean(s.force) && !existing.userModified)) {
+            const hashed = hashPasswordScrypt(rawPass);
+            credentialsStore.set(codeKey, {
+              salt: hashed.salt,
+              hash: hashed.hash,
+              userModified: false,
+              updatedAt: new Date().toISOString(),
+            });
+            credentialsChanged = true;
+          }
+        }
+      }
+
+      workspaceStore.revision += 1;
+      workspaceStore.updatedAt = new Date().toISOString();
+      workspaceStore.updatedBy = `${session.tenNhanVien} (${session.maNhanVien})`;
+      workspaceStore.snapshot = cleanSnapshot;
+
+      await persistWorkspace();
+      if (credentialsChanged) {
+        await persistCredentials();
+      }
+
+      res.json({
+        ok: true,
+        revision: workspaceStore.revision,
+        updatedAt: workspaceStore.updatedAt,
+        updatedBy: workspaceStore.updatedBy,
+      });
+    }
+  );
 
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');

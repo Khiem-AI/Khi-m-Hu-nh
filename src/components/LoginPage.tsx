@@ -69,7 +69,7 @@ export const LoginPage: React.FC = () => {
     }
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
 
@@ -83,16 +83,19 @@ export const LoginPage: React.FC = () => {
     }
 
     setIsLoading(true);
-    setTimeout(() => {
-      const res = login(username, password);
-      setIsLoading(false);
+    try {
+      const res = await login(username, password);
       if (!res.success) {
         setErrorMessage(res.message || 'Tên đăng nhập hoặc mật khẩu không chính xác!');
       }
-    }, 300);
+    } catch {
+      setErrorMessage('Không thể đăng nhập lúc này. Vui lòng thử lại!');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+  const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
     setCpSuccessMessage('');
@@ -112,16 +115,21 @@ export const LoginPage: React.FC = () => {
       return;
     }
 
-    const res = changePassword(cpUsername, cpCurrentPassword, cpNewPassword);
-    if (res.success) {
-      setCpSuccessMessage(res.message);
-      setUsername(cpUsername.trim());
-      setPassword('');
-      setCpCurrentPassword('');
-      setCpNewPassword('');
-      setCpConfirmPassword('');
-    } else {
-      setErrorMessage(res.message);
+    setIsLoading(true);
+    try {
+      const res = await changePassword(cpUsername, cpCurrentPassword, cpNewPassword);
+      if (res.success) {
+        setCpSuccessMessage(res.message);
+        setUsername(cpUsername.trim());
+        setPassword('');
+        setCpCurrentPassword('');
+        setCpNewPassword('');
+        setCpConfirmPassword('');
+      } else {
+        setErrorMessage(res.message);
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -258,18 +266,18 @@ export const LoginPage: React.FC = () => {
                     <span>
                       {isGoogleLoading || cloudSyncStatus === 'connecting'
                         ? 'Đang kết nối Google Cloud...'
-                        : 'Đăng nhập Admin Google (Cloud Sync & Backup)'}
+                        : 'Đăng nhập bằng Google (Đồng bộ Cloud trực tiếp)'}
                     </span>
                   </button>
                   <p className="text-[11px] text-center text-slate-500 dark:text-slate-400">
-                    Dành riêng cho tài khoản Admin (<span className="font-mono">khiemhuynhggs@gmail.com</span>)
+                    Hỗ trợ Admin và nhân viên đã đăng ký Gmail trong hệ thống — tự động tải dữ liệu mới nhất trên mọi máy tính
                   </p>
                 </div>
 
                 <div className="relative flex items-center py-1">
                   <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
                   <span className="shrink-0 mx-3 text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 text-center">
-                    Nhân viên đăng nhập nội bộ (không cần Gmail)
+                    Hoặc đăng nhập bằng Mã nhân viên &amp; Mật khẩu
                   </span>
                   <div className="flex-grow border-t border-slate-200 dark:border-slate-800" />
                 </div>
