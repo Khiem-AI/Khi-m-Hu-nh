@@ -2423,7 +2423,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     addAuditLog(
       'Cập nhật',
-      'Báo Cáo Tháng BGĐ',
+      'Báo Cáo Tháng',
       `Kỳ ${cleanedRecord.month}`,
       `Lưu báo cáo tháng ${cleanedRecord.month} (${cleanedRecord.status})`
     );
@@ -2446,7 +2446,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     addAuditLog(
       'Xóa',
-      'Báo Cáo Tháng BGĐ',
+      'Báo Cáo Tháng',
       `Kỳ ${month}`,
       `Xóa bản lưu báo cáo tháng ${month} khỏi lịch sử`
     );

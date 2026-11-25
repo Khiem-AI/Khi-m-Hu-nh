@@ -1172,7 +1172,7 @@ export const EmailAlertsTab: React.FC = () => {
                           : log.type === 'BAO_CAO_HOAN_THANH'
                           ? 'Báo Cáo Hoàn Thành'
                           : log.type === 'BAO_CAO_THANG_BGD'
-                          ? 'Báo Cáo Tháng BGĐ'
+                          ? 'Báo Cáo Tháng'
                           : 'Thử Nghiệm'}
                       </span>
                     </td>

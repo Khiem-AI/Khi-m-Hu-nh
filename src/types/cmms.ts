@@ -336,7 +336,7 @@ export interface AppViewOption {
 export const APP_VIEW_OPTIONS: AppViewOption[] = [
   { id: 'dashboard', label: 'Tổng Quan O&M', desc: 'Bảng điều hành nhà máy' },
   { id: 'admin_dashboard', label: 'Dashboard Admin', desc: 'OEE, MTBF, MTTR & KPI vận hành' },
-  { id: 'monthly_report', label: 'Báo Cáo Tháng BGĐ', desc: 'Tổng hợp KPI & gửi Ban Giám Đốc' },
+  { id: 'monthly_report', label: 'Báo Cáo Tháng', desc: 'Tổng hợp KPI & gửi Ban Giám Đốc' },
   { id: 'my_tasks', label: 'Việc Được Giao', desc: 'Nhiệm vụ của tôi' },
   { id: 'morning_checks', label: 'Công Việc Đầu Ngày', desc: 'Kiểm tra Vòng trong, Vòng Ngoài & Phòng Utility' },
   { id: 'profile', label: 'Hồ Sơ Cá Nhân', desc: 'Thông tin & Phép năm' },

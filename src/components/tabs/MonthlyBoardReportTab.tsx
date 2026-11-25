@@ -844,7 +844,7 @@ export const MonthlyBoardReportTab: React.FC = () => {
       `VI. KẾ HOẠCH TRỌNG TÂM & ĐỀ XUẤT THÁNG TỚI`,
       nextMonthPlan.trim() || '• Tiếp tục thực hiện bảo trì phòng ngừa đúng tiến độ.',
       ``,
-      `Trân trọng báo cáo Ban Giám Đốc xem xét và chỉ đạo.`,
+      `Trân trọng!.`,
       `${preparedBy || currentUser.tenNhanVien} — Bộ phận Facility Management`,
     ].join('\n');
 

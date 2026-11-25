@@ -81,7 +81,7 @@ export function getEmailTemplateTheme(type: EmailLog['type']): EmailTemplateThem
       };
     case 'BAO_CAO_THANG_BGD':
       return {
-        badgeText: 'BÁO CÁO THÁNG BGĐ',
+        badgeText: 'BÁO CÁO THÁNG',
         accentColor: '#1d4ed8',
         badgeBg: '#eff6ff',
         badgeTextColor: '#1e40af',
