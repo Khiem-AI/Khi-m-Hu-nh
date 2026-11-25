@@ -82,6 +82,9 @@ export const Header: React.FC<HeaderProps> = ({
     lastSyncedAt,
     serverSyncStatus,
     lastServerSyncedAt,
+    hasServerSyncSession,
+    isRealtimeStreamConnected,
+    pendingCloudOpsCount,
     connectCloudWithGoogle,
     disconnectCloud,
     forceSyncLocalToCloud,
@@ -101,6 +104,8 @@ export const Header: React.FC<HeaderProps> = ({
   const [showOnlinePopover, setShowOnlinePopover] = useState(false);
   const [isRefreshingOnline, setIsRefreshingOnline] = useState(false);
   const [isCloudActionLoading, setIsCloudActionLoading] = useState(false);
+  const [quickSyncPassword, setQuickSyncPassword] = useState('');
+  const [showQuickSyncPass, setShowQuickSyncPass] = useState(false);
   const [cloudActionNotice, setCloudActionNotice] = useState<{
     ok: boolean;
     text: string;
@@ -477,7 +482,7 @@ export const Header: React.FC<HeaderProps> = ({
             )}
           </div>
 
-          {/* Cloud & Multi-Device Sync Status Button & Popover (Available for all authenticated users) */}
+          {/* Cloud & Multi-Device Real-Time Sync Status Button & Popover */}
           <div className="relative">
             <button
               type="button"
@@ -490,17 +495,17 @@ export const Header: React.FC<HeaderProps> = ({
               }}
               title={
                 cloudSyncStatus === 'synced'
-                  ? `Đã đồng bộ Cloud (${cloudUser?.email || ''})`
+                  ? `Đã đồng bộ Cloud trực tiếp (${cloudUser?.email || ''})`
                   : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
-                  ? 'Đang đồng bộ dữ liệu mới nhất...'
+                  ? 'Đang đồng bộ dữ liệu theo thời gian thực...'
                   : cloudSyncStatus === 'error'
                   ? 'Lỗi đồng bộ Cloud — nhấn để xem chi tiết'
-                  : serverSyncStatus === 'synced'
-                  ? `Đã đồng bộ máy chủ${lastServerSyncedAt ? ` (${lastServerSyncedAt})` : ''}`
-                  : 'Nhấn để tải dữ liệu mới nhất hoặc kết nối Google Cloud'
+                  : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
+                  ? `Đang đồng bộ trực tiếp theo thời gian thực${lastServerSyncedAt ? ` (${lastServerSyncedAt})` : ''}`
+                  : 'Nhấn để kích hoạt đồng bộ trực tiếp hoặc kết nối Google Cloud'
               }
               className={`h-9 flex items-center gap-1.5 px-2.5 sm:px-3 rounded-xl border text-xs font-semibold transition whitespace-nowrap shrink-0 ${
-                cloudSyncStatus === 'synced' || serverSyncStatus === 'synced'
+                cloudSyncStatus === 'synced' || hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
                   ? 'bg-emerald-50 dark:bg-emerald-500/15 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
                   : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
                   ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/40'
@@ -524,10 +529,16 @@ export const Header: React.FC<HeaderProps> = ({
                   <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400" />
                   <span className="hidden xl:inline">Lỗi Cloud</span>
                 </>
-              ) : serverSyncStatus === 'synced' ? (
+              ) : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected ? (
                 <>
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    {isRealtimeStreamConnected && (
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    )}
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
                   <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="hidden xl:inline">Đã đồng bộ</span>
+                  <span className="hidden xl:inline">Đồng bộ trực tiếp</span>
                 </>
               ) : (
                 <>
@@ -538,17 +549,17 @@ export const Header: React.FC<HeaderProps> = ({
             </button>
 
             {showCloudPopover && (
-              <div className="absolute right-0 mt-2 w-80 sm:w-88 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3 text-xs">
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-2xl p-4 z-50 animate-in fade-in zoom-in-95 space-y-3 text-xs">
                 <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
                   <div className="flex items-center gap-2">
                     <Cloud className="w-4 h-4 text-cyan-500" />
                     <span className="font-bold text-slate-900 dark:text-slate-100 text-sm">
-                      Đồng Bộ Đa Thiết Bị
+                      Đồng Bộ Trực Tiếp
                     </span>
                   </div>
                   <span
                     className={`font-bold text-[11px] px-2 py-0.5 rounded-lg ${
-                      cloudSyncStatus === 'synced' || serverSyncStatus === 'synced'
+                      cloudSyncStatus === 'synced' || hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
                         : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
                         ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
@@ -565,43 +576,122 @@ export const Header: React.FC<HeaderProps> = ({
                       ? 'Đang kết nối'
                       : cloudSyncStatus === 'error'
                       ? 'Gặp lỗi'
-                      : serverSyncStatus === 'synced'
-                      ? 'Máy chủ trực tuyến'
-                      : 'Chưa kết nối Cloud'}
+                      : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
+                      ? 'Trực tuyến'
+                      : 'Chưa kích hoạt'}
                   </span>
                 </div>
 
                 {cloudUser ? (
-                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-1">
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Tài khoản Google Cloud:
+                  <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-500/30 space-y-1">
+                    <div className="text-[11px] text-emerald-700 dark:text-emerald-300 font-semibold">
+                      Đang kết nối Google Cloud trực tiếp:
                     </div>
                     <div className="font-bold text-slate-900 dark:text-slate-100 truncate">
                       {cloudUser.email}
                     </div>
                     {lastSyncedAt && (
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                      <div className="text-[11px] text-slate-600 dark:text-slate-400">
                         Đồng bộ Cloud lúc: <span className="font-mono">{lastSyncedAt}</span>
                       </div>
                     )}
                     {lastServerSyncedAt && (
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Đồng bộ máy chủ lúc: <span className="font-mono">{lastServerSyncedAt}</span>
+                      <div className="text-[11px] text-slate-600 dark:text-slate-400">
+                        Đồng bộ đa thiết bị lúc: <span className="font-mono">{lastServerSyncedAt}</span>
+                      </div>
+                    )}
+                    {pendingCloudOpsCount > 0 && (
+                      <div className="text-[11px] text-cyan-700 dark:text-cyan-300 font-semibold pt-0.5">
+                        Đang chuyển tiếp {pendingCloudOpsCount} cập nhật từ nhân viên lên Cloud...
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-1">
-                    <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                      {serverSyncStatus === 'synced'
-                        ? 'Đang tự động đồng bộ dữ liệu mới nhất qua máy chủ dùng chung giữa các máy tính.'
-                        : 'Kết nối Google Cloud bằng Gmail đã đăng ký trong hệ thống để nhận dữ liệu mới nhất trực tiếp từ đám mây.'}
+                ) : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected ? (
+                  <div className="p-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/25 border border-emerald-200 dark:border-emerald-500/30 space-y-1.5">
+                    <p className="text-emerald-800 dark:text-emerald-200 leading-relaxed font-medium">
+                      Đang bật đồng bộ trực tiếp theo thời gian thực. Mọi dữ liệu bạn nhập sẽ tự động cập nhật ngay sang các máy tính khác và chuyển tiếp lên Cloud.
                     </p>
-                    {lastServerSyncedAt && (
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        Cập nhật lúc: <span className="font-mono">{lastServerSyncedAt}</span>
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-400">
+                      {lastServerSyncedAt && (
+                        <span>
+                          Cập nhật lúc: <span className="font-mono font-semibold">{lastServerSyncedAt}</span>
+                        </span>
+                      )}
+                      {pendingCloudOpsCount > 0 ? (
+                        <span className="text-cyan-700 dark:text-cyan-300 font-semibold">
+                          • {pendingCloudOpsCount} thay đổi đang chờ lên Cloud
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
+                          • Đã đồng bộ mới nhất
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 space-y-2.5">
+                    <p className="text-slate-700 dark:text-slate-300 leading-relaxed">
+                      Xác nhận mật khẩu 1 lần cho tài khoản{' '}
+                      <strong className="font-mono text-cyan-700 dark:text-cyan-300">
+                        {currentUser.maNhanVien}
+                      </strong>{' '}
+                      để bật đồng bộ trực tiếp (tự duy trì 7 ngày ngay cả khi tải lại trang):
+                    </p>
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!quickSyncPassword.trim()) {
+                          setCloudActionNotice({
+                            ok: false,
+                            text: 'Vui lòng nhập mật khẩu của tài khoản hiện tại.',
+                          });
+                          return;
+                        }
+                        setIsCloudActionLoading(true);
+                        setCloudActionNotice(null);
+                        const res = await login(currentUser.maNhanVien, quickSyncPassword.trim());
+                        setIsCloudActionLoading(false);
+                        if (res.success) {
+                          setQuickSyncPassword('');
+                          setCloudActionNotice({
+                            ok: true,
+                            text: 'Đã kích hoạt đồng bộ trực tiếp và tải dữ liệu mới nhất thành công!',
+                          });
+                        } else {
+                          setCloudActionNotice({
+                            ok: false,
+                            text: res.message || 'Mật khẩu không chính xác.',
+                          });
+                        }
+                      }}
+                      className="space-y-2"
+                    >
+                      <div className="relative">
+                        <input
+                          type={showQuickSyncPass ? 'text' : 'password'}
+                          value={quickSyncPassword}
+                          onChange={(e) => setQuickSyncPassword(e.target.value)}
+                          placeholder="Nhập mật khẩu đăng nhập..."
+                          className="w-full px-3 py-2 pr-9 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowQuickSyncPass(!showQuickSyncPass)}
+                          aria-label={showQuickSyncPass ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        >
+                          {showQuickSyncPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
                       </div>
-                    )}
+                      <button
+                        type="submit"
+                        disabled={isCloudActionLoading}
+                        className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`} />
+                        <span>Bật đồng bộ trực tiếp ngay</span>
+                      </button>
+                    </form>
                   </div>
                 )}
 
@@ -703,23 +793,25 @@ export const Header: React.FC<HeaderProps> = ({
                     </>
                   ) : (
                     <>
-                      <button
-                        type="button"
-                        disabled={isCloudActionLoading}
-                        onClick={async () => {
-                          setIsCloudActionLoading(true);
-                          setCloudActionNotice(null);
-                          const res = await pullLatestFromServer();
-                          setIsCloudActionLoading(false);
-                          setCloudActionNotice({ ok: res.success, text: res.message });
-                        }}
-                        className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
-                      >
-                        <RefreshCw
-                          className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
-                        />
-                        <span>Tải dữ liệu mới nhất ngay</span>
-                      </button>
+                      {(hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && (
+                        <button
+                          type="button"
+                          disabled={isCloudActionLoading}
+                          onClick={async () => {
+                            setIsCloudActionLoading(true);
+                            setCloudActionNotice(null);
+                            const res = await pullLatestFromServer();
+                            setIsCloudActionLoading(false);
+                            setCloudActionNotice({ ok: res.success, text: res.message });
+                          }}
+                          className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"
+                        >
+                          <RefreshCw
+                            className={`w-3.5 h-3.5 ${isCloudActionLoading ? 'animate-spin' : ''}`}
+                          />
+                          <span>Tải dữ liệu mới nhất ngay</span>
+                        </button>
+                      )}
 
                       <button
                         type="button"
@@ -738,7 +830,7 @@ export const Header: React.FC<HeaderProps> = ({
                         ) : (
                           <Cloud className="w-4 h-4" />
                         )}
-                        <span>Kết nối Google Cloud trực tiếp</span>
+                        <span>Liên kết Google Cloud trực tiếp</span>
                       </button>
                     </>
                   )}

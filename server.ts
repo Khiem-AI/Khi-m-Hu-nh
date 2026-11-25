@@ -295,7 +295,10 @@ async function startServer() {
   const app = express();
   const defaultJsonParser = express.json({ limit: '2mb' });
   app.use((req, res, next) => {
-    if (req.path === '/api/workspace/sync') {
+    if (
+      req.path === '/api/workspace/sync' ||
+      req.path === '/api/workspace/pending-cloud-op'
+    ) {
       next();
       return;
     }
@@ -709,11 +712,40 @@ async function startServer() {
     res.json({ ok: true, serverNow: Date.now(), onlineUsers });
   });
 
-  // --- Shared Authenticated Workspace Sync Hub (Cross-Device Sync for Internal & Cloud Users) ---
+  // --- Shared Authenticated Workspace Sync Hub (Real-Time SSE + Cloud Bridge for Internal & Cloud Users) ---
   const BOOTSTRAPPED_ADMIN_EMAIL = 'khiemhuynhggs@gmail.com';
   const SERVER_DATA_DIR = path.resolve(__dirname, '.cmms-server-data');
-  const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+  const SESSION_COOKIE_NAME = 'cmms_sync_sid';
+  const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const SESSION_MAX_AGE_SEC = 7 * 24 * 60 * 60;
   const MAX_ACTIVE_SESSIONS = 1000;
+  const MAX_SSE_CLIENTS = 500;
+  const MAX_PENDING_CLOUD_OPS = 500;
+
+  const ALLOWED_CLOUD_COLLECTIONS = new Set<string>([
+    'settings',
+    'equipment',
+    'maintenance_plans',
+    'maintenance_history',
+    'tickets',
+    'spare_parts',
+    'stock_transactions',
+    'power_10days',
+    'water_monthly',
+    'meter_readings',
+    'cost_records',
+    'employees_public',
+    'employees_private',
+    'documents',
+    'projects',
+    'safety_inspections',
+    'tools',
+    'tool_logs',
+    'daily_area_checks',
+    'purchase_requests',
+    'email_logs',
+    'audit_logs',
+  ]);
 
   let firebaseProjectId = 'gen-lang-client-0762337637';
   try {
@@ -752,6 +784,16 @@ async function startServer() {
     snapshot: Record<string, unknown> | null;
   }
 
+  interface PendingCloudOp {
+    opId: string;
+    colName: string;
+    docId: string;
+    action: 'upsert' | 'delete';
+    sanitizedData?: Record<string, unknown>;
+    updatedAt: string;
+    updatedBy: string;
+  }
+
   interface AuthSessionRecord {
     token: string;
     maNhanVien: string;
@@ -765,6 +807,9 @@ async function startServer() {
 
   const activeSessions = new Map<string, AuthSessionRecord>();
   const credentialsStore = new Map<string, StoredCredential>();
+  const pendingCloudOps = new Map<string, PendingCloudOp>();
+  const sseClients = new Set<express.Response>();
+  let seedEmployeesDirectory: Record<string, unknown>[] = [];
   const workspaceStore: WorkspaceStoreState = {
     revision: 0,
     updatedAt: null,
@@ -824,35 +869,6 @@ async function startServer() {
     await fs.rename(tmp, target);
   }
 
-  async function loadPersistedWorkspaceState(): Promise<void> {
-    try {
-      const wsRaw = await fs.readFile(resolveServerDataFile('workspace.json'), 'utf8');
-      const parsed = JSON.parse(wsRaw) as Partial<WorkspaceStoreState>;
-      if (typeof parsed.revision === 'number' && parsed.snapshot && typeof parsed.snapshot === 'object') {
-        workspaceStore.revision = parsed.revision;
-        workspaceStore.updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null;
-        workspaceStore.updatedBy = typeof parsed.updatedBy === 'string' ? parsed.updatedBy : null;
-        workspaceStore.snapshot = stripEmployeePasswords(parsed.snapshot as Record<string, unknown>);
-      }
-    } catch {
-      // Fresh server start — workspace will populate on first sync
-    }
-
-    try {
-      const credRaw = await fs.readFile(resolveServerDataFile('credentials.json'), 'utf8');
-      const parsed = JSON.parse(credRaw) as Record<string, StoredCredential>;
-      if (parsed && typeof parsed === 'object') {
-        for (const [key, val] of Object.entries(parsed)) {
-          if (val && typeof val.salt === 'string' && typeof val.hash === 'string') {
-            credentialsStore.set(key.toUpperCase(), val);
-          }
-        }
-      }
-    } catch {
-      // Fresh server start — credentials will populate on first Admin sync
-    }
-  }
-
   async function persistCredentials(): Promise<void> {
     const obj: Record<string, StoredCredential> = {};
     for (const [key, val] of credentialsStore.entries()) {
@@ -878,7 +894,156 @@ async function startServer() {
     }
   }
 
+  async function persistPendingCloudOps(): Promise<void> {
+    try {
+      await atomicWriteJson('pending-cloud-ops.json', Array.from(pendingCloudOps.values()));
+    } catch {
+      // Non-fatal on read-only environments
+    }
+  }
+
+  async function bootstrapSeedEmployeesFromInitialData(): Promise<void> {
+    try {
+      const initPath = path.resolve(__dirname, 'src', 'data', 'initialData.ts');
+      if (!initPath.startsWith(path.resolve(__dirname) + path.sep)) return;
+      const content = await fs.readFile(initPath, 'utf8');
+      const marker = 'export const INITIAL_EMPLOYEES: Employee[] = [';
+      const startIdx = content.indexOf(marker);
+      if (startIdx === -1) return;
+      const arrayStart = startIdx + marker.length - 1;
+      const endIdx = content.indexOf('\n];', arrayStart);
+      if (endIdx === -1) return;
+      const jsonText = content.slice(arrayStart, endIdx + 2);
+      const parsed = JSON.parse(jsonText) as Record<string, unknown>[];
+      if (!Array.isArray(parsed)) return;
+
+      let addedAnyHash = false;
+      const safeDir: Record<string, unknown>[] = [];
+      for (const raw of parsed) {
+        if (!raw || typeof raw !== 'object') continue;
+        const code = String(raw.maNhanVien || '').trim();
+        if (!code) continue;
+        const codeKey = code.toUpperCase();
+        const rawPass = typeof raw.password === 'string' && raw.password.trim() ? raw.password.trim() : '123456';
+        if (!credentialsStore.has(codeKey)) {
+          const hashed = hashPasswordScrypt(rawPass);
+          credentialsStore.set(codeKey, {
+            salt: hashed.salt,
+            hash: hashed.hash,
+            userModified: false,
+            updatedAt: new Date().toISOString(),
+          });
+          addedAnyHash = true;
+        }
+        const { password: _stripped, ...safeEmp } = raw;
+        safeDir.push(safeEmp);
+      }
+      seedEmployeesDirectory = safeDir;
+      if (addedAnyHash) {
+        await persistCredentials();
+      }
+    } catch {
+      // Optional cold-start bootstrap; server still works via Cloud sync
+    }
+  }
+
+  async function loadPersistedWorkspaceState(): Promise<void> {
+    try {
+      const wsRaw = await fs.readFile(resolveServerDataFile('workspace.json'), 'utf8');
+      const parsed = JSON.parse(wsRaw) as Partial<WorkspaceStoreState>;
+      if (typeof parsed.revision === 'number' && parsed.snapshot && typeof parsed.snapshot === 'object') {
+        workspaceStore.revision = parsed.revision;
+        workspaceStore.updatedAt = typeof parsed.updatedAt === 'string' ? parsed.updatedAt : null;
+        workspaceStore.updatedBy = typeof parsed.updatedBy === 'string' ? parsed.updatedBy : null;
+        workspaceStore.snapshot = stripEmployeePasswords(parsed.snapshot as Record<string, unknown>);
+      }
+    } catch {
+      // Fresh server start — workspace will populate on first sync
+    }
+
+    try {
+      const credRaw = await fs.readFile(resolveServerDataFile('credentials.json'), 'utf8');
+      const parsed = JSON.parse(credRaw) as Record<string, StoredCredential>;
+      if (parsed && typeof parsed === 'object') {
+        for (const [key, val] of Object.entries(parsed)) {
+          if (val && typeof val.salt === 'string' && typeof val.hash === 'string') {
+            credentialsStore.set(key.toUpperCase(), val);
+          }
+        }
+      }
+    } catch {
+      // Fresh server start — seed hashes loaded below
+    }
+
+    try {
+      const opsRaw = await fs.readFile(resolveServerDataFile('pending-cloud-ops.json'), 'utf8');
+      const parsed = JSON.parse(opsRaw) as PendingCloudOp[];
+      if (Array.isArray(parsed)) {
+        for (const op of parsed) {
+          if (op && op.opId && op.colName && op.docId && ALLOWED_CLOUD_COLLECTIONS.has(op.colName)) {
+            pendingCloudOps.set(`${op.colName}/${op.docId}`, op);
+          }
+        }
+      }
+    } catch {
+      // No queued Cloud ops
+    }
+
+    await bootstrapSeedEmployeesFromInitialData();
+  }
+
   await loadPersistedWorkspaceState();
+
+  function parseCookieValue(req: express.Request, name: string): string | null {
+    const cookieHeader = req.headers.cookie;
+    if (!cookieHeader) return null;
+    const parts = cookieHeader.split(';');
+    for (const part of parts) {
+      const eqIdx = part.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = part.slice(0, eqIdx).trim();
+      if (key === name) {
+        try {
+          return decodeURIComponent(part.slice(eqIdx + 1).trim());
+        } catch {
+          return part.slice(eqIdx + 1).trim();
+        }
+      }
+    }
+    return null;
+  }
+
+  function setSessionCookie(res: express.Response, token: string): void {
+    res.setHeader(
+      'Set-Cookie',
+      `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=None; Secure; Partitioned; Max-Age=${SESSION_MAX_AGE_SEC}`
+    );
+  }
+
+  function clearSessionCookie(res: express.Response): void {
+    res.setHeader(
+      'Set-Cookie',
+      `${SESSION_COOKIE_NAME}=; Path=/; HttpOnly; SameSite=None; Secure; Partitioned; Max-Age=0`
+    );
+  }
+
+  function isCsrfSafeMutation(req: express.Request): boolean {
+    if (String(req.headers['x-requested-with'] || '').toLowerCase() === 'xmlhttprequest') {
+      return true;
+    }
+    const origin = req.headers.origin;
+    const host = (req.headers['x-forwarded-host'] || req.headers.host || '') as string;
+    if (origin && host) {
+      try {
+        const originHost = new URL(origin).host.toLowerCase();
+        const expectedHost = host.split(',')[0].trim().toLowerCase();
+        if (originHost === expectedHost) return true;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
 
   function pruneExpiredSessions(): void {
     const now = Date.now();
@@ -905,18 +1070,45 @@ async function startServer() {
     return record;
   }
 
-  function authenticateBearerRequest(req: express.Request): AuthSessionRecord | null {
+  function authenticateRequest(req: express.Request, requireCsrf = false): AuthSessionRecord | null {
     const authHeader = req.headers.authorization || '';
-    if (!authHeader.startsWith('Bearer ')) return null;
-    const token = authHeader.slice(7).trim();
-    if (!token) return null;
-    const session = activeSessions.get(token);
+    if (authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      if (token) {
+        const session = activeSessions.get(token);
+        if (session) {
+          if (session.expiresAt <= Date.now()) {
+            activeSessions.delete(token);
+            return null;
+          }
+          return session;
+        }
+      }
+    }
+
+    const cookieToken = parseCookieValue(req, SESSION_COOKIE_NAME);
+    if (!cookieToken) return null;
+    if (requireCsrf && !isCsrfSafeMutation(req)) {
+      return null;
+    }
+    const session = activeSessions.get(cookieToken);
     if (!session) return null;
     if (session.expiresAt <= Date.now()) {
-      activeSessions.delete(token);
+      activeSessions.delete(cookieToken);
       return null;
     }
     return session;
+  }
+
+  function broadcastWorkspaceEvent(payload: Record<string, unknown>): void {
+    const frame = `data: ${JSON.stringify(payload)}\n\n`;
+    for (const client of sseClients) {
+      try {
+        client.write(frame);
+      } catch {
+        sseClients.delete(client);
+      }
+    }
   }
 
   // Google Firebase ID Token verification using Google's public x509 certificates
@@ -1007,9 +1199,34 @@ async function startServer() {
 
   function getServerEmployeesList(): Record<string, unknown>[] {
     const snap = workspaceStore.snapshot;
-    if (!snap || !Array.isArray(snap.employees)) return [];
-    return snap.employees.filter((e): e is Record<string, unknown> => Boolean(e && typeof e === 'object'));
+    if (snap && Array.isArray(snap.employees) && snap.employees.length > 0) {
+      return snap.employees.filter((e): e is Record<string, unknown> => Boolean(e && typeof e === 'object'));
+    }
+    return seedEmployeesDirectory;
   }
+
+  app.get('/api/auth/session', (req, res) => {
+    const session = authenticateRequest(req, false);
+    if (!session) {
+      res.status(401).json({ ok: false, authenticated: false });
+      return;
+    }
+    res.json({
+      ok: true,
+      authenticated: true,
+      token: session.token,
+      expiresAt: session.expiresAt,
+      employee: {
+        maNhanVien: session.maNhanVien,
+        tenNhanVien: session.tenNhanVien,
+        chucVu: session.chucVu,
+        email: session.email,
+      },
+      workspaceRevision: workspaceStore.revision,
+      updatedAt: workspaceStore.updatedAt,
+      pendingCloudCount: pendingCloudOps.size,
+    });
+  });
 
   app.post('/api/auth/cloud-session', async (req, res) => {
     const body = (req.body || {}) as { idToken?: unknown };
@@ -1047,12 +1264,14 @@ async function startServer() {
         authType: 'cloud',
       });
 
+      setSessionCookie(res, session.token);
       res.json({
         ok: true,
         token: session.token,
         expiresAt: session.expiresAt,
         workspaceRevision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
+        pendingCloudCount: pendingCloudOps.size,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Xác thực Google thất bại.';
@@ -1112,6 +1331,7 @@ async function startServer() {
       authType: 'internal',
     });
 
+    setSessionCookie(res, session.token);
     const { password: _removed, ...safeEmployee } = found;
     res.json({
       ok: true,
@@ -1120,11 +1340,12 @@ async function startServer() {
       employee: safeEmployee,
       workspaceRevision: workspaceStore.revision,
       updatedAt: workspaceStore.updatedAt,
+      pendingCloudCount: pendingCloudOps.size,
     });
   });
 
   app.post('/api/auth/change-password', async (req, res) => {
-    const session = authenticateBearerRequest(req);
+    const session = authenticateRequest(req, true);
     const body = (req.body || {}) as {
       username?: unknown;
       currentPassword?: unknown;
@@ -1196,18 +1417,72 @@ async function startServer() {
     if (authHeader.startsWith('Bearer ')) {
       activeSessions.delete(authHeader.slice(7).trim());
     }
+    const cookieToken = parseCookieValue(req, SESSION_COOKIE_NAME);
+    if (cookieToken) {
+      activeSessions.delete(cookieToken);
+    }
+    clearSessionCookie(res);
     res.json({ ok: true });
   });
 
+  app.get('/api/workspace/stream', (req, res) => {
+    const session = authenticateRequest(req, false);
+    if (!session) {
+      res.status(401).json({ ok: false, message: 'Phiên đồng bộ chưa xác thực.' });
+      return;
+    }
+    if (sseClients.size >= MAX_SSE_CLIENTS) {
+      res.status(503).json({ ok: false, message: 'Quá nhiều kết nối đồng bộ cùng lúc.' });
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+
+    sseClients.add(res);
+    res.write(
+      `data: ${JSON.stringify({
+        type: 'connected',
+        revision: workspaceStore.revision,
+        updatedAt: workspaceStore.updatedAt,
+        updatedBy: workspaceStore.updatedBy,
+        pendingCloudCount: pendingCloudOps.size,
+      })}\n\n`
+    );
+
+    const pingTimer = setInterval(() => {
+      try {
+        res.write(': ping\n\n');
+      } catch {
+        clearInterval(pingTimer);
+        sseClients.delete(res);
+      }
+    }, 25_000);
+
+    req.on('close', () => {
+      clearInterval(pingTimer);
+      sseClients.delete(res);
+    });
+  });
+
   app.get('/api/workspace/state', (req, res) => {
-    const session = authenticateBearerRequest(req);
+    const session = authenticateRequest(req, false);
     if (!session) {
       res.status(401).json({ ok: false, message: 'Phiên đồng bộ đã hết hạn hoặc chưa xác thực.' });
       return;
     }
     const since = Number(req.query.since) || 0;
     if (workspaceStore.revision === 0 || !workspaceStore.snapshot) {
-      res.json({ ok: true, updated: false, revision: 0, updatedAt: null });
+      res.json({
+        ok: true,
+        updated: false,
+        revision: 0,
+        updatedAt: null,
+        pendingCloudCount: pendingCloudOps.size,
+      });
       return;
     }
     if (since >= workspaceStore.revision) {
@@ -1217,6 +1492,7 @@ async function startServer() {
         revision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
         updatedBy: workspaceStore.updatedBy,
+        pendingCloudCount: pendingCloudOps.size,
       });
       return;
     }
@@ -1226,15 +1502,134 @@ async function startServer() {
       revision: workspaceStore.revision,
       updatedAt: workspaceStore.updatedAt,
       updatedBy: workspaceStore.updatedBy,
+      pendingCloudCount: pendingCloudOps.size,
       snapshot: workspaceStore.snapshot,
     });
+  });
+
+  app.post(
+    '/api/workspace/pending-cloud-op',
+    express.json({ limit: '5mb' }),
+    async (req, res) => {
+      const session = authenticateRequest(req, true);
+      if (!session) {
+        res.status(401).json({ ok: false, message: 'Phiên đồng bộ chưa xác thực.' });
+        return;
+      }
+
+      const body = (req.body || {}) as {
+        colName?: unknown;
+        docId?: unknown;
+        action?: unknown;
+        sanitizedData?: unknown;
+      };
+      const colName = typeof body.colName === 'string' ? body.colName.trim() : '';
+      const docId = typeof body.docId === 'string' ? body.docId.trim().slice(0, 128) : '';
+      const action = body.action === 'delete' ? 'delete' : 'upsert';
+
+      if (!ALLOWED_CLOUD_COLLECTIONS.has(colName) || !docId) {
+        res.status(400).json({ ok: false, message: 'Yêu cầu đồng bộ Cloud không hợp lệ.' });
+        return;
+      }
+
+      if (
+        !session.isAdmin &&
+        (colName === 'employees_private' ||
+          colName === 'employees_public' ||
+          colName === 'settings' ||
+          action === 'delete')
+      ) {
+        res.json({ ok: true, skipped: true, pendingCloudCount: pendingCloudOps.size });
+        return;
+      }
+
+      let cleanData: Record<string, unknown> | undefined;
+      if (action === 'upsert') {
+        if (!body.sanitizedData || typeof body.sanitizedData !== 'object' || Array.isArray(body.sanitizedData)) {
+          res.status(400).json({ ok: false, message: 'Thiếu dữ liệu bản ghi cần đồng bộ.' });
+          return;
+        }
+        const { password: _removed, ...rest } = body.sanitizedData as Record<string, unknown>;
+        cleanData = rest;
+      }
+
+      if (pendingCloudOps.size >= MAX_PENDING_CLOUD_OPS) {
+        const oldestKey = pendingCloudOps.keys().next().value;
+        if (oldestKey) pendingCloudOps.delete(oldestKey);
+      }
+
+      const op: PendingCloudOp = {
+        opId: `${Date.now().toString(36)}_${crypto.randomBytes(6).toString('hex')}`,
+        colName,
+        docId,
+        action,
+        sanitizedData: cleanData,
+        updatedAt: new Date().toISOString(),
+        updatedBy: `${session.tenNhanVien} (${session.maNhanVien})`,
+      };
+      pendingCloudOps.set(`${colName}/${docId}`, op);
+      await persistPendingCloudOps();
+
+      broadcastWorkspaceEvent({
+        type: 'pending_cloud_op',
+        revision: workspaceStore.revision,
+        updatedAt: op.updatedAt,
+        updatedBy: op.updatedBy,
+        pendingCloudCount: pendingCloudOps.size,
+      });
+
+      res.json({ ok: true, opId: op.opId, pendingCloudCount: pendingCloudOps.size });
+    }
+  );
+
+  app.get('/api/workspace/pending-cloud-ops', (req, res) => {
+    const session = authenticateRequest(req, false);
+    if (!session) {
+      res.status(401).json({ ok: false, message: 'Phiên đồng bộ chưa xác thực.' });
+      return;
+    }
+    res.json({
+      ok: true,
+      ops: Array.from(pendingCloudOps.values()),
+    });
+  });
+
+  app.post('/api/workspace/pending-cloud-ops/ack', async (req, res) => {
+    const session = authenticateRequest(req, true);
+    if (!session) {
+      res.status(401).json({ ok: false, message: 'Phiên đồng bộ chưa xác thực.' });
+      return;
+    }
+    const body = (req.body || {}) as { opIds?: unknown };
+    const opIds = Array.isArray(body.opIds)
+      ? new Set(body.opIds.filter((x): x is string => typeof x === 'string'))
+      : new Set<string>();
+    if (opIds.size > 0) {
+      let removed = false;
+      for (const [key, op] of pendingCloudOps.entries()) {
+        if (opIds.has(op.opId)) {
+          pendingCloudOps.delete(key);
+          removed = true;
+        }
+      }
+      if (removed) {
+        await persistPendingCloudOps();
+        broadcastWorkspaceEvent({
+          type: 'pending_cloud_ack',
+          revision: workspaceStore.revision,
+          updatedAt: new Date().toISOString(),
+          pendingCloudCount: pendingCloudOps.size,
+        });
+      }
+    }
+    res.json({ ok: true, pendingCloudCount: pendingCloudOps.size });
   });
 
   app.post(
     '/api/workspace/sync',
     express.json({ limit: '25mb' }),
     async (req, res) => {
-      const session = authenticateBearerRequest(req);
+      const session = authenticateRequest(req, true);
       if (!session) {
         res.status(401).json({ ok: false, message: 'Phiên đồng bộ đã hết hạn hoặc chưa xác thực.' });
         return;
@@ -1341,11 +1736,20 @@ async function startServer() {
         await persistCredentials();
       }
 
+      broadcastWorkspaceEvent({
+        type: 'workspace_updated',
+        revision: workspaceStore.revision,
+        updatedAt: workspaceStore.updatedAt,
+        updatedBy: workspaceStore.updatedBy,
+        pendingCloudCount: pendingCloudOps.size,
+      });
+
       res.json({
         ok: true,
         revision: workspaceStore.revision,
         updatedAt: workspaceStore.updatedAt,
         updatedBy: workspaceStore.updatedBy,
+        pendingCloudCount: pendingCloudOps.size,
       });
     }
   );

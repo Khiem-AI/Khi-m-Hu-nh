@@ -430,6 +430,9 @@ interface CMMSContextType {
   lastSyncedAt: string | null;
   serverSyncStatus: ServerSyncStatus;
   lastServerSyncedAt: string | null;
+  hasServerSyncSession: boolean;
+  isRealtimeStreamConnected: boolean;
+  pendingCloudOpsCount: number;
   connectCloudWithGoogle: () => Promise<{ success: boolean; message: string }>;
   disconnectCloud: () => Promise<void>;
   forceSyncLocalToCloud: () => Promise<{ success: boolean; message: string }>;
@@ -775,6 +778,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [serverSyncStatus, setServerSyncStatus] = useState<ServerSyncStatus>('idle');
   const [lastServerSyncedAt, setLastServerSyncedAt] = useState<string | null>(null);
+  const [hasServerSyncSession, setHasServerSyncSession] = useState<boolean>(false);
+  const [isRealtimeStreamConnected, setIsRealtimeStreamConnected] = useState<boolean>(false);
+  const [pendingCloudOpsCount, setPendingCloudOpsCount] = useState<number>(0);
 
   const cloudUserRef = useRef<CloudAccountInfo | null>(null);
   const pendingCloudFbUserRef = useRef<User | null>(null);
@@ -795,6 +801,50 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const localServerPushTimerRef = useRef<number | null>(null);
   const cloudMirrorTimerRef = useRef<number | null>(null);
   const hasMountedSyncWatcherRef = useRef<boolean>(false);
+  const flushingCloudOpsRef = useRef<boolean>(false);
+
+  const buildSyncFetchHeaders = (includeJson = true): Record<string, string> => {
+    const headers: Record<string, string> = {
+      'X-Requested-With': 'XMLHttpRequest',
+    };
+    if (includeJson) {
+      headers['Content-Type'] = 'application/json';
+    }
+    if (serverSessionTokenRef.current) {
+      headers.Authorization = `Bearer ${serverSessionTokenRef.current}`;
+    }
+    return headers;
+  };
+
+  const queuePendingCloudOp = (
+    colName: string,
+    docId: string,
+    action: 'upsert' | 'delete',
+    sanitizedData?: Record<string, unknown>
+  ) => {
+    if (!serverSessionTokenRef.current && !hasServerSyncSession) return;
+    void fetch('/api/workspace/pending-cloud-op', {
+      method: 'POST',
+      credentials: 'include',
+      headers: buildSyncFetchHeaders(true),
+      body: JSON.stringify({
+        colName,
+        docId,
+        action,
+        sanitizedData,
+      }),
+    })
+      .then(async (resp) => {
+        if (!resp.ok) return;
+        const data = (await resp.json()) as { pendingCloudCount?: number };
+        if (typeof data.pendingCloudCount === 'number') {
+          setPendingCloudOpsCount(data.pendingCloudCount);
+        }
+      })
+      .catch(() => {
+        // Non-fatal; full snapshot sync still runs automatically
+      });
+  };
 
   const applyCurrentUser = (nextUser: Employee, persistSession = false) => {
     currentUserRef.current = nextUser;
@@ -902,7 +952,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     employeesOverride?: Employee[]
   ) => {
     const user = cloudUserRef.current;
-    if (!user) return;
+    if (!user) {
+      // Internal user without Google Cloud -> queue real-time Cloud bridge op for instant Firestore sync
+      queuePendingCloudOp(colName, rawId, 'upsert', sanitizedData);
+      return;
+    }
     const allowed = buildAllowedEmails(employeesOverride || employeesRef.current, user.email);
     void upsertCloudDoc(
       colName,
@@ -1238,7 +1292,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
   const removeDocCloud = (colName: string, rawId: string) => {
-    if (!cloudUserRef.current) return;
+    if (!cloudUserRef.current) {
+      queuePendingCloudOp(colName, rawId, 'delete');
+      return;
+    }
     void deleteCloudDoc(colName, rawId, knownCloudIdsRef.current)
       .then(() => {
         setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
@@ -1664,7 +1721,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const idToken = await fbUser.getIdToken();
       const resp = await fetch('/api/auth/cloud-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildSyncFetchHeaders(true),
         body: JSON.stringify({ idToken }),
       });
       if (!resp.ok) return false;
@@ -1672,14 +1730,136 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ok?: boolean;
         token?: string;
         workspaceRevision?: number;
+        pendingCloudCount?: number;
       };
       if (data.ok && data.token) {
         serverSessionTokenRef.current = data.token;
+        setHasServerSyncSession(true);
+        if (typeof data.pendingCloudCount === 'number') {
+          setPendingCloudOpsCount(data.pendingCloudCount);
+        }
         return true;
       }
       return false;
     } catch {
       return false;
+    }
+  };
+
+  const restoreServerSessionFromCookie = async (): Promise<boolean> => {
+    try {
+      const resp = await fetch('/api/auth/session', {
+        credentials: 'include',
+        headers: buildSyncFetchHeaders(false),
+      });
+      if (!resp.ok) {
+        if (resp.status === 401) {
+          serverSessionTokenRef.current = null;
+          setHasServerSyncSession(false);
+        }
+        return false;
+      }
+      const data = (await resp.json()) as {
+        ok?: boolean;
+        authenticated?: boolean;
+        token?: string;
+        pendingCloudCount?: number;
+      };
+      if (data.ok && data.authenticated && data.token) {
+        serverSessionTokenRef.current = data.token;
+        setHasServerSyncSession(true);
+        if (typeof data.pendingCloudCount === 'number') {
+          setPendingCloudOpsCount(data.pendingCloudCount);
+        }
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const flushPendingCloudOpsToFirestore = async (): Promise<number> => {
+    const user = cloudUserRef.current;
+    if (!user || flushingCloudOpsRef.current) return 0;
+    if (!serverSessionTokenRef.current) {
+      const restored = await restoreServerSessionFromCookie();
+      if (!restored && auth.currentUser) {
+        await establishCloudServerSession(auth.currentUser);
+      }
+    }
+    if (!serverSessionTokenRef.current) return 0;
+
+    flushingCloudOpsRef.current = true;
+    try {
+      const resp = await fetch('/api/workspace/pending-cloud-ops', {
+        credentials: 'include',
+        headers: buildSyncFetchHeaders(false),
+      });
+      if (!resp.ok) return 0;
+      const data = (await resp.json()) as {
+        ok?: boolean;
+        ops?: Array<{
+          opId: string;
+          colName: string;
+          docId: string;
+          action: 'upsert' | 'delete';
+          sanitizedData?: Record<string, unknown>;
+        }>;
+      };
+      const ops = Array.isArray(data.ops) ? data.ops : [];
+      if (ops.length === 0) {
+        setPendingCloudOpsCount(0);
+        return 0;
+      }
+
+      const allowed = buildAllowedEmails(employeesRef.current, user.email);
+      const isBootAdmin = user.email.trim().toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL;
+      const succeededIds: string[] = [];
+
+      for (const op of ops) {
+        try {
+          if (op.action === 'delete') {
+            if (!isBootAdmin) continue;
+            await deleteCloudDoc(op.colName, op.docId, knownCloudIdsRef.current);
+            succeededIds.push(op.opId);
+          } else if (op.sanitizedData) {
+            await upsertCloudDoc(
+              op.colName,
+              op.docId,
+              op.sanitizedData,
+              user.uid,
+              allowed,
+              knownCloudIdsRef.current
+            );
+            succeededIds.push(op.opId);
+          }
+        } catch {
+          // If a non-admin Cloud user cannot write an Admin-only doc, leave it queued for Admin
+        }
+      }
+
+      if (succeededIds.length > 0) {
+        const ackResp = await fetch('/api/workspace/pending-cloud-ops/ack', {
+          method: 'POST',
+          credentials: 'include',
+          headers: buildSyncFetchHeaders(true),
+          body: JSON.stringify({ opIds: succeededIds }),
+        });
+        if (ackResp.ok) {
+          const ackData = (await ackResp.json()) as { pendingCloudCount?: number };
+          if (typeof ackData.pendingCloudCount === 'number') {
+            setPendingCloudOpsCount(ackData.pendingCloudCount);
+          }
+        }
+        setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+        setCloudSyncStatus('synced');
+      }
+      return succeededIds.length;
+    } catch {
+      return 0;
+    } finally {
+      flushingCloudOpsRef.current = false;
     }
   };
 
@@ -1716,15 +1896,19 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const pullLatestFromServerInternal = async (
     forceFull = false
   ): Promise<{ success: boolean; updated: boolean; message: string }> => {
-    if (!serverSessionTokenRef.current && auth.currentUser) {
-      await establishCloudServerSession(auth.currentUser);
+    if (!serverSessionTokenRef.current) {
+      const restored = await restoreServerSessionFromCookie();
+      if (!restored && auth.currentUser) {
+        await establishCloudServerSession(auth.currentUser);
+      }
     }
     const token = serverSessionTokenRef.current;
     if (!token) {
+      setHasServerSyncSession(false);
       return {
         success: false,
         updated: false,
-        message: 'Chưa có phiên đồng bộ máy chủ. Vui lòng đăng nhập lại hoặc kết nối Google Cloud.',
+        message: 'Phiên đồng bộ trực tiếp cần xác nhận mật khẩu 1 lần hoặc kết nối Google Cloud.',
       };
     }
 
@@ -1732,22 +1916,24 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const sinceParam = forceFull ? 0 : serverRevisionRef.current;
       const resp = await fetch(`/api/workspace/state?since=${sinceParam}`, {
-        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+        headers: buildSyncFetchHeaders(false),
       });
 
       if (resp.status === 401) {
         serverSessionTokenRef.current = null;
+        setHasServerSyncSession(false);
         if (auth.currentUser) {
           const refreshed = await establishCloudServerSession(auth.currentUser);
           if (refreshed) {
             return pullLatestFromServerInternal(forceFull);
           }
         }
-        setServerSyncStatus('error');
+        setServerSyncStatus('idle');
         return {
           success: false,
           updated: false,
-          message: 'Phiên đồng bộ đã hết hạn. Vui lòng đăng nhập lại để tải dữ liệu mới nhất.',
+          message: 'Phiên đồng bộ đã hết hạn. Hãy xác nhận mật khẩu 1 lần để tiếp tục đồng bộ trực tiếp.',
         };
       }
 
@@ -1766,6 +1952,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         revision?: number;
         updatedAt?: string | null;
         updatedBy?: string | null;
+        pendingCloudCount?: number;
         snapshot?: Partial<WorkspaceSnapshotData>;
       };
 
@@ -1773,9 +1960,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof data.revision === 'number' && data.revision > 0) {
         serverRevisionRef.current = data.revision;
       }
+      if (typeof data.pendingCloudCount === 'number') {
+        setPendingCloudOpsCount(data.pendingCloudCount);
+      }
+      setHasServerSyncSession(true);
       initialServerSyncDoneRef.current = true;
       setServerSyncStatus('synced');
       setLastServerSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+
+      if (typeof data.pendingCloudCount === 'number' && data.pendingCloudCount > 0 && cloudUserRef.current) {
+        void flushPendingCloudOpsToFirestore();
+      }
 
       if (data.updated && data.snapshot) {
         applyWorkspaceSnapshotToState(data.snapshot);
@@ -1821,7 +2016,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updated: false,
         message:
           (data.revision || 0) === 0
-            ? 'Máy chủ chưa có bản đồng bộ mới. Hãy kết nối Google Cloud để tải dữ liệu đám mây.'
+            ? 'Đã kết nối đồng bộ trực tiếp. Mọi dữ liệu nhập mới sẽ tự động đồng bộ ngay.'
             : `Dữ liệu hiện tại đã là phiên bản mới nhất (#${data.revision}).`,
       };
     } catch {
@@ -1838,8 +2033,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     source: 'cloud' | 'local',
     overrideSnapshot?: WorkspaceSnapshotData
   ): Promise<boolean> => {
-    if (!serverSessionTokenRef.current && auth.currentUser) {
-      await establishCloudServerSession(auth.currentUser);
+    if (!serverSessionTokenRef.current) {
+      const restored = await restoreServerSessionFromCookie();
+      if (!restored && auth.currentUser) {
+        await establishCloudServerSession(auth.currentUser);
+      }
     }
     const token = serverSessionTokenRef.current;
     if (!token) return false;
@@ -1864,10 +2062,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const resp = await fetch('/api/workspace/sync', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+        credentials: 'include',
+        headers: buildSyncFetchHeaders(true),
         body: JSON.stringify(payload),
       });
 
@@ -1879,13 +2075,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (resp.status === 401) {
         serverSessionTokenRef.current = null;
+        setHasServerSyncSession(false);
         if (auth.currentUser) {
           const refreshed = await establishCloudServerSession(auth.currentUser);
           if (refreshed) {
             return pushSnapshotToServer(source, overrideSnapshot);
           }
         }
-        setServerSyncStatus('error');
+        setServerSyncStatus('idle');
         return false;
       }
 
@@ -1894,10 +2091,18 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
 
-      const data = (await resp.json()) as { ok?: boolean; revision?: number };
+      const data = (await resp.json()) as {
+        ok?: boolean;
+        revision?: number;
+        pendingCloudCount?: number;
+      };
       if (data.ok && typeof data.revision === 'number') {
         serverRevisionRef.current = data.revision;
       }
+      if (typeof data.pendingCloudCount === 'number') {
+        setPendingCloudOpsCount(data.pendingCloudCount);
+      }
+      setHasServerSyncSession(true);
       initialServerSyncDoneRef.current = true;
       setServerSyncStatus('synced');
       setLastServerSyncedAt(new Date().toLocaleTimeString('vi-VN'));
@@ -1917,7 +2122,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (cloudUserRef.current && serverSessionTokenRef.current) {
         void pushSnapshotToServer('cloud');
       }
-    }, 1500);
+    }, 600);
   };
 
   const matchOrApplyCloudUser = (fbUser: User, recordLoginAudit = false): boolean => {
@@ -2032,8 +2237,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
-      // Establish authenticated server sync session in parallel
-      const serverSessionPromise = establishCloudServerSession(fbUser);
+      // Establish authenticated server sync session and flush any queued internal-user edits to Cloud FIRST
+      const hasServerSession = await establishCloudServerSession(fbUser);
+      if (cancelled) return;
 
       if (isBootAdmin) {
         try {
@@ -2050,6 +2256,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setCloudSyncError(formatFirestoreSyncError(err));
           setCloudSyncStatus('error');
         }
+      }
+
+      // CRITICAL: Flush queued edits submitted by internal users directly into Cloud Firestore BEFORE pulling
+      // so internal user entries are persisted to Cloud and NEVER overwritten!
+      if (hasServerSession) {
+        await flushPendingCloudOpsToFirestore();
+        if (cancelled) return;
       }
 
       // Force a server-first pull from Firestore immediately so new computers bypass stale cache
@@ -2103,7 +2316,6 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Mirror fresh Cloud data to Express server so all internal users on other devices receive it immediately
-        const hasServerSession = await serverSessionPromise;
         if (!cancelled && hasServerSession && (pulled.workspaceMetaExists || pulled.totalLoaded > 0)) {
           await pushSnapshotToServer('cloud', freshSnapshot);
         }
@@ -2669,17 +2881,107 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Automatic background polling for cross-device Server Workspace Sync (12s interval + focus/visibility)
+  // Automatically restore persistent HttpOnly server sync session on mount / page refresh (F5)
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setHasServerSyncSession(false);
+      setIsRealtimeStreamConnected(false);
+      return;
+    }
+
+    let cancelled = false;
+    const initSession = async () => {
+      if (serverSessionTokenRef.current) {
+        setHasServerSyncSession(true);
+        if (!initialServerSyncDoneRef.current) {
+          await pullLatestFromServerInternal(true);
+        }
+        return;
+      }
+
+      const restored = await restoreServerSessionFromCookie();
+      if (cancelled) return;
+      if (restored) {
+        await pullLatestFromServerInternal(true);
+        return;
+      }
+
+      if (auth.currentUser) {
+        const established = await establishCloudServerSession(auth.currentUser);
+        if (!cancelled && established) {
+          await pullLatestFromServerInternal(true);
+        }
+      }
+    };
+
+    void initSession();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated]);
+
+  // Real-time Server-Sent Events (SSE) stream for instant cross-device & Cloud bridge updates
+  useEffect(() => {
+    if (!isAuthenticated || !hasServerSyncSession || typeof EventSource === 'undefined') {
+      setIsRealtimeStreamConnected(false);
+      return;
+    }
+
+    const es = new EventSource('/api/workspace/stream', { withCredentials: true });
+
+    es.onopen = () => {
+      setIsRealtimeStreamConnected(true);
+    };
+
+    es.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as {
+          type?: string;
+          revision?: number;
+          pendingCloudCount?: number;
+        };
+        if (typeof msg.pendingCloudCount === 'number') {
+          setPendingCloudOpsCount(msg.pendingCloudCount);
+        }
+        if (typeof msg.revision === 'number' && msg.revision > serverRevisionRef.current) {
+          void pullLatestFromServerInternal(false);
+        }
+        if (
+          typeof msg.pendingCloudCount === 'number' &&
+          msg.pendingCloudCount > 0 &&
+          cloudUserRef.current
+        ) {
+          void flushPendingCloudOpsToFirestore();
+        }
+      } catch {
+        // ignore keepalive or malformed frames
+      }
+    };
+
+    es.onerror = () => {
+      setIsRealtimeStreamConnected(false);
+    };
+
+    return () => {
+      es.close();
+      setIsRealtimeStreamConnected(false);
+    };
+  }, [isAuthenticated, hasServerSyncSession]);
+
+  // Lightweight fallback polling (20s interval + focus/visibility) alongside real-time SSE
   useEffect(() => {
     if (!isAuthenticated) return;
 
     const pollNow = () => {
       if (serverSessionTokenRef.current) {
         void pullLatestFromServerInternal(false);
+        if (cloudUserRef.current) {
+          void flushPendingCloudOpsToFirestore();
+        }
       }
     };
 
-    const intervalId = window.setInterval(pollNow, 12_000);
+    const intervalId = window.setInterval(pollNow, 20_000);
     const onFocusOrVisible = () => {
       if (document.visibilityState === 'visible') {
         pollNow();
@@ -2695,7 +2997,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isAuthenticated]);
 
-  // Debounced auto-push of local user edits to shared Server Workspace (guarded against echo loops and cold starts)
+  // Real-time debounced auto-push (350ms) of user edits to shared Server Workspace (guarded against echo loops)
   useEffect(() => {
     if (!hasMountedSyncWatcherRef.current) {
       hasMountedSyncWatcherRef.current = true;
@@ -2716,7 +3018,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!applyingRemoteSnapshotRef.current && serverSessionTokenRef.current) {
         void pushSnapshotToServer('local');
       }
-    }, 1200);
+    }, 350);
 
     return () => {
       if (localServerPushTimerRef.current) {
@@ -4350,7 +4652,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const resp = await fetch('/api/auth/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        headers: buildSyncFetchHeaders(true),
         body: JSON.stringify({ username: cleanUser, password: cleanPassword }),
       });
 
@@ -4359,9 +4662,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           ok?: boolean;
           token?: string;
           employee?: Employee;
+          workspaceRevision?: number;
+          pendingCloudCount?: number;
         };
         if (data.ok && data.token && data.employee) {
           serverSessionTokenRef.current = data.token;
+          setHasServerSyncSession(true);
+          if (typeof data.pendingCloudCount === 'number') {
+            setPendingCloudOpsCount(data.pendingCloudCount);
+          }
           const localMatch = employeesRef.current.find(
             (e) =>
               e.maNhanVien.trim().toUpperCase() === data.employee!.maNhanVien.trim().toUpperCase()
@@ -4374,11 +4683,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setIsAuthenticated(true);
           // Immediately pull the latest workspace snapshot from server before user interacts
           await pullLatestFromServerInternal(true);
+          if ((data.workspaceRevision || 0) === 0) {
+            void pushSnapshotToServer('local');
+          }
           addAuditLog(
             'Đăng nhập',
             'Hệ thống',
             hydratedUser.maNhanVien,
-            `Người dùng ${hydratedUser.tenNhanVien} (${hydratedUser.maNhanVien} - ${hydratedUser.chucVu}) đăng nhập và đồng bộ dữ liệu thành công`,
+            `Người dùng ${hydratedUser.tenNhanVien} (${hydratedUser.maNhanVien} - ${hydratedUser.chucVu}) đăng nhập và bật đồng bộ trực tiếp thành công`,
             hydratedUser
           );
           return { success: true };
@@ -4445,13 +4757,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let serverUpdated = false;
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (serverSessionTokenRef.current) {
-        headers.Authorization = `Bearer ${serverSessionTokenRef.current}`;
-      }
       const resp = await fetch('/api/auth/change-password', {
         method: 'POST',
-        headers,
+        credentials: 'include',
+        headers: buildSyncFetchHeaders(true),
         body: JSON.stringify({
           username: cleanUser,
           currentPassword: cleanCurrent,
@@ -4525,14 +4834,21 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     serverSessionTokenRef.current = null;
     serverRevisionRef.current = 0;
     initialServerSyncDoneRef.current = false;
+    setHasServerSyncSession(false);
+    setIsRealtimeStreamConnected(false);
+    setPendingCloudOpsCount(0);
     setServerSyncStatus('idle');
-    if (activeToken) {
-      void fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${activeToken}` },
-        keepalive: true,
-      }).catch(() => {});
-    }
+    void fetch('/api/auth/logout', {
+      method: 'POST',
+      credentials: 'include',
+      headers: activeToken
+        ? {
+            'X-Requested-With': 'XMLHttpRequest',
+            Authorization: `Bearer ${activeToken}`,
+          }
+        : { 'X-Requested-With': 'XMLHttpRequest' },
+      keepalive: true,
+    }).catch(() => {});
     addAuditLog(
       'Đăng xuất',
       'Hệ thống',
@@ -5941,6 +6257,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastSyncedAt,
         serverSyncStatus,
         lastServerSyncedAt,
+        hasServerSyncSession,
+        isRealtimeStreamConnected,
+        pendingCloudOpsCount,
         connectCloudWithGoogle,
         disconnectCloud,
         forceSyncLocalToCloud,
