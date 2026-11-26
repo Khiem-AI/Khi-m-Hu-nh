@@ -26,6 +26,8 @@ export const UI_TEXTS = {
       morning_checks: { label: 'Công Việc Đầu Ngày', desc: '' },
       profile: { label: 'Hồ Sơ Cá Nhân', desc: '' },
       equipment: { label: 'Danh Sách Thiết Bị', desc: '' },
+      utility_connectivity: { label: 'Đấu Nối Utility', desc: '' },
+      compressor_runtime: { label: 'Giờ Chạy MNK', desc: '' },
       maintenance: { label: 'Kế Hoạch & Lịch Sử', desc: '' },
       inspection_calibration: { label: 'Kiểm Định & Hiệu Chuẩn', desc: '' },
       tools: { label: 'Dụng Cụ & Đồ Nghề', desc: '' },
@@ -63,6 +65,14 @@ export const UI_TEXTS = {
     },
     equipment: {
       title: 'Danh Mục Quản Lý Máy Móc & Thiết Bị',
+    },
+    utilityConnectivity: {
+      badge: 'Sơ Đồ Đấu Nối Utility',
+      title: 'Tra Cứu Hệ Utility Cấp Cho Thiết Bị & Mô Phỏng Cắt Nguồn (LOTO)',
+    },
+    compressorRuntime: {
+      badge: 'Hệ Thống Khí Nén',
+      title: 'Quản Lý Số Giờ Chạy & Cảnh Báo Thay Vật Tư Máy Nén Khí (MNK)',
     },
     maintenance: {
       historyBadge: 'Lịch Sử Bảo Trì',

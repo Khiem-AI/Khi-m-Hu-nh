@@ -341,6 +341,8 @@ export const APP_VIEW_OPTIONS: AppViewOption[] = [
   { id: 'morning_checks', label: 'Công Việc Đầu Ngày', desc: 'Kiểm tra Vòng trong, Vòng Ngoài & Phòng Utility' },
   { id: 'profile', label: 'Hồ Sơ Cá Nhân', desc: 'Thông tin & Phép năm' },
   { id: 'equipment', label: 'Danh Sách Thiết Bị', desc: 'Máy móc & Mã QR' },
+  { id: 'utility_connectivity', label: 'Đấu Nối Utility', desc: 'Tra cứu nguồn cấp & LOTO thiết bị' },
+  { id: 'compressor_runtime', label: 'Giờ Chạy MNK', desc: 'Theo dõi giờ chạy & thay vật tư MNK' },
   { id: 'maintenance', label: 'Kế Hoạch & Lịch Sử', desc: 'Bảo trì định kỳ' },
   { id: 'inspection_calibration', label: 'Kiểm Định & Hiệu Chuẩn', desc: 'An toàn, hiệu chuẩn & nhắc hạn' },
   { id: 'tools', label: 'Dụng Cụ & Đồ Nghề', desc: 'Cấp phát, mượn trả & kiểm kê' },
@@ -756,3 +758,106 @@ export interface OnlineUserPresence {
   sessionCount: number;
   source?: 'server' | 'cloud' | 'local';
 }
+
+// Tra cứu đấu nối Utility cấp cho thiết bị (File Connectivity)
+export type UtilityConnectivityStatus =
+  | 'Đang cấp nguồn'
+  | 'Đã tháo nguồn / Di dời'
+  | 'Cần kiểm tra';
+
+export interface UtilityConnectivityServices {
+  lan: boolean;
+  nitrogen: boolean;
+  air: boolean;
+  vacuum: boolean;
+  di: boolean;
+  exhaust: boolean;
+  exhaustFlowM3h?: number | null;
+}
+
+export interface UtilityConnectivityItem {
+  id: string;
+  tenMay: string;
+  khuVuc: string;
+  tenBanVe: string;
+  modelManual: string;
+  soLuong: number;
+  cableSize: string;
+  voltages: string[]; // e.g., ['380V'], ['220V', '110V']
+  phase: '1P' | '3P' | 'N/A';
+  maxCurrentA: number | null;
+  dbRaw: string;
+  dbPanel: string;
+  msbSource: string;
+  utilities: UtilityConnectivityServices;
+  trangThai: UtilityConnectivityStatus;
+  ghiChu: string;
+}
+
+// Quản lý số giờ chạy & thay thế vật tư Hệ thống Máy Nén Khí (File Số giờ chạy của MNK)
+export type CompressorConsumableType =
+  | 'oil'
+  | 'airFilter'
+  | 'oilFilter'
+  | 'oilSeparator'
+  | 'thermostatValve';
+
+export interface CompressorUnitSpec {
+  machineKey: string; // e.g., 'GA75-1', 'VSD90-2', 'AD300-1'
+  displayName: string;
+  equipmentCode: string; // Maps to Equipment.maThietBi (e.g. 'CMP-GA75-01')
+  category: 'Máy nén khí' | 'Máy sấy hấp thụ' | 'Máy tạo Nito' | 'Máy sấy tác nhân lạnh';
+  tracksConsumables: boolean;
+  oilCapacityLiters?: number;
+  oilIntervalH: number; // default 8000
+  airFilterIntervalH: number; // default 4000
+  oilFilterIntervalH: number; // default 8000 (or 4000 depending on filter type)
+  oilSeparatorIntervalH: number; // default 8000
+  sparePartCodes?: {
+    oil?: string;
+    airFilter?: string;
+    oilFilter?: string;
+    oilSeparator?: string;
+  };
+}
+
+export interface CompressorMachineReading {
+  runningHours: number | null;
+  loadHours: number | null;
+  oilRemainingH?: number | null;
+  airFilterRemainingH?: number | null;
+  oilFilterRemainingH?: number | null;
+  oilSeparatorRemainingH?: number | null;
+}
+
+export interface CompressorMonthlyLog {
+  id: string;
+  month: string; // YYYY-MM (e.g., '2026-11')
+  recordedDate: string; // YYYY-MM-DD (default day 15 of month)
+  readings: Record<string, CompressorMachineReading>;
+  note?: string;
+  recordedBy?: string;
+}
+
+export interface CompressorReplacementEvent {
+  id: string;
+  machineKey: string;
+  date: string; // YYYY-MM-DD
+  consumable: CompressorConsumableType;
+  runningHoursAtChange?: number | null;
+  newIntervalH?: number;
+  sparePartCode?: string;
+  quantityUsed?: number;
+  note?: string;
+  performedBy?: string;
+}
+
+export interface CompressorRuntimeStore {
+  warningThresholdH: number; // < 2000h cảnh báo vàng
+  readingDayOfMonth: number; // ngày 15 hàng tháng
+  unitSpecs: CompressorUnitSpec[];
+  monthlyLogs: CompressorMonthlyLog[];
+  replacementEvents: CompressorReplacementEvent[];
+  updatedAt?: string;
+}
+

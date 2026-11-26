@@ -373,6 +373,18 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
       resolved.push('morning_checks');
     }
     if (
+      !resolved.includes('utility_connectivity') &&
+      !(user.quyenHan || []).includes('DENY_UTILITY_CONNECTIVITY')
+    ) {
+      resolved.push('utility_connectivity');
+    }
+    if (
+      !resolved.includes('compressor_runtime') &&
+      !(user.quyenHan || []).includes('DENY_COMPRESSOR_RUNTIME')
+    ) {
+      resolved.push('compressor_runtime');
+    }
+    if (
       costAccess &&
       !resolved.includes('monthly_report') &&
       !(user.quyenHan || []).includes('DENY_MONTHLY_REPORT')
@@ -396,6 +408,8 @@ export function getEffectiveAllowedViews(user?: Employee | null): string[] {
     'morning_checks',
     'profile',
     'equipment',
+    'utility_connectivity',
+    'compressor_runtime',
     'maintenance',
     'inspection_calibration',
     'tools',
@@ -475,12 +489,7 @@ export function resolveAssigneeEmails(
 
   const emails: string[] = [];
   names.forEach((name) => {
-    const normalized = name.trim().toLowerCase();
-    const match = employees.find(
-      (e) =>
-        e.tenNhanVien.trim().toLowerCase() === normalized ||
-        e.maNhanVien.trim().toLowerCase() === normalized
-    );
+    const match = employees.find((e) => matchesAssignee(name, e));
     if (match?.email && match.email.trim()) {
       emails.push(match.email.trim());
     }
@@ -517,12 +526,7 @@ export function resolveAssigneeEmailDetails(
   const placeholderEmployees: { name: string; email: string; employeeCode?: string }[] = [];
 
   names.forEach((name) => {
-    const normalized = name.trim().toLowerCase();
-    const match = employees.find(
-      (e) =>
-        e.tenNhanVien.trim().toLowerCase() === normalized ||
-        e.maNhanVien.trim().toLowerCase() === normalized
-    );
+    const match = employees.find((e) => matchesAssignee(name, e));
     const email = match?.email?.trim() || '';
     if (email) {
       emails.push(email);
@@ -605,22 +609,82 @@ export function buildMailtoUrl(params: {
   return `mailto:${encodeURIComponent(cleanTo).replace(/%2C/g, ',')}?${queryParts.join('&')}`;
 }
 
+function normalizeVietnameseText(raw: string): string {
+  return raw
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/[^a-z0-9@.\s_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function extractNameTokens(normalized: string): string[] {
+  return normalized
+    .split(/[\s._-]+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 2);
+}
+
+function matchesSingleAssigneeCandidate(candidate: string, user: Employee): boolean {
+  const candNorm = normalizeVietnameseText(candidate);
+  if (!candNorm) return false;
+
+  const empNameNorm = normalizeVietnameseText(user.tenNhanVien || '');
+  const empCodeNorm = normalizeVietnameseText(user.maNhanVien || '');
+  const empUsernameNorm = normalizeVietnameseText(user.username || '');
+  const empEmailNorm = (user.email || '').trim().toLowerCase();
+
+  if (
+    (empNameNorm && candNorm === empNameNorm) ||
+    (empCodeNorm && candNorm === empCodeNorm) ||
+    (empUsernameNorm && candNorm === empUsernameNorm) ||
+    (empEmailNorm && candNorm === empEmailNorm)
+  ) {
+    return true;
+  }
+
+  // Handle Facility Lead / Admin role aliases (e.g. "FCLead")
+  if ((candNorm === 'fclead' || candNorm === 'facility lead') && isAdminLevel(user)) {
+    return true;
+  }
+
+  // Substring match on normalized name (e.g. "Khiem Huynh (ID1460)")
+  if (empNameNorm.length >= 4 && candNorm.includes(empNameNorm)) {
+    return true;
+  }
+  if (empCodeNorm.length >= 3 && candNorm.includes(empCodeNorm)) {
+    return true;
+  }
+
+  // Vietnamese full name vs English / shortened name match (accent-insensitive, word-order tolerant)
+  // e.g. "Huỳnh Thiện Khiêm" <-> "Khiem Huynh", "Lê Văn Tuấn" <-> "Tuấn Lê"
+  const candTokens = extractNameTokens(candNorm);
+  const empTokens = extractNameTokens(empNameNorm);
+  if (candTokens.length >= 2 && empTokens.length >= 2) {
+    const [smaller, larger] =
+      candTokens.length <= empTokens.length ? [candTokens, empTokens] : [empTokens, candTokens];
+    const largerSet = new Set(larger);
+    if (smaller.every((token) => largerSet.has(token))) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 /**
  * Checks whether a single or comma-separated assignee field includes the given employee.
+ * Supports accent-insensitive Vietnamese names, reversed/middle-name variants, employee codes, emails, and role aliases.
  */
 export function matchesAssignee(rawField?: string | null, user?: Employee | null): boolean {
   if (!rawField || !user) return false;
-  const empName = user.tenNhanVien.trim().toLowerCase();
-  const empCode = user.maNhanVien.trim().toLowerCase();
   const names = parseAssigneeNames(rawField);
   if (names.length > 0) {
-    return names.some((n) => {
-      const lower = n.toLowerCase();
-      return lower === empName || lower === empCode || lower.includes(empName);
-    });
+    return names.some((n) => matchesSingleAssigneeCandidate(n, user));
   }
-  const rawLower = rawField.trim().toLowerCase();
-  return rawLower === empName || rawLower === empCode;
+  return matchesSingleAssigneeCandidate(rawField, user);
 }
 
 /**

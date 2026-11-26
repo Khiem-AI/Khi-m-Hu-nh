@@ -42,7 +42,18 @@ import {
   PurchaseRequestStatus,
   APP_VIEW_OPTIONS,
   OnlineUserPresence,
+  UtilityConnectivityItem,
+  CompressorConsumableType,
+  CompressorMonthlyLog,
+  CompressorReplacementEvent,
+  CompressorRuntimeStore,
+  CompressorUnitSpec,
 } from '../types/cmms';
+import {
+  INITIAL_UTILITY_CONNECTIVITY,
+  INITIAL_COMPRESSOR_RUNTIME,
+} from '../data/utilityAndCompressorData';
+import { CONSUMABLE_META } from '../utils/utilityCompressorCsv';
 import { buildProfessionalEmailHtml } from '../utils/emailTemplates';
 import {
   INITIAL_EQUIPMENT,
@@ -179,6 +190,8 @@ interface CMMSContextType {
   morningCheckTemplates: MorningCheckTemplatesMap;
   monthlyBoardReports: MonthlyBoardReportsStore;
   purchaseRequests: PurchaseRequest[];
+  utilityConnectivity: UtilityConnectivityItem[];
+  compressorRuntime: CompressorRuntimeStore;
   currentUser: Employee;
 
   // Equipment Actions
@@ -324,6 +337,32 @@ interface CMMSContextType {
     defaults?: { defaultBoardRecipients?: string; defaultCcRecipients?: string }
   ) => void;
   deleteMonthlyBoardReport: (month: string) => void;
+
+  // Utility Connectivity ("Đấu Nối Utility")
+  addUtilityConnectivity: (item: Omit<UtilityConnectivityItem, 'id'>) => UtilityConnectivityItem;
+  updateUtilityConnectivity: (item: UtilityConnectivityItem) => void;
+  deleteUtilityConnectivity: (id: string) => void;
+  replaceUtilityConnectivity: (items: UtilityConnectivityItem[], sourceLabel?: string) => void;
+
+  // Compressor Runtime & Consumables ("Giờ Chạy MNK")
+  upsertCompressorMonthlyLog: (log: CompressorMonthlyLog) => void;
+  deleteCompressorMonthlyLog: (id: string) => void;
+  recordCompressorReplacement: (params: {
+    machineKey: string;
+    date: string;
+    consumable: CompressorConsumableType;
+    runningHoursAtChange?: number | null;
+    newIntervalH?: number;
+    sparePartCode?: string;
+    quantityUsed?: number;
+    deductStock?: boolean;
+    createMaintenanceHistory?: boolean;
+    note?: string;
+  }) => void;
+  deleteCompressorReplacementEvent: (id: string) => void;
+  updateCompressorUnitSpec: (spec: CompressorUnitSpec) => void;
+  updateCompressorThresholds: (params: { warningThresholdH?: number; readingDayOfMonth?: number }) => void;
+  replaceCompressorRuntimeStore: (store: CompressorRuntimeStore, sourceLabel?: string) => void;
 
   // Email & Alert Service
   emailConfig: EmailConfig;
@@ -753,6 +792,35 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>(() =>
     deduplicateById(loadStorage('purchaseRequests', INITIAL_PURCHASE_REQUESTS), 'PR')
   );
+  const [utilityConnectivity, setUtilityConnectivity] = useState<UtilityConnectivityItem[]>(() => {
+    const saved = loadStorage<UtilityConnectivityItem[]>('utilityConnectivity', []);
+    return Array.isArray(saved) && saved.length > 0 ? saved : INITIAL_UTILITY_CONNECTIVITY;
+  });
+  const [compressorRuntime, setCompressorRuntime] = useState<CompressorRuntimeStore>(() => {
+    const saved = loadStorage<Partial<CompressorRuntimeStore> | null>('compressorRuntime', null);
+    if (saved && Array.isArray(saved.monthlyLogs) && saved.monthlyLogs.length > 0) {
+      return {
+        warningThresholdH:
+          typeof saved.warningThresholdH === 'number'
+            ? saved.warningThresholdH
+            : INITIAL_COMPRESSOR_RUNTIME.warningThresholdH,
+        readingDayOfMonth:
+          typeof saved.readingDayOfMonth === 'number'
+            ? saved.readingDayOfMonth
+            : INITIAL_COMPRESSOR_RUNTIME.readingDayOfMonth,
+        unitSpecs:
+          Array.isArray(saved.unitSpecs) && saved.unitSpecs.length > 0
+            ? saved.unitSpecs
+            : INITIAL_COMPRESSOR_RUNTIME.unitSpecs,
+        monthlyLogs: saved.monthlyLogs,
+        replacementEvents: Array.isArray(saved.replacementEvents)
+          ? saved.replacementEvents
+          : INITIAL_COMPRESSOR_RUNTIME.replacementEvents,
+        updatedAt: saved.updatedAt,
+      };
+    }
+    return INITIAL_COMPRESSOR_RUNTIME;
+  });
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     return sessionStorage.getItem('cmms_authenticated') === 'true';
@@ -905,6 +973,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dailyAreaChecks,
     morningCheckTemplates,
     monthlyBoardReports,
+    utilityConnectivity,
+    compressorRuntime,
     purchaseRequests,
     emailLogs,
     auditLogs,
@@ -933,6 +1003,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dailyAreaChecks,
       morningCheckTemplates,
       monthlyBoardReports,
+      utilityConnectivity,
+      compressorRuntime,
       purchaseRequests,
       emailLogs,
       auditLogs,
@@ -959,6 +1031,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dailyAreaChecks,
     morningCheckTemplates,
     monthlyBoardReports,
+    utilityConnectivity,
+    compressorRuntime,
     purchaseRequests,
     emailLogs,
     auditLogs,
@@ -1617,6 +1691,25 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
             : prev.reportsByMonth,
       }));
     }
+    if (Array.isArray(rawSnap.utilityConnectivity) && rawSnap.utilityConnectivity.length > 0) {
+      setUtilityConnectivity(rawSnap.utilityConnectivity);
+    }
+    if (
+      rawSnap.compressorRuntime &&
+      typeof rawSnap.compressorRuntime === 'object' &&
+      Array.isArray(rawSnap.compressorRuntime.monthlyLogs) &&
+      rawSnap.compressorRuntime.monthlyLogs.length > 0
+    ) {
+      setCompressorRuntime((prev) => ({
+        ...prev,
+        ...rawSnap.compressorRuntime,
+        unitSpecs:
+          Array.isArray(rawSnap.compressorRuntime?.unitSpecs) &&
+          rawSnap.compressorRuntime.unitSpecs.length > 0
+            ? rawSnap.compressorRuntime.unitSpecs
+            : prev.unitSpecs,
+      }));
+    }
   };
 
   const applyPulledCloudDataToState = (pulled: PulledCloudWorkspaceData): WorkspaceSnapshotData => {
@@ -1630,6 +1723,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let nextTariffConfig = latestSnapshotRef.current.tariffConfig;
     let nextMorningTemplates = latestSnapshotRef.current.morningCheckTemplates;
     let nextMonthlyBoardReports = latestSnapshotRef.current.monthlyBoardReports;
+    let nextUtilityConnectivity = latestSnapshotRef.current.utilityConnectivity;
+    let nextCompressorRuntime = latestSnapshotRef.current.compressorRuntime;
 
     for (const s of pulled.settings) {
       if (s.key === 'email_config' && s.payload) {
@@ -1666,6 +1761,24 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
               ? incomingStore.reportsByMonth
               : nextMonthlyBoardReports?.reportsByMonth || {},
         };
+      } else if (s.key === 'utility_connectivity' && s.payload) {
+        const items = (s.payload as { items?: UtilityConnectivityItem[] }).items;
+        if (Array.isArray(items) && items.length > 0) {
+          nextUtilityConnectivity = items;
+        }
+      } else if (s.key === 'compressor_runtime' && s.payload) {
+        const incomingStore = s.payload as Partial<CompressorRuntimeStore>;
+        if (Array.isArray(incomingStore.monthlyLogs) && incomingStore.monthlyLogs.length > 0) {
+          nextCompressorRuntime = {
+            ...INITIAL_COMPRESSOR_RUNTIME,
+            ...(nextCompressorRuntime || {}),
+            ...incomingStore,
+            unitSpecs:
+              Array.isArray(incomingStore.unitSpecs) && incomingStore.unitSpecs.length > 0
+                ? incomingStore.unitSpecs
+                : nextCompressorRuntime?.unitSpecs || INITIAL_COMPRESSOR_RUNTIME.unitSpecs,
+          };
+        }
       } else if (s.key && s.key.startsWith('presence_') && s.payload) {
         const p = s.payload as Record<string, unknown>;
         const maNV = typeof p.maNhanVien === 'string' ? p.maNhanVien : '';
@@ -1758,6 +1871,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tariffConfig: nextTariffConfig,
       morningCheckTemplates: nextMorningTemplates,
       monthlyBoardReports: nextMonthlyBoardReports,
+      utilityConnectivity: nextUtilityConnectivity,
+      compressorRuntime: nextCompressorRuntime,
     };
 
     applyWorkspaceSnapshotToState(mergedSnapshot);
@@ -2542,6 +2657,23 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
                       ? incomingStore.reportsByMonth
                       : prev.reportsByMonth,
                 }));
+              } else if (s.key === 'utility_connectivity' && s.payload) {
+                const incomingItems = (s.payload as { items?: UtilityConnectivityItem[] }).items;
+                if (Array.isArray(incomingItems) && incomingItems.length > 0) {
+                  setUtilityConnectivity(incomingItems);
+                }
+              } else if (s.key === 'compressor_runtime' && s.payload) {
+                const incomingStore = s.payload as Partial<CompressorRuntimeStore>;
+                if (Array.isArray(incomingStore.monthlyLogs) && incomingStore.monthlyLogs.length > 0) {
+                  setCompressorRuntime((prev) => ({
+                    ...prev,
+                    ...incomingStore,
+                    unitSpecs:
+                      Array.isArray(incomingStore.unitSpecs) && incomingStore.unitSpecs.length > 0
+                        ? incomingStore.unitSpecs
+                        : prev.unitSpecs,
+                  }));
+                }
               } else if (s.key && s.key.startsWith('presence_') && s.payload) {
                 const p = s.payload as Record<string, unknown>;
                 const maNV = typeof p.maNhanVien === 'string' ? p.maNhanVien : '';
@@ -3227,6 +3359,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dailyAreaChecks,
     morningCheckTemplates,
     monthlyBoardReports,
+    utilityConnectivity,
+    compressorRuntime,
     purchaseRequests,
     emailLogs,
     auditLogs,
@@ -3262,6 +3396,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => saveStorage('dailyAreaChecks', dailyAreaChecks), [dailyAreaChecks]);
   useEffect(() => saveStorage('morningCheckTemplates', morningCheckTemplates), [morningCheckTemplates]);
   useEffect(() => saveStorage('monthlyBoardReports', monthlyBoardReports), [monthlyBoardReports]);
+  useEffect(() => saveStorage('utilityConnectivity', utilityConnectivity), [utilityConnectivity]);
+  useEffect(() => saveStorage('compressorRuntime', compressorRuntime), [compressorRuntime]);
   useEffect(() => saveStorage('purchaseRequests', purchaseRequests), [purchaseRequests]);
   useEffect(() => saveStorage('webNotifications', webNotifications), [webNotifications]);
 
@@ -4144,6 +4280,315 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       'Báo Cáo Tháng',
       `Kỳ ${month}`,
       `Xóa bản lưu báo cáo tháng ${month} khỏi lịch sử`
+    );
+  };
+
+  // --- UTILITY CONNECTIVITY ACTIONS ---
+  const syncUtilityConnectivityToCloud = (items: UtilityConnectivityItem[]) => {
+    syncDoc('settings', 'utility_connectivity', {
+      key: 'utility_connectivity',
+      payload: {
+        items,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+  };
+
+  const addUtilityConnectivity = (
+    item: Omit<UtilityConnectivityItem, 'id'>
+  ): UtilityConnectivityItem => {
+    const newItem: UtilityConnectivityItem = {
+      ...item,
+      id: nextUniqueId('CONN'),
+    };
+    setUtilityConnectivity((prev) => {
+      const next = [newItem, ...prev];
+      syncUtilityConnectivityToCloud(next);
+      return next;
+    });
+    addAuditLog(
+      'Thêm',
+      'Đấu Nối Utility',
+      newItem.tenMay,
+      `Thêm sơ đồ đấu nối ${newItem.tenMay} (Tủ: ${newItem.dbPanel}, ${newItem.voltages.join('/') || 'N/A'})`
+    );
+    return newItem;
+  };
+
+  const updateUtilityConnectivity = (item: UtilityConnectivityItem) => {
+    setUtilityConnectivity((prev) => {
+      const next = prev.map((existing) => (existing.id === item.id ? item : existing));
+      syncUtilityConnectivityToCloud(next);
+      return next;
+    });
+    addAuditLog(
+      'Sửa',
+      'Đấu Nối Utility',
+      item.tenMay,
+      `Cập nhật thông số đấu nối ${item.tenMay} (Tủ: ${item.dbPanel}, Trạng thái: ${item.trangThai})`
+    );
+  };
+
+  const deleteUtilityConnectivity = (id: string) => {
+    if (!canDeleteRecords(currentUserRef.current)) return;
+    let removedName = id;
+    setUtilityConnectivity((prev) => {
+      const found = prev.find((x) => x.id === id);
+      if (found) removedName = found.tenMay;
+      const next = prev.filter((x) => x.id !== id);
+      syncUtilityConnectivityToCloud(next);
+      return next;
+    });
+    addAuditLog('Xóa', 'Đấu Nối Utility', removedName, `Xóa bản ghi đấu nối Utility ${removedName}`);
+  };
+
+  const replaceUtilityConnectivity = (items: UtilityConnectivityItem[], sourceLabel = 'Import CSV') => {
+    setUtilityConnectivity(items);
+    syncUtilityConnectivityToCloud(items);
+    addAuditLog(
+      'Cập nhật',
+      'Đấu Nối Utility',
+      `${items.length} thiết bị`,
+      `Nạp mới danh sách đấu nối Utility (${items.length} thiết bị) từ ${sourceLabel}`
+    );
+  };
+
+  // --- COMPRESSOR RUNTIME & CONSUMABLE REPLACEMENT ACTIONS ---
+  const syncCompressorRuntimeToCloud = (store: CompressorRuntimeStore) => {
+    syncDoc('settings', 'compressor_runtime', {
+      key: 'compressor_runtime',
+      payload: store as unknown as Record<string, unknown>,
+    });
+  };
+
+  const upsertCompressorMonthlyLog = (log: CompressorMonthlyLog) => {
+    const normalizedLog: CompressorMonthlyLog = {
+      ...log,
+      id: log.id || `MNK-LOG-${log.month}`,
+      recordedBy: log.recordedBy || currentUserRef.current.tenNhanVien,
+    };
+    setCompressorRuntime((prev) => {
+      const existsIdx = prev.monthlyLogs.findIndex(
+        (l) => l.id === normalizedLog.id || l.month === normalizedLog.month
+      );
+      const nextLogs =
+        existsIdx >= 0
+          ? prev.monthlyLogs.map((l, idx) => (idx === existsIdx ? normalizedLog : l))
+          : [...prev.monthlyLogs, normalizedLog];
+      nextLogs.sort((a, b) => a.month.localeCompare(b.month));
+      const nextStore: CompressorRuntimeStore = {
+        ...prev,
+        monthlyLogs: nextLogs,
+        updatedAt: new Date().toISOString(),
+      };
+      syncCompressorRuntimeToCloud(nextStore);
+      return nextStore;
+    });
+    addAuditLog(
+      'Chốt số',
+      'Giờ Chạy MNK',
+      `Kỳ ${normalizedLog.month}`,
+      `Ghi nhận chỉ số giờ chạy hệ thống máy nén khí tháng ${normalizedLog.month}`
+    );
+  };
+
+  const deleteCompressorMonthlyLog = (id: string) => {
+    if (!canDeleteRecords(currentUserRef.current)) return;
+    setCompressorRuntime((prev) => {
+      const nextStore: CompressorRuntimeStore = {
+        ...prev,
+        monthlyLogs: prev.monthlyLogs.filter((l) => l.id !== id),
+        updatedAt: new Date().toISOString(),
+      };
+      syncCompressorRuntimeToCloud(nextStore);
+      return nextStore;
+    });
+    addAuditLog('Xóa', 'Giờ Chạy MNK', id, `Xóa bản ghi giờ chạy MNK ${id}`);
+  };
+
+  const recordCompressorReplacement = (params: {
+    machineKey: string;
+    date: string;
+    consumable: CompressorConsumableType;
+    runningHoursAtChange?: number | null;
+    newIntervalH?: number;
+    sparePartCode?: string;
+    quantityUsed?: number;
+    deductStock?: boolean;
+    createMaintenanceHistory?: boolean;
+    note?: string;
+  }) => {
+    const consumableMeta = CONSUMABLE_META[params.consumable];
+    const intervalH = params.newIntervalH || consumableMeta.defaultIntervalH;
+    const newEvent: CompressorReplacementEvent = {
+      id: nextUniqueId('MNK-REP'),
+      machineKey: params.machineKey,
+      date: params.date || getTodayISODate(),
+      consumable: params.consumable,
+      runningHoursAtChange: params.runningHoursAtChange ?? null,
+      newIntervalH: intervalH,
+      sparePartCode: params.sparePartCode || undefined,
+      quantityUsed: params.quantityUsed || 1,
+      note: params.note?.trim() || undefined,
+      performedBy: currentUserRef.current.tenNhanVien,
+    };
+
+    const spec = compressorRuntime.unitSpecs.find((u) => u.machineKey === params.machineKey);
+
+    setCompressorRuntime((prev) => {
+      const sortedLogs = [...prev.monthlyLogs].sort((a, b) => a.month.localeCompare(b.month));
+      if (sortedLogs.length > 0 && params.consumable !== 'thermostatValve') {
+        const lastIdx = sortedLogs.length - 1;
+        const lastLog = sortedLogs[lastIdx];
+        const prevReading = lastLog.readings[params.machineKey] || {
+          runningHours: params.runningHoursAtChange ?? null,
+          loadHours: null,
+        };
+        const updatedReading = { ...prevReading };
+        if (
+          typeof params.runningHoursAtChange === 'number' &&
+          (updatedReading.runningHours === null ||
+            params.runningHoursAtChange > updatedReading.runningHours)
+        ) {
+          updatedReading.runningHours = params.runningHoursAtChange;
+        }
+        if (params.consumable === 'oil') updatedReading.oilRemainingH = intervalH;
+        if (params.consumable === 'airFilter') updatedReading.airFilterRemainingH = intervalH;
+        if (params.consumable === 'oilFilter') updatedReading.oilFilterRemainingH = intervalH;
+        if (params.consumable === 'oilSeparator') updatedReading.oilSeparatorRemainingH = intervalH;
+
+        sortedLogs[lastIdx] = {
+          ...lastLog,
+          readings: {
+            ...lastLog.readings,
+            [params.machineKey]: updatedReading,
+          },
+        };
+      }
+
+      const nextEvents = [newEvent, ...prev.replacementEvents].sort((a, b) =>
+        b.date.localeCompare(a.date)
+      );
+      const nextStore: CompressorRuntimeStore = {
+        ...prev,
+        monthlyLogs: sortedLogs,
+        replacementEvents: nextEvents,
+        updatedAt: new Date().toISOString(),
+      };
+      syncCompressorRuntimeToCloud(nextStore);
+      return nextStore;
+    });
+
+    // Optional: deduct linked spare part from Kho Phụ Tùng
+    if (params.deductStock && params.sparePartCode && (params.quantityUsed || 1) > 0) {
+      createStockTransaction({
+        ngay: newEvent.date,
+        loaiGD: 'Xuất kho sử dụng',
+        maVatTu: params.sparePartCode,
+        thietBiSuDung: spec ? `${spec.equipmentCode} (${spec.machineKey})` : params.machineKey,
+        soLuong: params.quantityUsed || 1,
+        nguoiThucHien: currentUserRef.current.tenNhanVien,
+        ghiChu: `Thay ${consumableMeta.label} cho ${params.machineKey} (chu kỳ ${intervalH}h)${params.note ? ` - ${params.note}` : ''}`,
+      });
+    }
+
+    // Optional: log into Maintenance History
+    if (params.createMaintenanceHistory && spec) {
+      const historyRecord: MaintenanceHistory = {
+        id: nextUniqueId('MH'),
+        maThietBi: spec.equipmentCode,
+        tenThietBi: spec.displayName,
+        loaiCongViec: 'Bảo trì theo kế hoạch',
+        ngayThucHien: newEvent.date,
+        nguoiThucHien: currentUserRef.current.tenNhanVien,
+        moTaCongViec: `Thay thế ${consumableMeta.label} (${params.machineKey}) — chu kỳ mới ${intervalH.toLocaleString('vi-VN')}h${params.runningHoursAtChange ? ` tại mốc ${params.runningHoursAtChange.toLocaleString('vi-VN')}h` : ''}${params.sparePartCode ? `, mã kho: ${params.sparePartCode}` : ''}${params.note ? `. Ghi chú: ${params.note}` : ''}`,
+        thoiGianDungMay: 30,
+        ketQua: 'Đạt',
+        nguoiLapBaoCao: currentUserRef.current.tenNhanVien,
+      };
+      setMaintenanceHistory((prev) => [historyRecord, ...prev]);
+      syncDoc('maintenance_history', historyRecord.id, sanitizeMaintenanceHistory(historyRecord));
+    }
+
+    addAuditLog(
+      'Hoàn thành',
+      'Giờ Chạy MNK',
+      params.machineKey,
+      `Xác nhận thay ${consumableMeta.label} cho ${params.machineKey} (đặt lại ${intervalH}h)${params.deductStock && params.sparePartCode ? `, xuất kho ${params.sparePartCode}` : ''}`
+    );
+  };
+
+  const deleteCompressorReplacementEvent = (id: string) => {
+    if (!canDeleteRecords(currentUserRef.current)) return;
+    setCompressorRuntime((prev) => {
+      const nextStore: CompressorRuntimeStore = {
+        ...prev,
+        replacementEvents: prev.replacementEvents.filter((e) => e.id !== id),
+        updatedAt: new Date().toISOString(),
+      };
+      syncCompressorRuntimeToCloud(nextStore);
+      return nextStore;
+    });
+    addAuditLog('Xóa', 'Giờ Chạy MNK', id, `Xóa lịch sử thay vật tư MNK ${id}`);
+  };
+
+  const updateCompressorUnitSpec = (spec: CompressorUnitSpec) => {
+    setCompressorRuntime((prev) => {
+      const nextStore: CompressorRuntimeStore = {
+        ...prev,
+        unitSpecs: prev.unitSpecs.map((u) => (u.machineKey === spec.machineKey ? spec : u)),
+        updatedAt: new Date().toISOString(),
+      };
+      syncCompressorRuntimeToCloud(nextStore);
+      return nextStore;
+    });
+    addAuditLog(
+      'Cập nhật',
+      'Giờ Chạy MNK',
+      spec.machineKey,
+      `Cập nhật định mức chu kỳ vật tư & liên kết kho cho ${spec.machineKey}`
+    );
+  };
+
+  const updateCompressorThresholds = (params: {
+    warningThresholdH?: number;
+    readingDayOfMonth?: number;
+  }) => {
+    setCompressorRuntime((prev) => {
+      const nextStore: CompressorRuntimeStore = {
+        ...prev,
+        warningThresholdH:
+          typeof params.warningThresholdH === 'number' && params.warningThresholdH > 0
+            ? params.warningThresholdH
+            : prev.warningThresholdH,
+        readingDayOfMonth:
+          typeof params.readingDayOfMonth === 'number' &&
+          params.readingDayOfMonth >= 1 &&
+          params.readingDayOfMonth <= 28
+            ? params.readingDayOfMonth
+            : prev.readingDayOfMonth,
+        updatedAt: new Date().toISOString(),
+      };
+      syncCompressorRuntimeToCloud(nextStore);
+      return nextStore;
+    });
+  };
+
+  const replaceCompressorRuntimeStore = (
+    store: CompressorRuntimeStore,
+    sourceLabel = 'Import CSV'
+  ) => {
+    const nextStore: CompressorRuntimeStore = {
+      ...store,
+      updatedAt: new Date().toISOString(),
+    };
+    setCompressorRuntime(nextStore);
+    syncCompressorRuntimeToCloud(nextStore);
+    addAuditLog(
+      'Cập nhật',
+      'Giờ Chạy MNK',
+      `${nextStore.monthlyLogs.length} kỳ`,
+      `Nạp mới dữ liệu giờ chạy MNK (${nextStore.monthlyLogs.length} tháng, ${nextStore.replacementEvents.length} lịch sử thay vật tư) từ ${sourceLabel}`
     );
   };
 
@@ -6154,6 +6599,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToolLogs(INITIAL_TOOL_LOGS);
     setDailyAreaChecks(INITIAL_DAILY_AREA_CHECKS);
     setMorningCheckTemplates(DEFAULT_MORNING_CHECK_TEMPLATES);
+    setUtilityConnectivity(INITIAL_UTILITY_CONNECTIVITY);
+    setCompressorRuntime(INITIAL_COMPRESSOR_RUNTIME);
     setPurchaseRequests(INITIAL_PURCHASE_REQUESTS);
     applyCurrentUser(INITIAL_EMPLOYEES[0], false);
     localStorage.clear();
@@ -6180,6 +6627,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           toolLogs: INITIAL_TOOL_LOGS,
           dailyAreaChecks: INITIAL_DAILY_AREA_CHECKS,
           morningCheckTemplates: DEFAULT_MORNING_CHECK_TEMPLATES,
+          utilityConnectivity: INITIAL_UTILITY_CONNECTIVITY,
+          compressorRuntime: INITIAL_COMPRESSOR_RUNTIME,
           purchaseRequests: INITIAL_PURCHASE_REQUESTS,
           emailLogs: INITIAL_EMAIL_LOGS,
           auditLogs: INITIAL_AUDIT_LOGS,
@@ -6215,6 +6664,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dailyAreaChecks,
       morningCheckTemplates,
       monthlyBoardReports,
+      utilityConnectivity,
+      compressorRuntime,
       purchaseRequests,
       emailConfig,
       emailLogs,
@@ -6250,6 +6701,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (Array.isArray(data.toolLogs)) setToolLogs(data.toolLogs);
       if (Array.isArray(data.dailyAreaChecks)) setDailyAreaChecks(data.dailyAreaChecks);
       if (Array.isArray(data.purchaseRequests)) setPurchaseRequests(data.purchaseRequests);
+      if (Array.isArray(data.utilityConnectivity)) setUtilityConnectivity(data.utilityConnectivity);
+      if (data.compressorRuntime && typeof data.compressorRuntime === 'object') {
+        setCompressorRuntime(data.compressorRuntime);
+      }
       if (data.morningCheckTemplates && typeof data.morningCheckTemplates === 'object') {
         setMorningCheckTemplates({
           ...DEFAULT_MORNING_CHECK_TEMPLATES,
@@ -6295,6 +6750,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
             data.monthlyBoardReports && typeof data.monthlyBoardReports === 'object'
               ? data.monthlyBoardReports
               : monthlyBoardReports,
+          utilityConnectivity: Array.isArray(data.utilityConnectivity)
+            ? data.utilityConnectivity
+            : utilityConnectivity,
+          compressorRuntime:
+            data.compressorRuntime && typeof data.compressorRuntime === 'object'
+              ? data.compressorRuntime
+              : compressorRuntime,
           purchaseRequests: Array.isArray(data.purchaseRequests) ? data.purchaseRequests : purchaseRequests,
           emailLogs: Array.isArray(data.emailLogs) ? data.emailLogs : emailLogs,
           auditLogs,
@@ -6342,6 +6804,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         dailyAreaChecks,
         morningCheckTemplates,
         monthlyBoardReports,
+        utilityConnectivity,
+        compressorRuntime,
         purchaseRequests,
         currentUser,
         emailConfig,
@@ -6431,6 +6895,17 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         deleteDailyAreaCheck,
         saveMonthlyBoardReport,
         deleteMonthlyBoardReport,
+        addUtilityConnectivity,
+        updateUtilityConnectivity,
+        deleteUtilityConnectivity,
+        replaceUtilityConnectivity,
+        upsertCompressorMonthlyLog,
+        deleteCompressorMonthlyLog,
+        recordCompressorReplacement,
+        deleteCompressorReplacementEvent,
+        updateCompressorUnitSpec,
+        updateCompressorThresholds,
+        replaceCompressorRuntimeStore,
         isAuthenticated,
         theme,
         toggleTheme,

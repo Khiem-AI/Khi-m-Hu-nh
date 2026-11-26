@@ -12,6 +12,8 @@ import { MyTasksTab } from './components/tabs/MyTasksTab';
 import { MorningChecksTab } from './components/tabs/MorningChecksTab';
 import { ProfileTab } from './components/tabs/ProfileTab';
 import { EquipmentTab } from './components/tabs/EquipmentTab';
+import { UtilityConnectivityTab } from './components/tabs/UtilityConnectivityTab';
+import { CompressorRuntimeTab } from './components/tabs/CompressorRuntimeTab';
 import { MaintenanceTab } from './components/tabs/MaintenanceTab';
 import { SafetyInspectionTab } from './components/tabs/SafetyInspectionTab';
 import { ToolsManagementTab } from './components/tabs/ToolsManagementTab';
@@ -302,6 +304,10 @@ function CMMSApp() {
               }}
             />
           )}
+
+          {activeTab === 'utility_connectivity' && <UtilityConnectivityTab />}
+
+          {activeTab === 'compressor_runtime' && <CompressorRuntimeTab />}
 
           {activeTab === 'maintenance' && (
             <MaintenanceTab

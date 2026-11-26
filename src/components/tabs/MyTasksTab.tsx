@@ -60,6 +60,8 @@ export const MyTasksTab: React.FC<MyTasksTabProps> = ({
   const [activeFilter, setActiveFilter] = useState<TaskSectionFilter>('ACTION_NEEDED');
   const [searchTerm, setSearchTerm] = useState('');
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [completingTicketId, setCompletingTicketId] = useState<string | null>(null);
+  const [quickCompleteNote, setQuickCompleteNote] = useState<string>('');
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -146,7 +148,9 @@ export const MyTasksTab: React.FC<MyTasksTabProps> = ({
         t.maTicket.toLowerCase().includes(q) ||
         t.tieuDe.toLowerCase().includes(q) ||
         t.moTaChiTiet.toLowerCase().includes(q) ||
-        (t.maThietBi || '').toLowerCase().includes(q)
+        (t.maThietBi || '').toLowerCase().includes(q) ||
+        (t.nguoiPhuTrach || '').toLowerCase().includes(q) ||
+        (t.nguoiGiaoViec || '').toLowerCase().includes(q)
     );
   }, [activeFilter, openTickets, myTickets, q]);
 
@@ -171,16 +175,25 @@ export const MyTasksTab: React.FC<MyTasksTabProps> = ({
     );
   }, [myHistory, q]);
 
-  const handleQuickTicketStatus = (ticket: Ticket, nextStatus: TicketStatus) => {
+  const handleQuickTicketStatus = (
+    ticket: Ticket,
+    nextStatus: TicketStatus,
+    customResultNote?: string
+  ) => {
+    const trimmedNote = (customResultNote || '').trim();
     updateTicket({
       ...ticket,
       trangThai: nextStatus,
       ngayHoanThanh: nextStatus === 'Hoàn thành' ? getTodayISODate() : ticket.ngayHoanThanh,
       ketQua:
-        nextStatus === 'Hoàn thành' && !ticket.ketQua
-          ? `Đã hoàn thành xử lý bởi ${currentUser.tenNhanVien}`
+        nextStatus === 'Hoàn thành'
+          ? trimmedNote || ticket.ketQua || `Đã hoàn thành xử lý bởi ${currentUser.tenNhanVien}`
           : ticket.ketQua,
     });
+    if (completingTicketId === ticket.maTicket) {
+      setCompletingTicketId(null);
+      setQuickCompleteNote('');
+    }
     showToast(`Đã cập nhật Ticket ${ticket.maTicket} → ${nextStatus}`);
   };
 
@@ -431,40 +444,89 @@ export const MyTasksTab: React.FC<MyTasksTabProps> = ({
                           <strong className="text-slate-200">{t.nguoiGiaoViec || t.nguoiLap}</strong>
                         </span>
                       </div>
+                      {t.nguoiPhuTrach && (
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                          <User className="w-3 h-3 text-cyan-400 shrink-0" />
+                          <span className="truncate">
+                            Phụ trách: <strong className="text-cyan-300">{t.nguoiPhuTrach}</strong>
+                          </span>
+                        </div>
+                      )}
 
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => onOpenEditTicket(t)}
-                          className="min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition whitespace-nowrap"
+                      {completingTicketId === t.maTicket && !isDone ? (
+                        <form
+                          onSubmit={(e) => {
+                            e.preventDefault();
+                            handleQuickTicketStatus(t, 'Hoàn thành', quickCompleteNote);
+                          }}
+                          className="p-2.5 rounded-xl bg-emerald-950/40 border border-emerald-500/35 space-y-2"
                         >
-                          <Edit className="w-3.5 h-3.5 text-cyan-400" />
-                          Cập Nhật / Ảnh
-                        </button>
-
-                        {!isDone && (
-                          <>
-                            {t.trangThai !== 'Đang thực hiện' && (
-                              <button
-                                type="button"
-                                onClick={() => handleQuickTicketStatus(t, 'Đang thực hiện')}
-                                className="min-h-[38px] inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/35 text-amber-300 border border-amber-500/40 text-xs font-semibold transition whitespace-nowrap"
-                              >
-                                <Clock className="w-3.5 h-3.5" />
-                                Bắt Đầu
-                              </button>
-                            )}
+                          <input
+                            type="text"
+                            value={quickCompleteNote}
+                            onChange={(e) => setQuickCompleteNote(e.target.value)}
+                            placeholder="Ghi chú kết quả xử lý (có thể để trống)..."
+                            autoFocus
+                            className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                          <div className="flex items-center justify-end gap-1.5">
                             <button
                               type="button"
-                              onClick={() => handleQuickTicketStatus(t, 'Hoàn thành')}
-                              className="min-h-[38px] inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition ml-auto whitespace-nowrap"
+                              onClick={() => {
+                                setCompletingTicketId(null);
+                                setQuickCompleteNote('');
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold transition"
+                            >
+                              Hủy
+                            </button>
+                            <button
+                              type="submit"
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow"
                             >
                               <CheckCircle2 className="w-3.5 h-3.5" />
-                              Hoàn Thành
+                              Xác Nhận Hoàn Thành
                             </button>
-                          </>
-                        )}
-                      </div>
+                          </div>
+                        </form>
+                      ) : (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => onOpenEditTicket(t)}
+                            className="min-h-[38px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold transition whitespace-nowrap"
+                          >
+                            <Edit className="w-3.5 h-3.5 text-cyan-400" />
+                            Cập Nhật / Ảnh
+                          </button>
+
+                          {!isDone && (
+                            <>
+                              {t.trangThai !== 'Đang thực hiện' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleQuickTicketStatus(t, 'Đang thực hiện')}
+                                  className="min-h-[38px] inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-amber-600/20 hover:bg-amber-600/35 text-amber-300 border border-amber-500/40 text-xs font-semibold transition whitespace-nowrap"
+                                >
+                                  <Clock className="w-3.5 h-3.5" />
+                                  Bắt Đầu
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setCompletingTicketId(t.maTicket);
+                                  setQuickCompleteNote(t.ketQua || '');
+                                }}
+                                className="min-h-[38px] inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition ml-auto whitespace-nowrap"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Hoàn Thành
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

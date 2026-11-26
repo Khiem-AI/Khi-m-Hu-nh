@@ -42,6 +42,8 @@ import {
   Ticket,
   ToolBorrowLog,
   ToolItem,
+  UtilityConnectivityItem,
+  CompressorRuntimeStore,
   WaterMonthly,
 } from '../types/cmms';
 import { isPlaceholderEmail, isValidEmailFormat } from './cmmsLogic';
@@ -1203,6 +1205,8 @@ export interface WorkspaceSnapshotData {
   tariffConfig: EnergyTariffConfig;
   morningCheckTemplates?: MorningCheckTemplatesMap;
   monthlyBoardReports?: MonthlyBoardReportsStore;
+  utilityConnectivity?: UtilityConnectivityItem[];
+  compressorRuntime?: CompressorRuntimeStore;
 }
 
 export async function seedOrPushWorkspaceToFirestore(
@@ -1317,6 +1321,29 @@ export async function seedOrPushWorkspaceToFirestore(
       data: {
         key: 'monthly_board_reports',
         payload: stripUndefined(snapshotData.monthlyBoardReports as unknown as Record<string, unknown>),
+      },
+    });
+  }
+  if (Array.isArray(snapshotData.utilityConnectivity)) {
+    ops.push({
+      col: 'settings',
+      id: 'utility_connectivity',
+      data: {
+        key: 'utility_connectivity',
+        payload: stripUndefined({
+          items: snapshotData.utilityConnectivity,
+          updatedAt: new Date().toISOString(),
+        }),
+      },
+    });
+  }
+  if (snapshotData.compressorRuntime) {
+    ops.push({
+      col: 'settings',
+      id: 'compressor_runtime',
+      data: {
+        key: 'compressor_runtime',
+        payload: stripUndefined(snapshotData.compressorRuntime as unknown as Record<string, unknown>),
       },
     });
   }

@@ -34,7 +34,10 @@ import {
   ChevronRight,
   Sunrise,
   FileBarChart2,
+  Cable,
+  Gauge,
 } from 'lucide-react';
+import { analyzeCompressorStore } from '../utils/utilityCompressorCsv';
 
 interface NavigationProps {
   activeTab: string;
@@ -57,7 +60,7 @@ export const Navigation: React.FC<NavigationProps> = ({
   isDesktopHoverOpen = false,
   onDesktopHoverChange,
 }) => {
-  const { maintenancePlans, tickets, spareParts, projects, safetyInspections, tools, dailyAreaChecks, currentUser } = useCMMS();
+  const { maintenancePlans, tickets, spareParts, projects, safetyInspections, tools, dailyAreaChecks, compressorRuntime, currentUser } = useCMMS();
   const hoverCloseTimerRef = React.useRef<number | null>(null);
 
   const clearHoverTimer = React.useCallback(() => {
@@ -134,6 +137,10 @@ export const Navigation: React.FC<NavigationProps> = ({
       c.trangThai !== 'Đã hoàn thành' &&
       (isAdminLevel(currentUser) || matchesAssignee(c.nguoiDuocGiao, currentUser))
   ).length;
+  const mnkDueCount = React.useMemo(() => {
+    const res = analyzeCompressorStore(compressorRuntime);
+    return res.overdueAlerts.length + res.warningAlerts.length;
+  }, [compressorRuntime]);
 
   const navItems = [
     {
@@ -189,6 +196,21 @@ export const Navigation: React.FC<NavigationProps> = ({
       desc: UI_TEXTS.navigation.items.equipment.desc,
       icon: Cpu,
       badge: null,
+    },
+    {
+      id: 'utility_connectivity',
+      label: UI_TEXTS.navigation.items.utility_connectivity.label,
+      desc: UI_TEXTS.navigation.items.utility_connectivity.desc,
+      icon: Cable,
+      badge: null,
+    },
+    {
+      id: 'compressor_runtime',
+      label: UI_TEXTS.navigation.items.compressor_runtime.label,
+      desc: UI_TEXTS.navigation.items.compressor_runtime.desc,
+      icon: Gauge,
+      badge: mnkDueCount > 0 ? `${mnkDueCount} thay` : null,
+      badgeColor: 'bg-amber-500/20 text-amber-400 border border-amber-500/30',
     },
     {
       id: 'maintenance',

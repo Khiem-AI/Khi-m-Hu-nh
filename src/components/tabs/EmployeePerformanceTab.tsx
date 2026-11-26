@@ -9,7 +9,7 @@ import {
   MaintenancePlan,
   Ticket,
 } from '../../types/cmms';
-import { formatDateVN, getTodayISODate, isAdminLevel, parseAssigneeNames } from '../../utils/cmmsLogic';
+import { formatDateVN, getTodayISODate, isAdminLevel, matchesAssignee } from '../../utils/cmmsLogic';
 import { SmartHorizontalScroll } from '../common/SmartHorizontalScroll';
 import {
   Award,
@@ -73,18 +73,7 @@ function isWithinDays(dateStr: string | undefined, days: number | null): boolean
 }
 
 function matchesEmployee(rawField: string | undefined | null, emp: Employee): boolean {
-  if (!rawField) return false;
-  const empName = emp.tenNhanVien.trim().toLowerCase();
-  const empCode = emp.maNhanVien.trim().toLowerCase();
-  const names = parseAssigneeNames(rawField);
-  if (names.length > 0) {
-    return names.some((n) => {
-      const lower = n.toLowerCase();
-      return lower === empName || lower === empCode || lower.includes(empName);
-    });
-  }
-  const lowerRaw = rawField.trim().toLowerCase();
-  return lowerRaw === empName || lowerRaw === empCode;
+  return matchesAssignee(rawField, emp);
 }
 
 export const EmployeePerformanceTab: React.FC = () => {
