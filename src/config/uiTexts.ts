@@ -68,11 +68,11 @@ export const UI_TEXTS = {
     },
     utilityConnectivity: {
       badge: 'Sơ Đồ Đấu Nối Utility',
-      title: 'Tra Cứu Hệ Utility Cấp Cho Thiết Bị & Mô Phỏng Cắt Nguồn (LOTO)',
+      title: 'Tra Cứu Hệ Utility Cấp Cho Thiết Bị',
     },
     compressorRuntime: {
       badge: 'Hệ Thống Khí Nén',
-      title: 'Quản Lý Số Giờ Chạy & Cảnh Báo Thay Vật Tư Máy Nén Khí (MNK)',
+      title: 'Quản Lý Số Giờ Chạy Máy Nén Khí',
     },
     maintenance: {
       historyBadge: 'Lịch Sử Bảo Trì',
