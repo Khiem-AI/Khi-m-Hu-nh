@@ -32,10 +32,16 @@ import {
   PinOff,
   PanelLeftClose,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   Sunrise,
   FileBarChart2,
   Cable,
   Gauge,
+  RefreshCw,
+  Monitor,
+  Smartphone,
+  ArrowRight,
 } from 'lucide-react';
 import { analyzeCompressorStore } from '../utils/utilityCompressorCsv';
 
@@ -60,8 +66,31 @@ export const Navigation: React.FC<NavigationProps> = ({
   isDesktopHoverOpen = false,
   onDesktopHoverChange,
 }) => {
-  const { maintenancePlans, tickets, spareParts, projects, safetyInspections, tools, dailyAreaChecks, compressorRuntime, currentUser } = useCMMS();
+  const {
+    maintenancePlans,
+    tickets,
+    spareParts,
+    projects,
+    safetyInspections,
+    tools,
+    dailyAreaChecks,
+    compressorRuntime,
+    currentUser,
+    employees,
+    onlineUsers,
+    refreshOnlineUsers,
+  } = useCMMS();
   const hoverCloseTimerRef = React.useRef<number | null>(null);
+  const [showOnlineList, setShowOnlineList] = React.useState(false);
+  const [isRefreshingOnline, setIsRefreshingOnline] = React.useState(false);
+
+  const formatPresenceAgo = (ts: number) => {
+    const diffSec = Math.max(0, Math.floor((Date.now() - ts) / 1000));
+    if (diffSec < 12) return 'Đang hoạt động';
+    if (diffSec < 60) return `${diffSec} giây trước`;
+    const mins = Math.floor(diffSec / 60);
+    return `${mins} phút trước`;
+  };
 
   const clearHoverTimer = React.useCallback(() => {
     if (hoverCloseTimerRef.current !== null) {
@@ -398,26 +427,171 @@ export const Navigation: React.FC<NavigationProps> = ({
         })}
       </div>
 
-      {/* User Status Card - Clickable shortcut to Profile */}
-      <button
-        type="button"
-        onClick={() => handleItemSelect('profile')}
-        className="w-full text-left p-3 rounded-xl bg-slate-50/90 dark:bg-[#182233] hover:bg-slate-100 dark:hover:bg-[#1f2c42] border border-slate-200/80 dark:border-[#26344a] text-xs space-y-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
-        title="Mở Hồ Sơ Cá Nhân (Profile)"
-      >
-        <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
-          <span className="text-[11px] font-medium">Hồ sơ của tôi</span>
-          <span className="font-mono text-[10px] font-semibold text-slate-600 dark:text-slate-300">
-            {currentUser.maNhanVien}
-          </span>
+      {/* Footer Widgets: Profile + Live Online Users */}
+      <div className="space-y-2.5 pt-2 border-t border-slate-200/80 dark:border-[#243045]">
+        {/* User Status Card - Clickable shortcut to Profile */}
+        <button
+          type="button"
+          onClick={() => handleItemSelect('profile')}
+          className="w-full text-left p-3 rounded-xl bg-slate-50/90 dark:bg-[#182233] hover:bg-slate-100 dark:hover:bg-[#1f2c42] border border-slate-200/80 dark:border-[#26344a] text-xs space-y-1 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500"
+          title="Mở Hồ Sơ Cá Nhân (Profile)"
+        >
+          <div className="flex items-center justify-between text-slate-500 dark:text-slate-400">
+            <span className="text-[11px] font-medium">Hồ sơ của tôi</span>
+            <span className="font-mono text-[10px] font-semibold text-slate-600 dark:text-slate-300">
+              {currentUser.maNhanVien}
+            </span>
+          </div>
+          <div className="font-semibold text-slate-800 dark:text-[#e7edf6] truncate">
+            {currentUser.tenNhanVien}
+          </div>
+          <div className="text-[11px] text-sky-700 dark:text-sky-400 font-medium">
+            {currentUser.chucVu}
+          </div>
+        </button>
+
+        {/* Live Online Users Widget (Bottom of Main Menu) */}
+        <div className="rounded-xl bg-emerald-50/80 dark:bg-emerald-500/10 border border-emerald-200/90 dark:border-emerald-500/30 overflow-hidden">
+          <div className="flex items-center justify-between gap-1 px-3 py-2.5">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !showOnlineList;
+                setShowOnlineList(next);
+                if (next) {
+                  void refreshOnlineUsers();
+                }
+              }}
+              aria-expanded={showOnlineList}
+              aria-label={`Người dùng đang online: ${onlineUsers.length}`}
+              className="flex-1 flex items-center justify-between gap-2 text-left min-w-0 focus-visible:outline-none"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+                </span>
+                <Users className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300 truncate">
+                  Đang Online
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="font-mono text-[11px] font-bold px-2 py-0.5 rounded-md bg-emerald-600 text-white tabular-nums">
+                  {onlineUsers.length}
+                </span>
+                {showOnlineList ? (
+                  <ChevronUp className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 text-emerald-700 dark:text-emerald-300" />
+                )}
+              </div>
+            </button>
+
+            <button
+              type="button"
+              disabled={isRefreshingOnline}
+              onClick={async () => {
+                setIsRefreshingOnline(true);
+                await refreshOnlineUsers();
+                setIsRefreshingOnline(false);
+              }}
+              title="Làm mới danh sách đang online"
+              aria-label="Làm mới danh sách đang online"
+              className="p-1 rounded-lg text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 transition disabled:opacity-50 shrink-0"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingOnline ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {showOnlineList && (
+            <div className="border-t border-emerald-200/80 dark:border-emerald-500/25 bg-white/90 dark:bg-[#101826]/90 p-2.5 space-y-2">
+              <div className="space-y-1.5 max-h-60 overflow-y-auto pr-0.5">
+                {onlineUsers.length === 0 ? (
+                  <div className="text-center py-3 text-[11px] text-slate-500 dark:text-slate-400">
+                    Chưa ghi nhận người dùng nào đang trực tuyến.
+                  </div>
+                ) : (
+                  onlineUsers.map((u) => {
+                    const empMatch = employees.find(
+                      (e) => e.maNhanVien.trim().toUpperCase() === u.maNhanVien.trim().toUpperCase()
+                    );
+                    const isMe =
+                      currentUser.maNhanVien.trim().toUpperCase() === u.maNhanVien.trim().toUpperCase();
+                    const avatarUrl =
+                      empMatch?.anhDaiDien ||
+                      'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80';
+
+                    return (
+                      <div
+                        key={u.maNhanVien}
+                        className={`p-2 rounded-lg border flex items-start gap-2 text-[11px] ${
+                          isMe
+                            ? 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-500/35'
+                            : 'bg-slate-50 dark:bg-slate-900/70 border-slate-200 dark:border-slate-800'
+                        }`}
+                      >
+                        <div className="relative shrink-0 mt-0.5">
+                          <img
+                            src={avatarUrl}
+                            alt={u.tenNhanVien}
+                            className="w-7 h-7 rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                          />
+                          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+                        </div>
+
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-slate-900 dark:text-slate-100 truncate">
+                              {u.tenNhanVien}
+                            </span>
+                            {isMe && (
+                              <span className="px-1 rounded bg-emerald-600 text-white text-[9px] font-bold shrink-0">
+                                Bạn
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between gap-1 text-[10px] text-slate-500 dark:text-slate-400">
+                            <span className="font-mono font-semibold">{u.maNhanVien}</span>
+                            <span className="inline-flex items-center gap-0.5">
+                              {u.deviceType === 'Mobile' ? (
+                                <Smartphone className="w-2.5 h-2.5" />
+                              ) : (
+                                <Monitor className="w-2.5 h-2.5" />
+                              )}
+                              {u.deviceType}
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-cyan-700 dark:text-cyan-300 truncate font-medium">
+                            {u.currentTabLabel}
+                          </div>
+                          <div className="text-[9px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                            {formatPresenceAgo(u.lastActiveAt)}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+
+              {allowedViewIds.includes('employees') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowOnlineList(false);
+                    handleItemSelect('employees');
+                  }}
+                  className="w-full pt-1.5 border-t border-slate-200 dark:border-slate-800 inline-flex items-center justify-center gap-1 text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:underline"
+                >
+                  <span>Xem danh sách nhân sự</span>
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          )}
         </div>
-        <div className="font-semibold text-slate-800 dark:text-[#e7edf6] truncate">
-          {currentUser.tenNhanVien}
-        </div>
-        <div className="text-[11px] text-sky-700 dark:text-sky-400 font-medium">
-          {currentUser.chucVu}
-        </div>
-      </button>
+      </div>
     </div>
   );
 

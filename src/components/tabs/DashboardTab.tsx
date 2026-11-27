@@ -15,7 +15,6 @@ import {
   Plus,
   Clock,
   ArrowRight,
-  Activity,
   Gauge,
   CalendarDays,
   ChevronLeft,
@@ -101,7 +100,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
     spareParts,
     power10Days,
     costRecords,
-    auditLogs,
   } = useCMMS();
   const showCosts = canViewCosts(currentUser);
   const showExportCSV = canExportCSV(currentUser);
@@ -1309,54 +1307,6 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
               </div>
             ))}
           </div>
-        </div>
-      </div>
-
-      {/* System Audit Log preview */}
-      <div className="rounded-2xl bg-slate-900/80 border border-slate-800 p-5 space-y-3">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-cyan-400" />
-            <h3 className="font-bold text-slate-100 text-sm">
-              {UI_TEXTS.dashboard.auditSectionTitle}
-            </h3>
-          </div>
-          <button
-            onClick={() => onNavigateTab('logs')}
-            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold"
-          >
-            Toàn bộ nhật ký ({auditLogs.length})
-          </button>
-        </div>
-
-        <div className="divide-y divide-slate-800">
-          {auditLogs.slice(0, 4).map((log) => (
-            <div key={log.id} className="py-2.5 flex items-center justify-between text-xs gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-slate-500 text-[11px] shrink-0">
-                  {log.thoiGian.split(' ')[1] || log.thoiGian}
-                </span>
-                <span
-                  className={`px-2 py-0.5 rounded text-[10px] font-bold shrink-0 ${
-                    log.hanhDong === 'Thêm'
-                      ? 'bg-emerald-500/20 text-emerald-300'
-                      : log.hanhDong === 'Hoàn thành'
-                      ? 'bg-blue-500/20 text-blue-300'
-                      : log.hanhDong === 'Xuất kho'
-                      ? 'bg-amber-500/20 text-amber-300'
-                      : 'bg-slate-700 text-slate-300'
-                  }`}
-                >
-                  {log.hanhDong}
-                </span>
-                <div className="min-w-0">
-                  <span className="font-semibold text-slate-300 mr-2">[{log.chucNang}]</span>
-                  <span className="text-slate-400 truncate">{log.chiTietNoiDung}</span>
-                </div>
-              </div>
-              <span className="text-slate-400 shrink-0 font-medium">{log.nguoiThaoTac}</span>
-            </div>
-          ))}
         </div>
       </div>
     </div>
