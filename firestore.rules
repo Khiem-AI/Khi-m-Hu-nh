@@ -37,7 +37,7 @@ service cloud.firestore {
     function isMemberOnDoc(data) {
       return isBootstrappedAdmin() ||
         data.ownerUid == request.auth.uid ||
-        (data.allowedEmails is list && data.allowedEmails.size() <= 50 && request.auth.token.email.lower() in data.allowedEmails);
+        request.auth.token.email.lower() in data.allowedEmails;
     }
 
     function isValidMeta(data) {

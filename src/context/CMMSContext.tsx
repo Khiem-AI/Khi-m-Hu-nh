@@ -1076,6 +1076,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       queuePendingCloudOp(colName, rawId, 'upsert', sanitizedData, false);
       return;
     }
+    const isBootAdmin = user.email.trim().toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL;
     // Cloud user -> write directly to Firestore AND broadcast doc op to shared server immediately
     queuePendingCloudOp(colName, rawId, 'upsert', sanitizedData, true);
     const allowed = buildAllowedEmails(employeesOverride || employeesRef.current, user.email);
@@ -1093,7 +1094,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCloudSyncStatus('synced');
       })
       .catch((err) => {
-        setCloudSyncError(formatFirestoreSyncError(err));
+        const msg = formatFirestoreSyncError(err);
+        if (!isBootAdmin && /permission-denied|chưa được cấp quyền/i.test(msg)) {
+          // For Admin-only Firestore collections (e.g. meter_readings, stock_transactions, audit_logs),
+          // queue via server bridge so Admin syncs it to Cloud seamlessly without alarming the user.
+          queuePendingCloudOp(colName, rawId, 'upsert', sanitizedData, false);
+          return;
+        }
+        setCloudSyncError(msg);
         setCloudSyncStatus('error');
       });
   };
@@ -1443,6 +1451,8 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       queuePendingCloudOp(colName, rawId, 'delete', undefined, false);
       return;
     }
+    const isBootAdmin =
+      cloudUserRef.current.email.trim().toLowerCase() === BOOTSTRAPPED_ADMIN_EMAIL;
     queuePendingCloudOp(colName, rawId, 'delete', undefined, true);
     void deleteCloudDoc(colName, rawId, knownCloudIdsRef.current)
       .then(() => {
@@ -1451,7 +1461,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCloudSyncStatus('synced');
       })
       .catch((err) => {
-        setCloudSyncError(formatFirestoreSyncError(err));
+        const msg = formatFirestoreSyncError(err);
+        if (!isBootAdmin && /permission-denied|chưa được cấp quyền/i.test(msg)) {
+          queuePendingCloudOp(colName, rawId, 'delete', undefined, false);
+          return;
+        }
+        setCloudSyncError(msg);
         setCloudSyncStatus('error');
       });
   };
@@ -2616,7 +2631,23 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } catch (err) {
         if (cancelled) return;
-        setCloudSyncError(formatFirestoreSyncError(err));
+        const msg = formatFirestoreSyncError(err);
+        if (!isBootAdmin && /permission-denied|chưa được cấp quyền/i.test(msg)) {
+          // Non-admin user whose Gmail isn't yet propagated to all Firestore docs:
+          // fall back cleanly to live server sync without showing an alarming error banner.
+          if (hasServerSession || serverSessionTokenRef.current) {
+            await pullLatestFromServerInternal(true);
+            if (cancelled) return;
+            cloudUserRef.current = null;
+            pendingCloudFbUserRef.current = null;
+            setCloudUser(null);
+            setCloudSyncStatus('offline');
+            setCloudSyncError(null);
+            void signOutGmail();
+            return;
+          }
+        }
+        setCloudSyncError(msg);
         setCloudSyncStatus('error');
       }
 

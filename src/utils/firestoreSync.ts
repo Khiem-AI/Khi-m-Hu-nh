@@ -116,7 +116,7 @@ export function formatFirestoreSyncError(err: unknown): string {
       // ignore
     }
     const who = rejectedEmail ? ` (${rejectedEmail})` : '';
-    return `Tài khoản Google${who} chưa được cấp quyền truy cập Cloud. Nếu dùng mô hình 1 tài khoản Admin, hãy ngắt kết nối tài khoản này và đăng nhập bằng Admin (${BOOTSTRAPPED_ADMIN_EMAIL}).`;
+    return `Tài khoản Google${who} chưa được đồng bộ quyền đọc trực tiếp Cloud Firestore. Vui lòng nhờ Admin (${BOOTSTRAPPED_ADMIN_EMAIL}) đăng nhập 1 lần để cập nhật quyền, hoặc dùng đăng nhập Mã nhân viên & Mật khẩu để đồng bộ trực tiếp.`;
   }
   if (/unavailable|offline|network/i.test(raw)) {
     return 'Mất kết nối tới máy chủ Cloud Firestore. Dữ liệu vẫn được lưu tạm trên máy và sẽ đồng bộ khi có mạng.';
