@@ -85,6 +85,7 @@ import {
   applyStockTransaction,
   calculateMeterConsumption,
   syncPlansWithHistory,
+  syncEquipmentDatesWithPlansAndHistory,
   getLatestMaintenanceForEquipment,
   getHistoryWorkType,
   parseAssigneeNames,
@@ -472,6 +473,7 @@ interface CMMSContextType {
   lastServerSyncedAt: string | null;
   hasServerSyncSession: boolean;
   isRealtimeStreamConnected: boolean;
+  serverRevision: number;
   serverCloudHydrated: boolean;
   pendingCloudOpsCount: number;
   connectCloudWithGoogle: () => Promise<{ success: boolean; message: string }>;
@@ -858,6 +860,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [lastServerSyncedAt, setLastServerSyncedAt] = useState<string | null>(null);
   const [hasServerSyncSession, setHasServerSyncSession] = useState<boolean>(false);
   const [isRealtimeStreamConnected, setIsRealtimeStreamConnected] = useState<boolean>(false);
+  const [serverRevision, setServerRevision] = useState<number>(0);
   const [serverCloudHydrated, setServerCloudHydrated] = useState<boolean>(false);
   const [pendingCloudOpsCount, setPendingCloudOpsCount] = useState<number>(0);
   const [sseReconnectNonce, setSseReconnectNonce] = useState<number>(0);
@@ -1531,29 +1534,76 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return sorted;
   };
 
+  const VERIFIED_SYNCED_DATA_KEY = 'cmms_has_verified_synced_data';
+
+  const markHasVerifiedSyncedData = () => {
+    try {
+      localStorage.setItem(VERIFIED_SYNCED_DATA_KEY, 'true');
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const hasVerifiedRealLocalData = (snap: WorkspaceSnapshotData): boolean => {
+    try {
+      if (localStorage.getItem(VERIFIED_SYNCED_DATA_KEY) === 'true') {
+        return true;
+      }
+      // Also recognize pre-existing browsers that already hold real updated maintenance/ticket/equipment data in localStorage
+      const hasPersistedEquip = localStorage.getItem('cmms_equipment_v1') !== null;
+      if (!hasPersistedEquip) return false;
+    } catch {
+      return false;
+    }
+
+    if (snap.maintenanceHistory.length > INITIAL_MAINTENANCE_HISTORY.length) return true;
+    if (snap.tickets.length > INITIAL_TICKETS.length) return true;
+    if (snap.projects.length > INITIAL_PROJECTS.length) return true;
+    if (snap.equipment.length !== INITIAL_EQUIPMENT.length) return true;
+
+    const initEqDueByCode = new Map(
+      INITIAL_EQUIPMENT.map((e) => [e.maThietBi, e.hanBaoTriTiepTheo || ''])
+    );
+    for (const eq of snap.equipment) {
+      const seedDue = initEqDueByCode.get(eq.maThietBi);
+      if (seedDue === undefined) return true;
+      if ((eq.hanBaoTriTiepTheo || '') !== seedDue) return true;
+    }
+    return false;
+  };
+
   const applyWorkspaceSnapshotToState = (rawSnap: Partial<WorkspaceSnapshotData>) => {
     markApplyingRemoteSnapshot();
     const todayIso = getTodayISODate();
 
-    if (Array.isArray(rawSnap.equipment) && rawSnap.equipment.length > 0) {
-      setEquipment([...rawSnap.equipment].sort((a, b) => a.maThietBi.localeCompare(b.maThietBi)));
-    }
-    if (Array.isArray(rawSnap.maintenancePlans)) {
-      setMaintenancePlans(
-        [...rawSnap.maintenancePlans]
+    const nextHistory = Array.isArray(rawSnap.maintenanceHistory)
+      ? [...rawSnap.maintenanceHistory].sort((a, b) =>
+          (b.ngayThucHien || '').localeCompare(a.ngayThucHien || '')
+        )
+      : latestSnapshotRef.current.maintenanceHistory;
+
+    const nextPlans = Array.isArray(rawSnap.maintenancePlans)
+      ? syncPlansWithHistory(rawSnap.maintenancePlans, nextHistory)
           .map((p) => ({
             ...p,
             trangThai: getMaintenanceStatus(p.ngayBaoTriTiepTheo, todayIso),
           }))
           .sort((a, b) => (a.ngayBaoTriTiepTheo || '').localeCompare(b.ngayBaoTriTiepTheo || ''))
+      : latestSnapshotRef.current.maintenancePlans;
+
+    if (Array.isArray(rawSnap.equipment) && rawSnap.equipment.length > 0) {
+      const syncedEquipment = syncEquipmentDatesWithPlansAndHistory(
+        rawSnap.equipment,
+        nextPlans,
+        nextHistory
       );
+      setEquipment([...syncedEquipment].sort((a, b) => a.maThietBi.localeCompare(b.maThietBi)));
+    }
+    if (Array.isArray(rawSnap.maintenancePlans)) {
+      setMaintenancePlans(nextPlans);
     }
     if (Array.isArray(rawSnap.maintenanceHistory)) {
-      setMaintenanceHistory(
-        [...rawSnap.maintenanceHistory].sort((a, b) =>
-          (b.ngayThucHien || '').localeCompare(a.ngayThucHien || '')
-        )
-      );
+      setMaintenanceHistory(nextHistory);
     }
     if (Array.isArray(rawSnap.tickets)) {
       setTickets(
@@ -1914,6 +1964,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       compressorRuntime: nextCompressorRuntime,
     };
 
+    if (pulled.workspaceMetaExists || pulled.totalLoaded > 0) {
+      markHasVerifiedSyncedData();
+    }
     applyWorkspaceSnapshotToState(mergedSnapshot);
     latestSnapshotRef.current = mergedSnapshot;
     recomputeMergedOnlineUsers();
@@ -2187,8 +2240,12 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (typeof data.revision === 'number') {
         if (data.revision > 0) {
           serverRevisionRef.current = data.revision;
+          setServerRevision(data.revision);
         } else if (prevRev > 0) {
           serverRevisionRef.current = 0;
+          setServerRevision(0);
+        } else {
+          setServerRevision(0);
         }
       }
       if (typeof data.pendingCloudCount === 'number') {
@@ -2210,9 +2267,20 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // auto-rehydrate the server with fresh Cloud Firestore data immediately so all internal users receive it!
       if (data.cloudHydrated === false && cloudUserRef.current) {
         void hydrateServerFromCloudIfNeeded();
+      } else if (
+        (data.revision || 0) === 0 &&
+        !data.updated &&
+        !cloudUserRef.current &&
+        hasVerifiedRealLocalData(latestSnapshotRef.current)
+      ) {
+        // Server just restarted empty (revision 0) and no Google Cloud browser is online yet:
+        // temporarily share this device's verified real synced dataset so newly logged-in browsers
+        // receive up-to-date maintenance dates instead of stale seed defaults.
+        void pushSnapshotToServer('local', latestSnapshotRef.current);
       }
 
       if (data.updated && data.snapshot) {
+        markHasVerifiedSyncedData();
         applyWorkspaceSnapshotToState(data.snapshot);
         // If this browser is connected as Cloud Admin and received newer edits from another device (e.g. internal user),
         // mirror those changes up to Cloud Firestore ONLY when the server snapshot is genuinely Cloud-hydrated.
@@ -2295,6 +2363,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       snapshot: buildSanitizedServerPayload(snap),
       baseRevision: serverRevisionRef.current,
       source,
+      hasVerifiedRealData: source === 'cloud' || hasVerifiedRealLocalData(snap),
     };
 
     if (isAdminActor && (source === 'cloud' || serverRevisionRef.current === 0)) {
@@ -2345,6 +2414,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
       if (data.ok && !data.skipped && typeof data.revision === 'number') {
         serverRevisionRef.current = data.revision;
+        setServerRevision(data.revision);
       }
       if (typeof data.cloudHydrated === 'boolean') {
         serverCloudHydratedRef.current = data.cloudHydrated;
@@ -3278,10 +3348,6 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const ready = workspaceReadyRef.current;
           const prevSnap = latestSnapshotRef.current;
 
-          const nextEquipment =
-            pulledCore.equipment.length > 0 || ready
-              ? [...pulledCore.equipment].sort((a, b) => a.maThietBi.localeCompare(b.maThietBi))
-              : prevSnap.equipment;
           const nextHistory =
             pulledCore.maintenanceHistory.length > 0 || ready
               ? [...pulledCore.maintenanceHistory].sort((a, b) =>
@@ -3293,6 +3359,15 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
               ? pulledCore.maintenancePlans
               : prevSnap.maintenancePlans;
           const nextPlans = syncPlansWithHistory(rawPlans, nextHistory);
+          const rawEquipment =
+            pulledCore.equipment.length > 0 || ready
+              ? pulledCore.equipment
+              : prevSnap.equipment;
+          const nextEquipment = syncEquipmentDatesWithPlansAndHistory(
+            rawEquipment,
+            nextPlans,
+            nextHistory
+          ).sort((a, b) => a.maThietBi.localeCompare(b.maThietBi));
           const nextTickets =
             pulledCore.tickets.length > 0 || ready
               ? [...pulledCore.tickets].sort((a, b) =>
@@ -3598,9 +3673,14 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (applyingRemoteSnapshotRef.current) {
       return;
     }
-    // Never let an unhydrated non-Cloud device seed a freshly restarted server with stale local/seed data.
-    // Individual mutations from internal users are already safely queued via /api/workspace/pending-cloud-op.
-    if (!cloudUserRef.current && !serverCloudHydratedRef.current && serverRevisionRef.current === 0) {
+    // Never let a brand-new / seed-only device seed a freshly restarted server with default seed data.
+    // Verified devices that already carry real synced data CAN temporarily bridge a restarted server.
+    if (
+      !cloudUserRef.current &&
+      !serverCloudHydratedRef.current &&
+      serverRevisionRef.current === 0 &&
+      !hasVerifiedRealLocalData(latestSnapshotRef.current)
+    ) {
       return;
     }
 
@@ -3612,7 +3692,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (
         !applyingRemoteSnapshotRef.current &&
         serverSessionTokenRef.current &&
-        (cloudUserRef.current || serverCloudHydratedRef.current || serverRevisionRef.current > 0)
+        (cloudUserRef.current ||
+          serverCloudHydratedRef.current ||
+          serverRevisionRef.current > 0 ||
+          hasVerifiedRealLocalData(latestSnapshotRef.current))
       ) {
         void pushSnapshotToServer('local');
       }
@@ -7236,6 +7319,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastServerSyncedAt,
         hasServerSyncSession,
         isRealtimeStreamConnected,
+        serverRevision,
         serverCloudHydrated,
         pendingCloudOpsCount,
         connectCloudWithGoogle,

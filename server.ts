@@ -1856,6 +1856,7 @@ async function startServer() {
         snapshot?: unknown;
         baseRevision?: unknown;
         source?: unknown;
+        hasVerifiedRealData?: unknown;
         credentialSeeds?: unknown;
       };
 
@@ -1873,11 +1874,17 @@ async function startServer() {
       }
 
       const source = body.source === 'cloud' ? 'cloud' : 'local';
+      const hasVerifiedRealData = body.hasVerifiedRealData === true;
       const baseRevision = typeof body.baseRevision === 'number' ? body.baseRevision : 0;
 
-      // Guard: prevent unhydrated local/stale device from seeding a freshly restarted server before Cloud hydrates it.
-      // Individual user edits still flow safely through /api/workspace/pending-cloud-op.
-      if (!workspaceStore.cloudHydrated && workspaceStore.revision === 0 && source !== 'cloud') {
+      // Guard: prevent a brand-new / seed-only browser from seeding a freshly restarted server before
+      // either Cloud Firestore or a client holding verified real synced data hydrates it.
+      if (
+        !workspaceStore.cloudHydrated &&
+        workspaceStore.revision === 0 &&
+        source !== 'cloud' &&
+        !hasVerifiedRealData
+      ) {
         res.json({
           ok: true,
           skipped: true,

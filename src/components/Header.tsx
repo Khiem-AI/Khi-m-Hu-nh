@@ -77,6 +77,7 @@ export const Header: React.FC<HeaderProps> = ({
     lastServerSyncedAt,
     hasServerSyncSession,
     isRealtimeStreamConnected,
+    serverRevision,
     serverCloudHydrated,
     pendingCloudOpsCount,
     connectCloudWithGoogle,
@@ -324,7 +325,9 @@ export const Header: React.FC<HeaderProps> = ({
                   : (hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && serverCloudHydrated
                   ? `Đang đồng bộ trực tiếp dữ liệu Cloud mới nhất${lastServerSyncedAt ? ` (${lastServerSyncedAt})` : ''}`
                   : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
-                  ? 'Đang đồng bộ trực tiếp giữa các máy — nhấn để nạp dữ liệu Cloud mới nhất bằng Google'
+                  ? serverRevision === 0
+                    ? 'Máy chủ vừa khởi động lại và chưa có dữ liệu Cloud — nhấn để nạp dữ liệu Cloud mới nhất bằng Google'
+                    : 'Đang đồng bộ giữa các máy — nhấn để liên kết Google Cloud nhằm đồng bộ lên Cloud'
                   : cloudSyncStatus === 'syncing' || serverSyncStatus === 'syncing'
                   ? 'Đang tải dữ liệu đồng bộ...'
                   : 'Nhấn để kích hoạt đồng bộ trực tiếp hoặc kết nối Google Cloud'
@@ -336,7 +339,7 @@ export const Header: React.FC<HeaderProps> = ({
                   : cloudSyncStatus === 'error'
                   ? 'bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/40'
                   : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
-                  ? 'bg-sky-50 dark:bg-sky-500/15 hover:bg-sky-100 dark:hover:bg-sky-500/25 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-500/40'
+                  ? 'bg-amber-50 dark:bg-amber-500/15 hover:bg-amber-100 dark:hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/40'
                   : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
                   ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/40'
                   : 'bg-amber-50 dark:bg-amber-500/15 hover:bg-amber-100 dark:hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/40'
@@ -360,9 +363,9 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               ) : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected ? (
                 <>
-                  <span className="absolute -top-0.5 -right-0.5 sm:static inline-flex h-2 w-2 rounded-full bg-sky-500 shrink-0" />
-                  <Cloud className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
-                  <span className="hidden xl:inline">Đồng bộ Cloud</span>
+                  <span className="absolute -top-0.5 -right-0.5 sm:static inline-flex h-2 w-2 rounded-full bg-amber-500 shrink-0" />
+                  <Cloud className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="hidden xl:inline">Chờ nạp Cloud</span>
                 </>
               ) : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing' ? (
                 <>
@@ -394,7 +397,7 @@ export const Header: React.FC<HeaderProps> = ({
                         : cloudSyncStatus === 'error'
                         ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300'
                         : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
-                        ? 'bg-sky-500/15 text-sky-600 dark:text-sky-300'
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
                         : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
                         ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
                         : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
@@ -407,7 +410,7 @@ export const Header: React.FC<HeaderProps> = ({
                       : (hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && serverCloudHydrated
                       ? 'Trực tuyến'
                       : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
-                      ? 'Sẵn sàng nạp Cloud'
+                      ? 'Chờ nạp Cloud'
                       : cloudSyncStatus === 'connecting'
                       ? 'Đang kết nối'
                       : cloudSyncStatus === 'syncing' || serverSyncStatus === 'syncing'
@@ -445,23 +448,25 @@ export const Header: React.FC<HeaderProps> = ({
                     className={`p-2.5 rounded-xl border space-y-1.5 ${
                       serverCloudHydrated
                         ? 'bg-emerald-50/70 dark:bg-emerald-950/25 border-emerald-200 dark:border-emerald-500/30'
-                        : 'bg-sky-50/80 dark:bg-sky-950/25 border-sky-200 dark:border-sky-500/35'
+                        : 'bg-amber-50/80 dark:bg-amber-950/25 border-amber-200 dark:border-amber-500/35'
                     }`}
                   >
                     <p
                       className={`leading-relaxed font-medium ${
                         serverCloudHydrated
                           ? 'text-emerald-800 dark:text-emerald-200'
-                          : 'text-sky-900 dark:text-sky-200'
+                          : 'text-amber-900 dark:text-amber-200'
                       }`}
                     >
                       {serverCloudHydrated
                         ? 'Đang bật đồng bộ trực tiếp theo thời gian thực. Mọi dữ liệu bạn nhập sẽ tự động cập nhật ngay sang các máy tính khác và chuyển tiếp lên Cloud.'
-                        : `Đồng bộ giữa các máy đang hoạt động. Vì máy chủ vừa khởi động lại, hãy bấm nút Liên kết Google Cloud bên dưới 1 lần${
+                        : serverRevision === 0
+                        ? `Máy chủ vừa khởi động lại nên chưa có bản dữ liệu Cloud mới nhất. Bấm Liên kết Google Cloud bên dưới 1 lần${
                             currentUser.email && currentUser.email.includes('@')
                               ? ` (${currentUser.email.trim()})`
                               : ''
-                          } để tải ngay dữ liệu Cloud mới nhất — trình duyệt sẽ tự nhớ cho các lần sau.`}
+                          } để nạp ngay dữ liệu mới nhất cho tất cả các máy.`
+                        : `Đang chia sẻ dữ liệu tạm giữa các máy. Bấm Liên kết Google Cloud bên dưới 1 lần để đồng bộ đầy đủ với Cloud Firestore.`}
                     </p>
                     <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-400">
                       {lastServerSyncedAt && (
@@ -478,8 +483,8 @@ export const Header: React.FC<HeaderProps> = ({
                           • Đã đồng bộ mới nhất
                         </span>
                       ) : (
-                        <span className="text-sky-700 dark:text-sky-300 font-semibold">
-                          • Tự động cập nhật ngay khi có máy Google trực tuyến
+                        <span className="text-amber-700 dark:text-amber-300 font-semibold">
+                          • Chưa nạp từ Google Cloud
                         </span>
                       )}
                     </div>

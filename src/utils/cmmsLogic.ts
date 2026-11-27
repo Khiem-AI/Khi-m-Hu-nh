@@ -1,4 +1,5 @@
 import {
+  Equipment,
   MaintenanceFrequency,
   StockTransactionType,
   MaintenancePlan,
@@ -212,7 +213,11 @@ export function syncPlansWithHistory(
   return plans.map((plan) => {
     const latest = latestHistoryMap.get(plan.maThietBi);
     if (latest) {
-      const nextDate = calculateNextMaintenanceDate(latest.ngayThucHien, plan.tanSuat);
+      const alreadySyncedToLatest =
+        plan.ngayBaoTriGanNhat === latest.ngayThucHien && Boolean(plan.ngayBaoTriTiepTheo);
+      const nextDate = alreadySyncedToLatest
+        ? plan.ngayBaoTriTiepTheo
+        : calculateNextMaintenanceDate(latest.ngayThucHien, plan.tanSuat);
       const newStatus = getMaintenanceStatus(nextDate);
       return {
         ...plan,
@@ -226,6 +231,56 @@ export function syncPlansWithHistory(
       ...plan,
       trangThai: status,
     };
+  });
+}
+
+/**
+ * Keeps each equipment record's hanBaoTriTiepTheo strictly synchronized with
+ * the latest maintenance plans and planned maintenance history so EquipmentTab
+ * and MaintenanceTab never show conflicting due dates after remote sync.
+ */
+export function syncEquipmentDatesWithPlansAndHistory(
+  equipmentList: Equipment[],
+  plans: MaintenancePlan[],
+  history: MaintenanceHistory[]
+): Equipment[] {
+  const planByEq = new Map<string, MaintenancePlan>();
+  for (const p of plans) {
+    if (!p.maThietBi || !p.ngayBaoTriTiepTheo) continue;
+    const prev = planByEq.get(p.maThietBi);
+    if (!prev || (p.ngayBaoTriTiepTheo || '') > (prev.ngayBaoTriTiepTheo || '')) {
+      planByEq.set(p.maThietBi, p);
+    }
+  }
+
+  const latestHistoryMap = new Map<string, MaintenanceHistory>();
+  for (const h of history) {
+    if (getHistoryWorkType(h) === 'Sửa chữa') continue;
+    const existing = latestHistoryMap.get(h.maThietBi);
+    if (!existing || new Date(h.ngayThucHien).getTime() > new Date(existing.ngayThucHien).getTime()) {
+      latestHistoryMap.set(h.maThietBi, h);
+    }
+  }
+
+  return equipmentList.map((eq) => {
+    const matchingPlan = planByEq.get(eq.maThietBi);
+    if (matchingPlan?.ngayBaoTriTiepTheo && matchingPlan.ngayBaoTriTiepTheo !== eq.hanBaoTriTiepTheo) {
+      return {
+        ...eq,
+        hanBaoTriTiepTheo: matchingPlan.ngayBaoTriTiepTheo,
+      };
+    }
+    const latestHist = latestHistoryMap.get(eq.maThietBi);
+    if (latestHist && eq.tanSuat) {
+      const computedNext = calculateNextMaintenanceDate(latestHist.ngayThucHien, eq.tanSuat);
+      if (computedNext && (!eq.hanBaoTriTiepTheo || computedNext > eq.hanBaoTriTiepTheo)) {
+        return {
+          ...eq,
+          hanBaoTriTiepTheo: computedNext,
+        };
+      }
+    }
+    return eq;
   });
 }
 

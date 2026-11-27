@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo, ReactNode, useCallback, useEffect, useState } from 'react';
+import { Cloud, RefreshCw, X } from 'lucide-react';
 import { CMMSProvider, useCMMS } from './context/CMMSContext';
 import { Header } from './components/Header';
 import { Navigation } from './components/Navigation';
@@ -46,9 +47,23 @@ import { WebNotificationToast } from './components/common/WebNotificationToast';
 import { Equipment, MaintenanceWorkType, Ticket, SparePart, CostRecord } from './types/cmms';
 
 function CMMSApp() {
-  const { theme, isAuthenticated, currentUser, setActiveViewId } = useCMMS();
+  const {
+    theme,
+    isAuthenticated,
+    currentUser,
+    setActiveViewId,
+    cloudUser,
+    serverSyncStatus,
+    hasServerSyncSession,
+    serverRevision,
+    serverCloudHydrated,
+    connectCloudWithGoogle,
+  } = useCMMS();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [dismissedCloudHydrateBanner, setDismissedCloudHydrateBanner] = useState(false);
+  const [isHydratingCloudBanner, setIsHydratingCloudBanner] = useState(false);
+  const [cloudBannerError, setCloudBannerError] = useState<string | null>(null);
   const [isDesktopSidebarPinned, setIsDesktopSidebarPinned] = useState<boolean>(() => {
     try {
       return localStorage.getItem('cmms_desktop_sidebar_pinned') !== 'false';
@@ -243,6 +258,60 @@ function CMMSApp() {
             isDesktopSidebarPinned ? 'lg:p-8 max-w-7xl' : 'lg:py-7 lg:px-10 max-w-[1600px]'
           }`}
         >
+          {!cloudUser &&
+            !serverCloudHydrated &&
+            serverRevision === 0 &&
+            (hasServerSyncSession || serverSyncStatus === 'synced') &&
+            !dismissedCloudHydrateBanner && (
+              <div className="mb-4 rounded-2xl border border-amber-300/80 dark:border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/35 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-start sm:items-center gap-2.5 text-amber-900 dark:text-amber-100">
+                  <Cloud className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5 sm:mt-0" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold">
+                      Máy chủ vừa khởi động lại và chưa tải dữ liệu bảo trì mới nhất từ Cloud.
+                    </p>
+                    <p className="text-amber-800/90 dark:text-amber-200/85">
+                      Nhấn <strong>Nạp dữ liệu Cloud (Google)</strong> 1 lần để cập nhật đồng bộ dữ liệu thật cho tất cả thiết bị đang mở.
+                    </p>
+                    {cloudBannerError && (
+                      <p className="text-rose-600 dark:text-rose-300 font-medium pt-0.5">
+                        {cloudBannerError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isHydratingCloudBanner}
+                    onClick={async () => {
+                      setIsHydratingCloudBanner(true);
+                      setCloudBannerError(null);
+                      const res = await connectCloudWithGoogle();
+                      setIsHydratingCloudBanner(false);
+                      if (!res.success) {
+                        setCloudBannerError(res.message);
+                      }
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold transition disabled:opacity-50"
+                  >
+                    <RefreshCw
+                      className={`w-3.5 h-3.5 ${isHydratingCloudBanner ? 'animate-spin' : ''}`}
+                    />
+                    <span>Nạp dữ liệu Cloud (Google)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDismissedCloudHydrateBanner(true)}
+                    aria-label="Đóng thông báo"
+                    className="p-1.5 rounded-lg text-amber-700 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-800/40 transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+
           {activeTab === 'dashboard' && (
             <DashboardTab
               onOpenScanner={() => setIsScannerOpen(true)}
