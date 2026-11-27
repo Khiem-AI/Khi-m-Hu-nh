@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
@@ -271,7 +271,12 @@ export const MorningChecksTab: React.FC = () => {
   // Modal 4: Delete Confirmation Modal
   const [checkToDelete, setCheckToDelete] = useState<DailyAreaCheck | null>(null);
 
+  const lastTemplatesJsonRef = useRef<string>(JSON.stringify(morningCheckTemplates));
+
   useEffect(() => {
+    const serialized = JSON.stringify(morningCheckTemplates);
+    if (isBatchModalOpen || serialized === lastTemplatesJsonRef.current) return;
+    lastTemplatesJsonRef.current = serialized;
     setBatchAssignees({
       'Vòng trong': morningCheckTemplates['Vòng trong'].nguoiMacDinh || '',
       'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].nguoiMacDinh || '',
@@ -282,7 +287,7 @@ export const MorningChecksTab: React.FC = () => {
       'Vòng Ngoài': morningCheckTemplates['Vòng Ngoài'].moTaCongViec,
       'Phòng Utility': morningCheckTemplates['Phòng Utility'].moTaCongViec,
     });
-  }, [morningCheckTemplates]);
+  }, [morningCheckTemplates, isBatchModalOpen]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);

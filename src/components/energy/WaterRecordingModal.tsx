@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { WATER_DAILY_METERS, MeterReading, WaterMonthly } from '../../types/cmms';
 import { NumericInput } from '../common/NumericInput';
@@ -161,8 +161,17 @@ export const WaterRecordingModal: React.FC<WaterRecordingModalProps> = ({
     setMonthlySewageUSDInput(sUSD);
   };
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedKeyRef.current = null;
+      return;
+    }
+    const nextKey = editingRecord ? `edit:${editingRecord.month}` : `new:${initialMode}`;
+    if (initializedKeyRef.current === nextKey) return;
+    initializedKeyRef.current = nextKey;
+
     setDailyError('');
     setDailySuccess(false);
     setMonthlyError('');

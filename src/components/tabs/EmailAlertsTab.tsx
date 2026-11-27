@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
 import { EmailLog, NotificationDeliveryMode } from '../../types/cmms';
@@ -122,7 +122,12 @@ export const EmailAlertsTab: React.FC = () => {
   const [webhookUrl, setWebhookUrl] = useState(emailConfig.webhookUrl || '');
   const [autoDispatchMethod, setAutoDispatchMethod] = useState(emailConfig.autoDispatchMethod);
 
+  const lastEmailConfigJsonRef = useRef<string>(JSON.stringify(emailConfig));
+
   useEffect(() => {
+    const serialized = JSON.stringify(emailConfig);
+    if (serialized === lastEmailConfigJsonRef.current) return;
+    lastEmailConfigJsonRef.current = serialized;
     setEnabled(emailConfig.enabled);
     setNotificationMode(emailConfig.notificationMode || 'both');
     setEnableBrowserNotifications(emailConfig.enableBrowserNotifications ?? true);

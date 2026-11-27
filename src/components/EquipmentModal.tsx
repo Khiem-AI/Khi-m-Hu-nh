@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Equipment, MaintenanceFrequency, RiskLevel, EquipmentStatus } from '../types/cmms';
 import { canAssignWork, parseAssigneeNames, resolveAssigneeEmails, isAdminLevel, isPlaceholderEmail, isValidEmailFormat } from '../utils/cmmsLogic';
@@ -64,8 +64,17 @@ export const EquipmentModal: React.FC<EquipmentModalProps> = ({
   const [error, setError] = useState('');
   const [emailFailure, setEmailFailure] = useState<string | null>(null);
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedKeyRef.current = null;
+      return;
+    }
+    const nextKey = equipmentToEdit ? `edit:${equipmentToEdit.maThietBi}` : 'new';
+    if (initializedKeyRef.current === nextKey) return;
+    initializedKeyRef.current = nextKey;
+
     if (equipmentToEdit) {
       setMaThietBi(equipmentToEdit.maThietBi);
       setTenThietBi(equipmentToEdit.tenThietBi);

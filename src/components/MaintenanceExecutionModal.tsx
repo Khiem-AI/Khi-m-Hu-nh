@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Equipment, MaintenanceHistory, MaintenanceResult, MaintenanceWorkType } from '../types/cmms';
 import { useCMMS } from '../context/CMMSContext';
 import {
@@ -93,8 +93,21 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
   const [isConnectingGmail, setIsConnectingGmail] = useState(false);
   const [error, setError] = useState('');
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!shouldOpen) return;
+    if (!shouldOpen) {
+      initializedKeyRef.current = null;
+      return;
+    }
+    const nextKey = initialRecord
+      ? `edit:${initialRecord.id}`
+      : propEquipment
+      ? `eq:${propEquipment.maThietBi}:${defaultWorkType}`
+      : `new:${defaultWorkType}`;
+    if (initializedKeyRef.current === nextKey) return;
+    initializedKeyRef.current = nextKey;
+
     setError('');
     setSendCompletionEmail(Boolean(emailConfig.enabled));
     if (initialRecord) {
@@ -129,7 +142,7 @@ export const MaintenanceExecutionModal: React.FC<MaintenanceExecutionModalProps>
       setAnhTruocXuLy('');
       setChiPhiUocTinh(0);
     }
-  }, [shouldOpen, initialRecord, propEquipment, defaultEngineer, defaultWorkType, allowAssignWork, currentUser.tenNhanVien, emailConfig.enabled]);
+  }, [shouldOpen, initialRecord, propEquipment, defaultEngineer, defaultWorkType, allowAssignWork, currentUser.tenNhanVien, emailConfig.enabled, today]);
 
   if (!shouldOpen || !activeEquipment) return null;
 

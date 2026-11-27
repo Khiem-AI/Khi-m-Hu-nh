@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { SparePart } from '../types/cmms';
 import { canViewCosts } from '../utils/cmmsLogic';
@@ -31,8 +31,17 @@ export const SparePartModal: React.FC<SparePartModalProps> = ({
   const [donGia, setDonGia] = useState(partToEdit?.donGia ?? 500000);
   const [error, setError] = useState('');
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedKeyRef.current = null;
+      return;
+    }
+    const nextKey = partToEdit ? `edit:${partToEdit.maVatTu}` : 'new';
+    if (initializedKeyRef.current === nextKey) return;
+    initializedKeyRef.current = nextKey;
+
     if (partToEdit) {
       setMaVatTu(partToEdit.maVatTu || '');
       setTenVatTu(partToEdit.tenVatTu || '');

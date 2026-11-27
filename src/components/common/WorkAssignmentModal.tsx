@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useCMMS } from '../../context/CMMSContext';
 import { UI_TEXTS } from '../../config/uiTexts';
@@ -76,25 +76,33 @@ export const WorkAssignmentModal: React.FC<WorkAssignmentModalProps> = ({
     recipient: string;
   } | null>(null);
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (isOpen) {
-      const initialAssignee = currentAssignee || '';
-      const initialAssigner = currentAssigner || currentUser.tenNhanVien || '';
-      setAssigneeName(initialAssignee);
-      setAssignerName(initialAssigner);
-      const details = resolveAssigneeEmailDetails(
-        initialAssignee,
-        employees,
-        emailConfig.primaryRecipient
-      );
-      setRecipientEmail(details.emails.join(', '));
-      setSaveEmailToProfile(true);
-      setNote('');
-      setSendEmail(true);
-      setError('');
-      setDispatchFailure(null);
+    if (!isOpen) {
+      initializedKeyRef.current = null;
+      return;
     }
-  }, [isOpen, currentAssignee, currentAssigner, currentUser.tenNhanVien, employees, emailConfig.primaryRecipient]);
+    const nextKey = `${module}:${targetId}`;
+    if (initializedKeyRef.current === nextKey) return;
+    initializedKeyRef.current = nextKey;
+
+    const initialAssignee = currentAssignee || '';
+    const initialAssigner = currentAssigner || currentUser.tenNhanVien || '';
+    setAssigneeName(initialAssignee);
+    setAssignerName(initialAssigner);
+    const details = resolveAssigneeEmailDetails(
+      initialAssignee,
+      employees,
+      emailConfig.primaryRecipient
+    );
+    setRecipientEmail(details.emails.join(', '));
+    setSaveEmailToProfile(true);
+    setNote('');
+    setSendEmail(true);
+    setError('');
+    setDispatchFailure(null);
+  }, [isOpen, module, targetId, currentAssignee, currentAssigner, currentUser.tenNhanVien, employees, emailConfig.primaryRecipient]);
 
   if (!isOpen || !canAssignWork(currentUser)) return null;
 

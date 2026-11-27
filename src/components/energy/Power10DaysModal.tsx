@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useCMMS } from '../../context/CMMSContext';
 import { Power10Days } from '../../types/cmms';
 import { isAdminLevel } from '../../utils/cmmsLogic';
@@ -96,8 +96,17 @@ export const Power10DaysModal: React.FC<Power10DaysModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedKeyRef.current = null;
+      return;
+    }
+    const nextKey = editingRecord ? `edit:${editingRecord.id}` : 'new';
+    if (initializedKeyRef.current === nextKey) return;
+    initializedKeyRef.current = nextKey;
+
     setErrorMsg('');
     setSavedSuccess(false);
     if (editingRecord) {

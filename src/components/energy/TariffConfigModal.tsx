@@ -29,16 +29,22 @@ export const TariffConfigModal: React.FC<TariffConfigModalProps> = ({ isOpen, on
   }));
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  const wasOpenRef = React.useRef(false);
+
   React.useEffect(() => {
-    if (isOpen) {
-      setForm({
-        ...DEFAULT_ENERGY_TARIFF_CONFIG,
-        ...tariffConfig,
-        solarBT: tariffConfig.evnBT,
-        solarCD: tariffConfig.evnCD,
-        solarDiscountPct: getSolarDiscountPct(tariffConfig),
-      });
+    if (!isOpen) {
+      wasOpenRef.current = false;
+      return;
     }
+    if (wasOpenRef.current) return;
+    wasOpenRef.current = true;
+    setForm({
+      ...DEFAULT_ENERGY_TARIFF_CONFIG,
+      ...tariffConfig,
+      solarBT: tariffConfig.evnBT,
+      solarCD: tariffConfig.evnCD,
+      solarDiscountPct: getSolarDiscountPct(tariffConfig),
+    });
   }, [isOpen, tariffConfig]);
 
   if (!isOpen) return null;

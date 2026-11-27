@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { MeterReading } from '../../types/cmms';
 import { useCMMS } from '../../context/CMMSContext';
 import { calculateMeterConsumption, isAdminLevel } from '../../utils/cmmsLogic';
@@ -38,8 +38,16 @@ export const MeterReadingEditModal: React.FC<MeterReadingEditModalProps> = ({
   const [errorMsg, setErrorMsg] = useState('');
   const [savedSuccess, setSavedSuccess] = useState(false);
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!isOpen || !record) return;
+    if (!isOpen || !record) {
+      initializedKeyRef.current = null;
+      return;
+    }
+    if (initializedKeyRef.current === record.id) return;
+    initializedKeyRef.current = record.id;
+
     setNgayChot(record.ngayChot);
     setTimestamp(record.timestamp);
     setNguon(record.nguon);

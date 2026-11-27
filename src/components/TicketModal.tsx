@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useCMMS } from '../context/CMMSContext';
 import { Ticket, TicketPriority, TicketStatus } from '../types/cmms';
 import { canAssignWork, getTodayISODate, isAdminLevel, parseAssigneeNames } from '../utils/cmmsLogic';
@@ -59,8 +59,19 @@ export const TicketModal: React.FC<TicketModalProps> = ({
   const [isConnectingGmail, setIsConnectingGmail] = useState(false);
   const [error, setError] = useState('');
 
+  const initializedKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      initializedKeyRef.current = null;
+      return;
+    }
+    const nextKey = ticketToEdit
+      ? `edit:${ticketToEdit.maTicket}`
+      : `new:${defaultEquipmentCode || ''}`;
+    if (initializedKeyRef.current === nextKey) return;
+    initializedKeyRef.current = nextKey;
+
     if (ticketToEdit) {
       setTieuDe(ticketToEdit.tieuDe);
       setMoTaChiTiet(ticketToEdit.moTaChiTiet);
