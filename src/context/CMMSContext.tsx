@@ -125,6 +125,7 @@ import {
   deleteCloudDoc,
   formatFirestoreSyncError,
   propagateAllowedEmails,
+  pullEquipmentAndMaintenanceFromFirestore,
   pullLatestWorkspaceFromFirestore,
   sanitizeAuditLog,
   sanitizeCostRecord,
@@ -478,6 +479,14 @@ interface CMMSContextType {
   forceSyncLocalToCloud: () => Promise<{ success: boolean; message: string }>;
   pullLatestFromCloud: () => Promise<{ success: boolean; message: string }>;
   pullLatestFromServer: () => Promise<{ success: boolean; message: string }>;
+  isRefreshingData: boolean;
+  lastForceRefreshedAt: string | null;
+  dataCacheVersion: number;
+  forceRefreshData: (options?: {
+    scope?: 'equipment_maintenance' | 'all';
+    manual?: boolean;
+    reason?: string;
+  }) => Promise<{ success: boolean; updated: boolean; message: string }>;
 
   // Live Online Users Presence
   onlineUsers: OnlineUserPresence[];
@@ -852,6 +861,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [serverCloudHydrated, setServerCloudHydrated] = useState<boolean>(false);
   const [pendingCloudOpsCount, setPendingCloudOpsCount] = useState<number>(0);
   const [sseReconnectNonce, setSseReconnectNonce] = useState<number>(0);
+  const [isRefreshingData, setIsRefreshingData] = useState<boolean>(false);
+  const [lastForceRefreshedAt, setLastForceRefreshedAt] = useState<string | null>(null);
+  const [dataCacheVersion, setDataCacheVersion] = useState<number>(0);
 
   const cloudUserRef = useRef<CloudAccountInfo | null>(null);
   const pendingCloudFbUserRef = useRef<User | null>(null);
@@ -867,6 +879,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Bearer session token kept strictly in JS memory (never persisted to localStorage/sessionStorage)
   const serverSessionTokenRef = useRef<string | null>(null);
   const serverRevisionRef = useRef<number>(0);
+  const serverCloudHydratedRef = useRef<boolean>(false);
   const applyingRemoteSnapshotRef = useRef<boolean>(false);
   const initialServerSyncDoneRef = useRef<boolean>(false);
   const localServerPushTimerRef = useRef<number | null>(null);
@@ -874,6 +887,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const hasMountedSyncWatcherRef = useRef<boolean>(false);
   const flushingCloudOpsRef = useRef<boolean>(false);
   const hydratingServerFromCloudRef = useRef<boolean>(false);
+  const inFlightForceRefreshRef = useRef<Promise<{
+    success: boolean;
+    updated: boolean;
+    message: string;
+  }> | null>(null);
+  const lastAutoRefreshAtRef = useRef<number>(0);
+  const lastAutoRefreshTabRef = useRef<string>('');
 
   const buildSyncFetchHeaders = (includeJson = true): Record<string, string> => {
     const headers: Record<string, string> = {
@@ -952,6 +972,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
+
+  useEffect(() => {
+    serverCloudHydratedRef.current = serverCloudHydrated;
+  }, [serverCloudHydrated]);
 
   const latestSnapshotRef = useRef<WorkspaceSnapshotData>({
     equipment,
@@ -2091,12 +2115,20 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       };
     }
 
-    setServerSyncStatus('syncing');
+    if (!initialServerSyncDoneRef.current) {
+      setServerSyncStatus('syncing');
+    }
     try {
       const sinceParam = forceFull ? 0 : serverRevisionRef.current;
-      const resp = await fetch(`/api/workspace/state?since=${sinceParam}`, {
+      const cacheBuster = forceFull ? `&_t=${Date.now()}` : '';
+      const resp = await fetch(`/api/workspace/state?since=${sinceParam}${cacheBuster}`, {
         credentials: 'include',
-        headers: buildSyncFetchHeaders(false),
+        cache: 'no-store',
+        headers: {
+          ...buildSyncFetchHeaders(false),
+          'Cache-Control': 'no-cache',
+          Pragma: 'no-cache',
+        },
       });
 
       if (resp.status === 401) {
@@ -2148,6 +2180,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setPendingCloudOpsCount(data.pendingCloudCount);
       }
       if (typeof data.cloudHydrated === 'boolean') {
+        serverCloudHydratedRef.current = data.cloudHydrated;
         setServerCloudHydrated(data.cloudHydrated);
       }
       setHasServerSyncSession(true);
@@ -2167,10 +2200,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (data.updated && data.snapshot) {
         applyWorkspaceSnapshotToState(data.snapshot);
         // If this browser is connected as Cloud Admin and received newer edits from another device (e.g. internal user),
-        // mirror those changes up to Cloud Firestore so Cloud stays permanently updated too.
+        // mirror those changes up to Cloud Firestore ONLY when the server snapshot is genuinely Cloud-hydrated.
         const cloudU = cloudUserRef.current;
         if (
           !forceFull &&
+          data.cloudHydrated === true &&
           prevRev > 0 &&
           typeof data.revision === 'number' &&
           data.revision > prevRev &&
@@ -2252,7 +2286,9 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       payload.credentialSeeds = buildAdminCredentialSeeds(snap.employees);
     }
 
-    setServerSyncStatus('syncing');
+    if (!initialServerSyncDoneRef.current) {
+      setServerSyncStatus('syncing');
+    }
     try {
       const resp = await fetch('/api/workspace/sync', {
         method: 'POST',
@@ -2287,14 +2323,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const data = (await resp.json()) as {
         ok?: boolean;
+        skipped?: boolean;
         revision?: number;
         cloudHydrated?: boolean;
         pendingCloudCount?: number;
       };
-      if (data.ok && typeof data.revision === 'number') {
+      if (data.ok && !data.skipped && typeof data.revision === 'number') {
         serverRevisionRef.current = data.revision;
       }
       if (typeof data.cloudHydrated === 'boolean') {
+        serverCloudHydratedRef.current = data.cloudHydrated;
         setServerCloudHydrated(data.cloudHydrated);
       }
       if (typeof data.pendingCloudCount === 'number') {
@@ -2304,7 +2342,7 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       initialServerSyncDoneRef.current = true;
       setServerSyncStatus('synced');
       setLastServerSyncedAt(new Date().toLocaleTimeString('vi-VN'));
-      return true;
+      return !data.skipped;
     } catch {
       setServerSyncStatus('error');
       return false;
@@ -3116,6 +3154,188 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { success: res.success, message: res.message };
   };
 
+  /**
+   * Force Refresh & Cache Invalidation mechanism:
+   * Bypasses client/Firestore/HTTP caches to re-fetch the latest Equipment & Maintenance records
+   * (or full workspace) from Cloud Firestore and/or the shared server without requiring a full page reload.
+   */
+  const forceRefreshData = async (options?: {
+    scope?: 'equipment_maintenance' | 'all';
+    manual?: boolean;
+    reason?: string;
+  }): Promise<{ success: boolean; updated: boolean; message: string }> => {
+    const scope = options?.scope || 'equipment_maintenance';
+    const isManual = options?.manual === true;
+    const reason = options?.reason || 'manual';
+
+    if (!isAuthenticated) {
+      return { success: false, updated: false, message: 'Chưa đăng nhập phiên làm việc.' };
+    }
+
+    // Deduplicate concurrent in-flight refreshes
+    if (inFlightForceRefreshRef.current) {
+      return inFlightForceRefreshRef.current;
+    }
+
+    // Brief cooldown for automatic tab-entry refreshes to protect Firestore quota on rapid tab clicks
+    const now = Date.now();
+    if (
+      !isManual &&
+      now - lastAutoRefreshAtRef.current < 2500 &&
+      lastAutoRefreshTabRef.current === reason
+    ) {
+      return {
+        success: true,
+        updated: false,
+        message: 'Dữ liệu vừa được làm mới.',
+      };
+    }
+
+    const runRefresh = async (): Promise<{
+      success: boolean;
+      updated: boolean;
+      message: string;
+    }> => {
+      if (isManual) {
+        setIsRefreshingData(true);
+      }
+      if (!isManual) {
+        lastAutoRefreshAtRef.current = Date.now();
+        lastAutoRefreshTabRef.current = reason;
+      }
+
+      try {
+        const cloudUserNow = cloudUserRef.current;
+        if (cloudUserNow) {
+          // Ensure any queued internal-user mutations are flushed to Cloud before reading fresh state
+          if (serverSessionTokenRef.current || hasServerSyncSession) {
+            await flushPendingCloudOpsToFirestore();
+          }
+
+          if (scope === 'all') {
+            const pulled = await pullLatestWorkspaceFromFirestore(
+              cloudUserNow.email,
+              cloudUserNow.uid,
+              knownCloudIdsRef.current
+            );
+            const freshSnapshot = applyPulledCloudDataToState(pulled);
+            setLastSyncedAt(new Date().toLocaleTimeString('vi-VN'));
+            setCloudSyncStatus('synced');
+            setLastForceRefreshedAt(new Date().toLocaleTimeString('vi-VN'));
+            setDataCacheVersion((v) => v + 1);
+
+            if (
+              serverSessionTokenRef.current &&
+              (pulled.workspaceMetaExists || pulled.totalLoaded > 0)
+            ) {
+              void pushSnapshotToServer('cloud', freshSnapshot);
+            }
+
+            return {
+              success: true,
+              updated: true,
+              message: `Đã làm mới toàn bộ dữ liệu từ Cloud (${pulled.totalLoaded} bản ghi).`,
+            };
+          }
+
+          // Targeted server-first cache invalidation for Equipment, Maintenance Plans, History, Tickets & Inspections
+          const pulledCore = await pullEquipmentAndMaintenanceFromFirestore(
+            cloudUserNow.email,
+            cloudUserNow.uid,
+            knownCloudIdsRef.current
+          );
+          const ready = workspaceReadyRef.current;
+          const prevSnap = latestSnapshotRef.current;
+
+          const nextEquipment =
+            pulledCore.equipment.length > 0 || ready
+              ? [...pulledCore.equipment].sort((a, b) => a.maThietBi.localeCompare(b.maThietBi))
+              : prevSnap.equipment;
+          const nextHistory =
+            pulledCore.maintenanceHistory.length > 0 || ready
+              ? [...pulledCore.maintenanceHistory].sort((a, b) =>
+                  (b.ngayThucHien || '').localeCompare(a.ngayThucHien || '')
+                )
+              : prevSnap.maintenanceHistory;
+          const rawPlans =
+            pulledCore.maintenancePlans.length > 0 || ready
+              ? pulledCore.maintenancePlans
+              : prevSnap.maintenancePlans;
+          const nextPlans = syncPlansWithHistory(rawPlans, nextHistory);
+          const nextTickets =
+            pulledCore.tickets.length > 0 || ready
+              ? [...pulledCore.tickets].sort((a, b) =>
+                  (b.ngayTao || '').localeCompare(a.ngayTao || '')
+                )
+              : prevSnap.tickets;
+          const nextInspections =
+            pulledCore.safetyInspections.length > 0 || ready
+              ? pulledCore.safetyInspections.map((item) => ({
+                  ...item,
+                  trangThai: getInspectionStatus(
+                    item.ngayHetHan,
+                    item.nhacTruocNgay ?? 30,
+                    item.trangThai === 'Đang kiểm định'
+                  ),
+                }))
+              : prevSnap.safetyInspections;
+
+          markApplyingRemoteSnapshot();
+          setEquipment(nextEquipment);
+          setMaintenanceHistory(nextHistory);
+          setMaintenancePlans(nextPlans);
+          setTickets(nextTickets);
+          setSafetyInspections(nextInspections);
+
+          latestSnapshotRef.current = {
+            ...prevSnap,
+            equipment: nextEquipment,
+            maintenanceHistory: nextHistory,
+            maintenancePlans: nextPlans,
+            tickets: nextTickets,
+            safetyInspections: nextInspections,
+          };
+
+          const nowLabel = new Date().toLocaleTimeString('vi-VN');
+          setLastSyncedAt(nowLabel);
+          setLastForceRefreshedAt(nowLabel);
+          setDataCacheVersion((v) => v + 1);
+
+          return {
+            success: true,
+            updated: true,
+            message: `Đã làm mới ${nextEquipment.length} thiết bị, ${nextPlans.length} kế hoạch & ${nextHistory.length} lịch sử bảo trì từ Cloud.`,
+          };
+        }
+
+        // Non-Cloud (internal session) path: invalidate local revision cache and force full cache-busted fetch from shared server
+        serverRevisionRef.current = 0;
+        const serverRes = await pullLatestFromServerInternal(true);
+        if (serverRes.success) {
+          setLastForceRefreshedAt(new Date().toLocaleTimeString('vi-VN'));
+          setDataCacheVersion((v) => v + 1);
+        }
+        return serverRes;
+      } catch (err) {
+        const msg = formatFirestoreSyncError(err);
+        return {
+          success: false,
+          updated: false,
+          message: msg || 'Không thể làm mới dữ liệu lúc này.',
+        };
+      } finally {
+        if (isManual) {
+          setIsRefreshingData(false);
+        }
+        inFlightForceRefreshRef.current = null;
+      }
+    };
+
+    const promise = runRefresh();
+    inFlightForceRefreshRef.current = promise;
+    return promise;
+  };
+
   const forceSyncLocalToCloud = async (): Promise<{ success: boolean; message: string }> => {
     const user = cloudUserRef.current;
     if (!user) {
@@ -3310,6 +3530,31 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [isAuthenticated]);
 
+  // Automatic Force Refresh & Cache Invalidation when entering main tabs
+  const forceRefreshDataRef = useRef(forceRefreshData);
+  forceRefreshDataRef.current = forceRefreshData;
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    const MAIN_REFRESH_TABS = new Set([
+      'dashboard',
+      'admin_dashboard',
+      'my_tasks',
+      'equipment',
+      'maintenance',
+      'safety_inspection',
+      'tickets',
+      'monthly_report',
+    ]);
+    if (!MAIN_REFRESH_TABS.has(activeViewId)) return;
+
+    void forceRefreshDataRef.current({
+      scope: 'equipment_maintenance',
+      manual: false,
+      reason: `tab:${activeViewId}`,
+    });
+  }, [isAuthenticated, activeViewId]);
+
   // Real-time debounced auto-push (350ms) of user edits to shared Server Workspace (guarded against echo loops)
   useEffect(() => {
     if (!hasMountedSyncWatcherRef.current) {
@@ -3322,13 +3567,22 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (applyingRemoteSnapshotRef.current) {
       return;
     }
+    // Never let an unhydrated non-Cloud device seed a freshly restarted server with stale local/seed data.
+    // Individual mutations from internal users are already safely queued via /api/workspace/pending-cloud-op.
+    if (!cloudUserRef.current && !serverCloudHydratedRef.current && serverRevisionRef.current === 0) {
+      return;
+    }
 
     if (localServerPushTimerRef.current) {
       window.clearTimeout(localServerPushTimerRef.current);
     }
     localServerPushTimerRef.current = window.setTimeout(() => {
       localServerPushTimerRef.current = null;
-      if (!applyingRemoteSnapshotRef.current && serverSessionTokenRef.current) {
+      if (
+        !applyingRemoteSnapshotRef.current &&
+        serverSessionTokenRef.current &&
+        (cloudUserRef.current || serverCloudHydratedRef.current || serverRevisionRef.current > 0)
+      ) {
         void pushSnapshotToServer('local');
       }
     }, 350);
@@ -6440,7 +6694,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isAuto: boolean = false,
     options?: { userConfirmed?: boolean }
   ): Promise<{ sentCount: number; dueCount: number; result?: EmailSendResult }> => {
-    const dueItems = safetyInspections.filter((item) => {
+    const liveInspections = latestSnapshotRef.current.safetyInspections;
+    const liveEmailConfig = latestSnapshotRef.current.emailConfig;
+
+    const dueItems = liveInspections.filter((item) => {
       const status = getInspectionStatus(
         item.ngayHetHan,
         item.nhacTruocNgay ?? 30,
@@ -6461,8 +6718,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const recipientEmails = Array.from(
       new Set(
         [
-          emailConfig.primaryRecipient,
-          ...dueItems.map((i) => i.emailCanhBao).filter((e): e is string => Boolean(e && e.trim())),
+          liveEmailConfig.primaryRecipient,
+          ...dueItems
+            .map((i) => i.emailCanhBao)
+            .filter(
+              (e): e is string =>
+                Boolean(e && e.trim() && !e.trim().toLowerCase().endsWith('@factory.com'))
+            ),
         ].filter(Boolean)
       )
     ).join(', ');
@@ -6480,13 +6742,13 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       body += `   - Phân loại: ${item.phanLoai} | Hạn: ${item.ngayHetHan} | Phụ trách: ${item.nguoiPhuTrach} | Đơn vị: ${item.donViKiemDinh}\n`;
     });
 
-    body += `\nĐề nghị bộ phận kỹ thuật liên hệ đơn vị kiểm định/hiệu chuẩn để thực hiện đúng quy định an toàn và ISO.\n\nTrân trọng,\n${emailConfig.senderName}`;
+    body += `\nĐề nghị bộ phận kỹ thuật liên hệ đơn vị kiểm định/hiệu chuẩn để thực hiện đúng quy định an toàn và ISO.\n\nTrân trọng,\n${liveEmailConfig.senderName}`;
 
     const result = await sendEmailNotification({
       type: 'KIEM_DINH_DEN_HAN',
       subject: subj,
       body,
-      recipient: recipientEmails || emailConfig.primaryRecipient,
+      recipient: recipientEmails || liveEmailConfig.primaryRecipient,
       relatedId: isAuto ? 'AUTO-INSPECTION-REMINDER' : 'MANUAL-INSPECTION-REMINDER',
       interactiveFallback: !isAuto,
       userConfirmed: Boolean(options?.userConfirmed),
@@ -6495,11 +6757,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return { sentCount: 1, dueCount: dueItems.length, result };
   };
 
-  // Automatic daily inspection & calibration reminder check when authenticated
+  // Automatic daily inspection & calibration reminder check — ONLY after authoritative Cloud/Server data is synced
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!emailConfig.enabled || emailConfig.notifyOnInspectionDue === false) return;
-    if (cloudSyncStatus === 'syncing') return;
+    if (cloudSyncStatus === 'syncing' || serverSyncStatus === 'syncing') return;
+
+    const hasAuthoritativeData =
+      (cloudSyncStatus === 'synced' && workspaceReadyRef.current) ||
+      (serverSyncStatus === 'synced' && serverCloudHydrated && serverRevisionRef.current > 0);
+    if (!hasAuthoritativeData) return;
 
     const todayYMD = getVietnamTodayYMD();
     if (autoInspectionCheckedDateRef.current === todayYMD) return;
@@ -6522,6 +6789,11 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const checkAndTrigger = () => {
       if (autoInspectionCheckedDateRef.current === todayYMD) return;
+      const stillAuthoritative =
+        (cloudSyncStatus === 'synced' && workspaceReadyRef.current) ||
+        (serverSyncStatus === 'synced' && serverCloudHydratedRef.current && serverRevisionRef.current > 0);
+      if (!stillAuthoritative) return;
+
       autoInspectionCheckedDateRef.current = todayYMD;
 
       const alreadyLoggedAuto = latestSnapshotRef.current.emailLogs.some(
@@ -6559,10 +6831,16 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
-    const delayMs = cloudUserRef.current ? 1500 : 100;
-    const timer = window.setTimeout(checkAndTrigger, delayMs);
+    const timer = window.setTimeout(checkAndTrigger, 2000);
     return () => window.clearTimeout(timer);
-  }, [isAuthenticated, emailConfig.enabled, emailConfig.notifyOnInspectionDue, cloudSyncStatus]);
+  }, [
+    isAuthenticated,
+    emailConfig.enabled,
+    emailConfig.notifyOnInspectionDue,
+    cloudSyncStatus,
+    serverSyncStatus,
+    serverCloudHydrated,
+  ]);
 
   const deleteEmailLog = (id: string) => {
     setEmailLogs((prev) => prev.filter((l) => l.id !== id));
@@ -6934,6 +7212,10 @@ export const CMMSProvider: React.FC<{ children: React.ReactNode }> = ({ children
         forceSyncLocalToCloud,
         pullLatestFromCloud,
         pullLatestFromServer,
+        isRefreshingData,
+        lastForceRefreshedAt,
+        dataCacheVersion,
+        forceRefreshData,
         onlineUsers,
         activeViewId,
         setActiveViewId,

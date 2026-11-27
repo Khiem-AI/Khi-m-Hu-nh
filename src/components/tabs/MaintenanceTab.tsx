@@ -41,6 +41,7 @@ import {
   GripVertical,
   RotateCcw,
   CalendarClock,
+  RefreshCw,
 } from 'lucide-react';
 
 interface MaintenanceTabProps {
@@ -85,6 +86,8 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
     triggerMaintenanceDueAlerts,
     emailConfig,
     addAuditLog,
+    forceRefreshData,
+    isRefreshingData,
   } = useCMMS();
 
   const [activeSubTab, setActiveSubTab] = useState<'plans' | 'history' | 'calendar'>('history');
@@ -529,6 +532,23 @@ export const MaintenanceTab: React.FC<MaintenanceTabProps> = ({
           >
             <CalendarDays className="w-4 h-4" />
             Lịch Bảo Trì
+          </button>
+          <button
+            type="button"
+            disabled={isRefreshingData}
+            onClick={async () => {
+              const res = await forceRefreshData({
+                scope: 'equipment_maintenance',
+                manual: true,
+                reason: 'maintenance_tab_manual',
+              });
+              showToast(res.message);
+            }}
+            title="Tải lại kế hoạch và lịch sử bảo trì mới nhất từ cơ sở dữ liệu"
+            className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-cyan-300 hover:text-white hover:bg-slate-800 transition flex items-center gap-1.5 disabled:opacity-60"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingData ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Làm mới</span>
           </button>
         </div>
       </div>

@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   ShieldAlert,
   Send,
+  RefreshCw,
 } from 'lucide-react';
 
 interface EquipmentTabProps {
@@ -41,7 +42,7 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
   onOpenAddEquipment,
   onOpenEditEquipment,
 }) => {
-  const { equipment, deleteEquipment, currentUser } = useCMMS();
+  const { equipment, deleteEquipment, currentUser, forceRefreshData, isRefreshingData } = useCMMS();
   const canDelete = canDeleteRecords(currentUser);
   const allowAssignWork = canAssignWork(currentUser);
 
@@ -156,7 +157,24 @@ export const EquipmentTab: React.FC<EquipmentTabProps> = ({
           </h2>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            disabled={isRefreshingData}
+            onClick={async () => {
+              const res = await forceRefreshData({
+                scope: 'equipment_maintenance',
+                manual: true,
+                reason: 'equipment_tab_manual',
+              });
+              showToast(res.message);
+            }}
+            title="Tải lại toàn bộ dữ liệu thiết bị mới nhất từ cơ sở dữ liệu"
+            className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold border border-slate-700 transition disabled:opacity-60"
+          >
+            <RefreshCw className={`w-4 h-4 text-emerald-400 ${isRefreshingData ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Làm mới</span>
+          </button>
           <button
             onClick={handleExportCSV}
             className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs sm:text-sm font-semibold border border-slate-700 transition"

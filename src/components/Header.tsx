@@ -84,6 +84,7 @@ export const Header: React.FC<HeaderProps> = ({
     forceSyncLocalToCloud,
     pullLatestFromCloud,
     pullLatestFromServer,
+    forceRefreshData,
     webNotifications,
     browserNotificationPermission,
     requestBrowserNotificationPermission,
@@ -316,26 +317,28 @@ export const Header: React.FC<HeaderProps> = ({
               title={
                 cloudSyncStatus === 'synced'
                   ? `Đã đồng bộ Cloud trực tiếp (${cloudUser?.email || ''})`
-                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
-                  ? 'Đang đồng bộ dữ liệu theo thời gian thực...'
+                  : cloudSyncStatus === 'connecting'
+                  ? 'Đang kết nối Google Cloud...'
                   : cloudSyncStatus === 'error'
                   ? 'Lỗi đồng bộ Cloud — nhấn để xem chi tiết'
                   : (hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && serverCloudHydrated
                   ? `Đang đồng bộ trực tiếp dữ liệu Cloud mới nhất${lastServerSyncedAt ? ` (${lastServerSyncedAt})` : ''}`
                   : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
                   ? 'Đang đồng bộ trực tiếp giữa các máy — nhấn để nạp dữ liệu Cloud mới nhất bằng Google'
+                  : cloudSyncStatus === 'syncing' || serverSyncStatus === 'syncing'
+                  ? 'Đang tải dữ liệu đồng bộ...'
                   : 'Nhấn để kích hoạt đồng bộ trực tiếp hoặc kết nối Google Cloud'
               }
               className={`relative h-8 w-8 sm:h-9 sm:w-auto flex items-center justify-center sm:gap-1.5 sm:px-3 rounded-xl border text-xs font-semibold transition whitespace-nowrap shrink-0 ${
                 cloudSyncStatus === 'synced' ||
                 ((hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && serverCloudHydrated)
                   ? 'bg-emerald-50 dark:bg-emerald-500/15 hover:bg-emerald-100 dark:hover:bg-emerald-500/25 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-500/40'
-                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
-                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/40'
                   : cloudSyncStatus === 'error'
                   ? 'bg-rose-50 dark:bg-rose-500/15 hover:bg-rose-100 dark:hover:bg-rose-500/25 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-500/40'
                   : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
                   ? 'bg-sky-50 dark:bg-sky-500/15 hover:bg-sky-100 dark:hover:bg-sky-500/25 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-500/40'
+                  : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
+                  ? 'bg-cyan-50 dark:bg-cyan-500/15 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-500/40'
                   : 'bg-amber-50 dark:bg-amber-500/15 hover:bg-amber-100 dark:hover:bg-amber-500/25 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-500/40'
               }`}
             >
@@ -344,11 +347,6 @@ export const Header: React.FC<HeaderProps> = ({
                   <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span className="hidden xl:inline">Cloud Sync</span>
                 </>
-              ) : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing' ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-600 dark:text-cyan-400 shrink-0" />
-                  <span className="hidden xl:inline">Đang đồng bộ...</span>
-                </>
               ) : cloudSyncStatus === 'error' ? (
                 <>
                   <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0" />
@@ -356,25 +354,20 @@ export const Header: React.FC<HeaderProps> = ({
                 </>
               ) : (hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && serverCloudHydrated ? (
                 <>
-                  <span className="absolute -top-0.5 -right-0.5 sm:static sm:relative flex h-2 w-2 shrink-0">
-                    {isRealtimeStreamConnected && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    )}
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
+                  <span className="absolute -top-0.5 -right-0.5 sm:static inline-flex h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
                   <Cloud className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
                   <span className="hidden xl:inline">Đồng bộ trực tiếp</span>
                 </>
               ) : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected ? (
                 <>
-                  <span className="absolute -top-0.5 -right-0.5 sm:static sm:relative flex h-2 w-2 shrink-0">
-                    {isRealtimeStreamConnected && (
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75" />
-                    )}
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500" />
-                  </span>
+                  <span className="absolute -top-0.5 -right-0.5 sm:static inline-flex h-2 w-2 rounded-full bg-sky-500 shrink-0" />
                   <Cloud className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0" />
                   <span className="hidden xl:inline">Đồng bộ Cloud</span>
+                </>
+              ) : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing' ? (
+                <>
+                  <RefreshCw className="w-4 h-4 animate-spin text-cyan-600 dark:text-cyan-400 shrink-0" />
+                  <span className="hidden xl:inline">Đang đồng bộ...</span>
                 </>
               ) : (
                 <>
@@ -398,27 +391,27 @@ export const Header: React.FC<HeaderProps> = ({
                       cloudSyncStatus === 'synced' ||
                       ((hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && serverCloudHydrated)
                         ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300'
-                        : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
-                        ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
                         : cloudSyncStatus === 'error'
                         ? 'bg-rose-500/15 text-rose-600 dark:text-rose-300'
                         : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
                         ? 'bg-sky-500/15 text-sky-600 dark:text-sky-300'
+                        : cloudSyncStatus === 'syncing' || cloudSyncStatus === 'connecting' || serverSyncStatus === 'syncing'
+                        ? 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-300'
                         : 'bg-amber-500/15 text-amber-600 dark:text-amber-300'
                     }`}
                   >
                     {cloudSyncStatus === 'synced'
                       ? 'Cloud trực tuyến'
-                      : cloudSyncStatus === 'syncing' || serverSyncStatus === 'syncing'
-                      ? 'Đang đồng bộ'
-                      : cloudSyncStatus === 'connecting'
-                      ? 'Đang kết nối'
                       : cloudSyncStatus === 'error'
                       ? 'Gặp lỗi'
                       : (hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected) && serverCloudHydrated
                       ? 'Trực tuyến'
                       : hasServerSyncSession || serverSyncStatus === 'synced' || isRealtimeStreamConnected
                       ? 'Sẵn sàng nạp Cloud'
+                      : cloudSyncStatus === 'connecting'
+                      ? 'Đang kết nối'
+                      : cloudSyncStatus === 'syncing' || serverSyncStatus === 'syncing'
+                      ? 'Đang đồng bộ'
                       : 'Chưa kích hoạt'}
                   </span>
                 </div>
@@ -585,7 +578,11 @@ export const Header: React.FC<HeaderProps> = ({
                         onClick={async () => {
                           setIsCloudActionLoading(true);
                           setCloudActionNotice(null);
-                          const res = await pullLatestFromCloud();
+                          const res = await forceRefreshData({
+                            scope: 'all',
+                            manual: true,
+                            reason: 'header_cloud_manual',
+                          });
                           setIsCloudActionLoading(false);
                           setCloudActionNotice({ ok: res.success, text: res.message });
                         }}
@@ -685,7 +682,11 @@ export const Header: React.FC<HeaderProps> = ({
                           onClick={async () => {
                             setIsCloudActionLoading(true);
                             setCloudActionNotice(null);
-                            const res = await pullLatestFromServer();
+                            const res = await forceRefreshData({
+                              scope: 'all',
+                              manual: true,
+                              reason: 'header_server_manual',
+                            });
                             setIsCloudActionLoading(false);
                             setCloudActionNotice({ ok: res.success, text: res.message });
                           }}

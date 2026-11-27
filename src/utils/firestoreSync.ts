@@ -1180,6 +1180,84 @@ export async function pullLatestWorkspaceFromFirestore(
   };
 }
 
+export interface PulledEquipmentMaintenanceData {
+  equipment: Equipment[];
+  maintenancePlans: MaintenancePlan[];
+  maintenanceHistory: MaintenanceHistory[];
+  tickets: Ticket[];
+  safetyInspections: SafetyInspectionItem[];
+  totalLoaded: number;
+}
+
+/**
+ * Targeted server-first cache-invalidating fetch for core Equipment & Maintenance collections.
+ * Always calls getDocsFromServer() first to bypass Firestore local cache and prunes deleted IDs
+ * from knownCloudIds so the UI reflects the latest database state without a full page reload.
+ */
+export async function pullEquipmentAndMaintenanceFromFirestore(
+  userEmail: string,
+  uid: string,
+  knownCloudIds?: Set<string>
+): Promise<PulledEquipmentMaintenanceData> {
+  const freshIds = new Set<string>();
+  const [equipment, maintenancePlans, maintenanceHistory, tickets, safetyInspections] =
+    await Promise.all([
+      fetchCollectionServerFirst<Equipment>('equipment', userEmail, uid, 'standard', freshIds),
+      fetchCollectionServerFirst<MaintenancePlan>(
+        'maintenance_plans',
+        userEmail,
+        uid,
+        'standard',
+        freshIds
+      ),
+      fetchCollectionServerFirst<MaintenanceHistory>(
+        'maintenance_history',
+        userEmail,
+        uid,
+        'standard',
+        freshIds
+      ),
+      fetchCollectionServerFirst<Ticket>('tickets', userEmail, uid, 'standard', freshIds),
+      fetchCollectionServerFirst<SafetyInspectionItem>(
+        'safety_inspections',
+        userEmail,
+        uid,
+        'standard',
+        freshIds
+      ),
+    ]);
+
+  if (knownCloudIds) {
+    const refreshedPrefixes = [
+      'equipment/',
+      'maintenance_plans/',
+      'maintenance_history/',
+      'tickets/',
+      'safety_inspections/',
+    ];
+    for (const existingPath of Array.from(knownCloudIds)) {
+      if (refreshedPrefixes.some((prefix) => existingPath.startsWith(prefix))) {
+        knownCloudIds.delete(existingPath);
+      }
+    }
+    freshIds.forEach((p) => knownCloudIds.add(p));
+  }
+
+  return {
+    equipment,
+    maintenancePlans,
+    maintenanceHistory,
+    tickets,
+    safetyInspections,
+    totalLoaded:
+      equipment.length +
+      maintenancePlans.length +
+      maintenanceHistory.length +
+      tickets.length +
+      safetyInspections.length,
+  };
+}
+
 export interface WorkspaceSnapshotData {
   equipment: Equipment[];
   maintenancePlans: MaintenancePlan[];
